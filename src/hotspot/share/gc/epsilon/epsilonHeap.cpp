@@ -388,7 +388,7 @@ class VM_EpsilonCollect: public VM_Operation {
 private:
   const GCCause::Cause _cause;
   EpsilonHeap* const _heap;
-  static size_t _last_used;
+  static size_t _req_id;
 public:
   VM_EpsilonCollect(GCCause::Cause cause) : VM_Operation(),
                                             _cause(cause),
@@ -398,22 +398,22 @@ public:
   const char* name()             const { return "Epsilon Collection"; }
 
   virtual bool doit_prologue() {
+    size_t id = Atomic::load_acquire(&_req_id);
+
     // Need to take the Heap lock before managing backing storage.
-    // This also naturally serializes GC requests, and allows us to coalesce
-    // back-to-back allocation failure requests from many threads. There is no
-    // need to handle allocation failure that comes without allocations since
-    // last complete GC. Waiting for 1% of heap allocated before starting next
-    // GC seems to resolve most races.
     Heap_lock->lock();
-    size_t used = _heap->used();
-    size_t capacity = _heap->capacity();
-    size_t allocated = used > _last_used ? used - _last_used : 0;
-    if (_cause != GCCause::_allocation_failure || allocated > capacity / 100) {
-      return true;
-    } else {
+
+    // Heap lock also naturally serializes GC requests, and allows us to coalesce
+    // back-to-back GC requests from many threads. Avoid the consecutive GCs
+    // if we started waiting when other GC request was being handled.
+    if (id < Atomic::load_acquire(&_req_id)) {
       Heap_lock->unlock();
       return false;
     }
+
+    // No contenders. Start handling a new GC request.
+    Atomic::inc(&_req_id);
+    return true;
   }
 
   virtual void doit() {
@@ -421,12 +421,11 @@ public:
   }
 
   virtual void doit_epilogue() {
-    _last_used = _heap->used();
     Heap_lock->unlock();
   }
 };
 
-size_t VM_EpsilonCollect::_last_used = 0;
+size_t VM_EpsilonCollect::_req_id = 0;
 
 void EpsilonHeap::vmentry_collect(GCCause::Cause cause) {
   VM_EpsilonCollect vmop(cause);

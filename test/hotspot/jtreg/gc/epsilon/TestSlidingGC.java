@@ -33,6 +33,7 @@ package gc.epsilon;
  * @run main/othervm -Xmx512m -XX:+UnlockExperimentalVMOptions -XX:+UseEpsilonGC -XX:+EpsilonSlidingGC                                         gc.epsilon.TestSlidingGC
  * @run main/othervm -Xmx512m -XX:+UnlockExperimentalVMOptions -XX:+UseEpsilonGC -XX:+EpsilonSlidingGC -XX:+EpsilonVerify -XX:+EpsilonUncommit gc.epsilon.TestSlidingGC
  * @run main/othervm -Xmx512m -XX:+UnlockExperimentalVMOptions -XX:+UseEpsilonGC -XX:+EpsilonSlidingGC                    -XX:+EpsilonUncommit gc.epsilon.TestSlidingGC
+ * @run main/othervm -Xmx512m -XX:+UnlockExperimentalVMOptions -XX:+UseEpsilonGC -XX:+EpsilonSlidingGC -XX:+EpsilonVerify -XX:+EpsilonDensePrefix -Xlog:gc gc.epsilon.TestSlidingGC
  */
 
 import java.util.concurrent.*;

@@ -50,6 +50,7 @@ private:
   volatile size_t _last_heap_print;
   MemRegion  _bitmap_region;
   MarkBitMap _bitmap;
+  HeapWord* _prefix_top;
 
 public:
   static EpsilonHeap* heap();
@@ -148,11 +149,12 @@ private:
   void print_metaspace_info() const;
 
   void vmentry_collect(GCCause::Cause cause);
+  void do_collect(GCCause::Cause cause);
 
   void do_roots(OopClosure* cl, bool everything);
   void process_roots(OopClosure* cl)     { do_roots(cl, false); }
   void process_all_roots(OopClosure* cl) { do_roots(cl, true);  }
-  void walk_bitmap(ObjectClosure* cl);
+  void walk_bitmap(ObjectClosure* cl, HeapWord* start);
 
 };
 

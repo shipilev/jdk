@@ -68,6 +68,8 @@ jint EpsilonHeap::initialize() {
   _space = new ContiguousSpace();
   _space->initialize(committed_region, /* clear_space = */ true, /* mangle_space = */ true);
 
+  _prefix_top = _space->top();
+
   // Precompute hot fields
   _max_tlab_size = MIN2(CollectedHeap::max_tlab_size(), align_object_size(EpsilonMaxTLABSize / HeapWordSize));
   _step_counter_update = MIN2<size_t>(max_byte_size / 16, EpsilonUpdateCountersStep);
@@ -383,6 +385,15 @@ void EpsilonHeap::print_metaspace_info() const {
 // cleanups.
 //
 
+HeapWord* EpsilonHeap::allocate_or_collect_work(size_t size) {
+  HeapWord* res = allocate_work(size);
+  if (res == NULL && EpsilonSlidingGC) {
+    vmentry_collect(GCCause::_allocation_failure);
+    res = allocate_work(size);
+  }
+  return res;
+}
+
 // VM operation that executes collection cycle under safepoint
 class VM_EpsilonCollect: public VM_Operation {
 private:
@@ -432,13 +443,16 @@ void EpsilonHeap::vmentry_collect(GCCause::Cause cause) {
   VMThread::execute(&vmop);
 }
 
-HeapWord* EpsilonHeap::allocate_or_collect_work(size_t size) {
-  HeapWord* res = allocate_work(size);
-  if (res == NULL && EpsilonSlidingGC) {
-    vmentry_collect(GCCause::_allocation_failure);
-    res = allocate_work(size);
+void EpsilonHeap::entry_collect(GCCause::Cause cause) {
+  size_t before = used();
+  do_collect(cause);
+  size_t after = used();
+  size_t freed = (before > after) ? before - after : 0;
+  if (EpsilonDensePrefix && (freed < capacity() / 100)) {
+    log_warning(gc)("Not enough space freed with dense prefix enabled, trying again without it");
+    _prefix_top = _space->bottom();
+    do_collect(cause);
   }
-  return res;
 }
 
 typedef Stack<oop, mtGC> EpsilonMarkStack;
@@ -481,9 +495,9 @@ void EpsilonHeap::do_roots(OopClosure* cl, bool everything) {
 // Walk the marking bitmap and call object closure on every marked object.
 // This is much faster that walking a (very sparse) parsable heap, but it
 // takes up to 1/64-th of heap size for the bitmap.
-void EpsilonHeap::walk_bitmap(ObjectClosure* cl) {
+void EpsilonHeap::walk_bitmap(ObjectClosure* cl, HeapWord* start) {
    HeapWord* limit = _space->top();
-   HeapWord* addr = _bitmap.get_next_marked_addr(_space->bottom(), limit);
+   HeapWord* addr = _bitmap.get_next_marked_addr(start, limit);
    while (addr < limit) {
      oop obj = oop(addr);
      assert(_bitmap.is_marked(obj), "sanity");
@@ -499,6 +513,8 @@ class EpsilonScanOopClosure : public BasicOopIterateClosure {
 private:
   EpsilonMarkStack* const _stack;
   MarkBitMap* const _bitmap;
+  HeapWord* const _prefix_top;
+  bool _has_cross_prefix;
 
   template <class T>
   void do_oop_work(T* p) {
@@ -507,6 +523,11 @@ private:
     T o = RawAccess<>::oop_load(p);
     if (!CompressedOops::is_null(o)) {
       oop obj = CompressedOops::decode_not_null(o);
+
+      // Reference from dense prefix outside the prefix? Record it.
+      if ((HeapWord*)p < _prefix_top && cast_from_oop<HeapWord*>(obj) >= _prefix_top) {
+        _has_cross_prefix = true;
+      }
 
       // Object is discovered. See if it is marked already. If not,
       // mark and push it on mark stack for further traversal. Non-atomic
@@ -519,10 +540,12 @@ private:
   }
 
 public:
-  EpsilonScanOopClosure(EpsilonMarkStack* stack, MarkBitMap* bitmap) :
-                        _stack(stack), _bitmap(bitmap) {}
+  EpsilonScanOopClosure(EpsilonMarkStack* stack, MarkBitMap* bitmap, HeapWord* prefix_top) :
+                        _stack(stack), _bitmap(bitmap), _prefix_top(prefix_top), _has_cross_prefix(false) {}
   virtual void do_oop(oop* p)       { do_oop_work(p); }
   virtual void do_oop(narrowOop* p) { do_oop_work(p); }
+  void clear_has_cross_prefix()     { _has_cross_prefix = false; }
+  bool has_cross_prefix()           { return _has_cross_prefix;  }
 };
 
 class EpsilonCalcNewLocationObjectClosure : public ObjectClosure {
@@ -557,6 +580,8 @@ public:
 
 class EpsilonAdjustPointersOopClosure : public BasicOopIterateClosure {
 private:
+  HeapWord* const _prefix_top;
+
   template <class T>
   void do_oop_work(T* p) {
     // p is the pointer to memory location where oop is, load the value
@@ -567,7 +592,7 @@ private:
 
       // Rewrite the current pointer to the object with its forwardee.
       // Skip the write if update is not needed.
-      if (obj->is_forwarded()) {
+      if (cast_from_oop<HeapWord*>(obj) >= _prefix_top && obj->is_forwarded()) {
         oop fwd = obj->forwardee();
         assert(fwd != NULL, "just checking");
         RawAccess<>::oop_store(p, fwd);
@@ -576,6 +601,7 @@ private:
   }
 
 public:
+  EpsilonAdjustPointersOopClosure(HeapWord* prefix_top) : _prefix_top(prefix_top) {};
   virtual void do_oop(oop* p)       { do_oop_work(p); }
   virtual void do_oop(narrowOop* p) { do_oop_work(p); }
 };
@@ -584,6 +610,7 @@ class EpsilonAdjustPointersObjectClosure : public ObjectClosure {
 private:
   EpsilonAdjustPointersOopClosure _cl;
 public:
+  EpsilonAdjustPointersObjectClosure(HeapWord* prefix_top) : _cl(prefix_top) {};
   void do_object(oop obj) {
     // Apply the updates to all references reachable from current object:
     obj->oop_iterate(&_cl);
@@ -644,7 +671,7 @@ public:
   virtual void do_oop(narrowOop* p) { do_oop_work(p); }
 };
 
-void EpsilonHeap::entry_collect(GCCause::Cause cause) {
+void EpsilonHeap::do_collect(GCCause::Cause cause) {
   GCIdMark mark;
   GCTraceTime(Info, gc) time("Lisp2-style Mark-Compact", NULL, cause, true);
 
@@ -685,18 +712,45 @@ void EpsilonHeap::entry_collect(GCCause::Cause cause) {
     // would scan the outgoing references, mark them, and push newly-marked
     // objects to stack for further processing.
     EpsilonMarkStack stack;
-    EpsilonScanOopClosure cl(&stack, &_bitmap);
+    EpsilonScanOopClosure cl(&stack, &_bitmap, _prefix_top);
 
     // Seed the marking with roots.
     process_roots(&cl);
     stat_reachable_roots = stack.size();
 
+    // Need to record the "interesting" objects in dense prefix that have
+    // references outside it. Those objects need to be treated later: we
+    // need to adjust the pointers in those objects. These objects are
+    // hopefully rare.
+    EpsilonMarkStack interest_dense_prefix;
+
     // Scan the rest of the heap until we run out of objects. Termination is
     // guaranteed, because all reachable objects would be marked eventually.
     while (!stack.is_empty()) {
       oop obj = stack.pop();
+      cl.clear_has_cross_prefix();
       obj->oop_iterate(&cl);
+      if (cl.has_cross_prefix()) {
+        interest_dense_prefix.push(obj);
+      }
       stat_reachable_heap++;
+    }
+
+    // Drop all marks from non-interesting objects in dense prefix. This would
+    // skip adjusting pointers in them, leaving them untouched. The majority
+    // of objects in dense prefix should be non-interesting.
+    //
+    // We cannot do it as we mark, because bitmap serves as marking wavefront
+    // that records visited objects. Now, we can clear the bitmap for the prefix,
+    // and put back a few marks for interesting objects.
+    MemRegion mr = MemRegion(_space->bottom(), _prefix_top);
+    if (!mr.is_empty()) {
+      _bitmap.clear_range_large(mr);
+      while (!interest_dense_prefix.is_empty()) {
+        _bitmap.mark(interest_dense_prefix.pop());
+      }
+    } else {
+      assert(interest_dense_prefix.is_empty(), "Should be empty");
     }
 
     // No more derived pointers discovered after marking is done.
@@ -715,9 +769,10 @@ void EpsilonHeap::entry_collect(GCCause::Cause cause) {
     GCTraceTime(Info, gc) time("Step 2: Calculate new locations", NULL);
 
     // Walk all alive objects, compute their new addresses and store those
-    // addresses in mark words. Optionally preserve some marks.
-    EpsilonCalcNewLocationObjectClosure cl(_space->bottom(), &preserved_marks);
-    walk_bitmap(&cl);
+    // addresses in mark words. Ignore dense prefix for walks. Optionally
+    // preserve some marks.
+    EpsilonCalcNewLocationObjectClosure cl(_prefix_top, &preserved_marks);
+    walk_bitmap(&cl, _prefix_top);
 
     // After addresses are calculated, we know the new top for the allocated
     // space. We cannot set it just yet, because some asserts check that objects
@@ -732,13 +787,17 @@ void EpsilonHeap::entry_collect(GCCause::Cause cause) {
 
     // Walk all alive objects _and their reference fields_, and put "new
     // addresses" there. We know the new addresses from the forwarding data
-    // in mark words. Take care of the heap objects first.
-    EpsilonAdjustPointersObjectClosure cl;
-    walk_bitmap(&cl);
+    // in mark words. We can skip updating references that point into dense
+    // prefix, because those objects do not move. However, we need to walk
+    // all live objects, including the dense prefix, because references to
+    // moved objects should be updated there as well. Take care of the heap
+    // objects first.
+    EpsilonAdjustPointersObjectClosure cl(_prefix_top);
+    walk_bitmap(&cl, _space->bottom());
 
     // Now do the same, but for all VM roots, which reference the objects on
     // their own: their references should also be updated.
-    EpsilonAdjustPointersOopClosure cli;
+    EpsilonAdjustPointersOopClosure cli(_prefix_top);
     process_roots(&cli);
 
     // Finally, make sure preserved marks know the objects are about to move.
@@ -749,14 +808,22 @@ void EpsilonHeap::entry_collect(GCCause::Cause cause) {
     GCTraceTime(Info, gc) time("Step 4: Move objects", NULL);
 
     // Move all alive objects to their new locations. All the references are
-    // already adjusted at previous step.
+    // already adjusted at previous step. We are free to ignore objects in
+    // the prefix.
     EpsilonMoveObjectsObjectClosure cl;
-    walk_bitmap(&cl);
+    walk_bitmap(&cl, _prefix_top);
     stat_moved = cl.moved();
 
     // Now we moved all objects to their relevant locations, we can retract
     // the "top" of the allocation space to the end of the compacted prefix.
     _space->set_top(new_top);
+
+    // Record the dense prefix size, if needed.
+    if (EpsilonDensePrefix) {
+      _prefix_top = new_top;
+    } else {
+      _prefix_top = _space->bottom();
+    }
   }
 
   {

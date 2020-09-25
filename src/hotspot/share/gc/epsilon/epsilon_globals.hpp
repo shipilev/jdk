@@ -91,6 +91,9 @@
   product(bool, EpsilonSlidingGC, false, EXPERIMENTAL,                      \
           "Actually does sliding mark-compact GC.")                         \
                                                                             \
+  product(bool, EpsilonDensePrefix, false, EXPERIMENTAL,                    \
+          "Ignore dense prefix from last collection.")                      \
+                                                                            \
   product(bool, EpsilonUncommit, false, EXPERIMENTAL,                       \
           "Uncommits all unneeded memory after GC.")                        \
                                                                             \

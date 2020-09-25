@@ -26,6 +26,7 @@
 #define SHARE_GC_EPSILON_EPSILONHEAP_HPP
 
 #include "gc/shared/collectedHeap.hpp"
+#include "gc/shared/markBitMap.hpp"
 #include "gc/shared/softRefPolicy.hpp"
 #include "gc/shared/space.hpp"
 #include "gc/epsilon/epsilonMonitoringSupport.hpp"
@@ -47,6 +48,8 @@ private:
   int64_t _decay_time_ns;
   volatile size_t _last_counter_update;
   volatile size_t _last_heap_print;
+  MemRegion  _bitmap_region;
+  MarkBitMap _bitmap;
 
 public:
   static EpsilonHeap* heap();
@@ -89,6 +92,7 @@ public:
 
   // Allocation
   HeapWord* allocate_work(size_t size);
+  HeapWord* allocate_or_collect_work(size_t size);
   virtual HeapWord* mem_allocate(size_t size, bool* gc_overhead_limit_was_exceeded);
   virtual HeapWord* allocate_new_tlab(size_t min_size,
                                       size_t requested_size,
@@ -108,7 +112,8 @@ public:
   virtual void object_iterate(ObjectClosure* cl);
 
   // Object pinning support: every object is implicitly pinned
-  virtual bool supports_object_pinning() const           { return true; }
+  // Or is it... (evil laugh)
+  virtual bool supports_object_pinning() const           { return !EpsilonSlidingGC; }
   virtual oop pin_object(JavaThread* thread, oop obj)    { return obj; }
   virtual void unpin_object(JavaThread* thread, oop obj) { }
 
@@ -136,9 +141,18 @@ public:
   virtual void print_tracing_info() const;
   virtual bool print_location(outputStream* st, void* addr) const;
 
+  void entry_collect(GCCause::Cause cause);
+
 private:
   void print_heap_info(size_t used) const;
   void print_metaspace_info() const;
+
+  void vmentry_collect(GCCause::Cause cause);
+
+  void do_roots(OopClosure* cl, bool everything);
+  void process_roots(OopClosure* cl)     { do_roots(cl, false); }
+  void process_all_roots(OopClosure* cl) { do_roots(cl, true);  }
+  void walk_bitmap(ObjectClosure* cl);
 
 };
 

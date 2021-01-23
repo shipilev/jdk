@@ -541,7 +541,7 @@ public:
     // dense prefix, that we would normally get), do not bother recording the
     // move, letting downstream code ignore it.
     if (obj != oop(_compact_point)) {
-      markWord mark = obj->mark_raw();
+      markWord mark = obj->mark();
       if (mark.must_be_preserved(obj->klass())) {
         _preserved_marks->push(obj, mark);
       }
@@ -604,7 +604,7 @@ public:
       oop fwd = obj->forwardee();
       assert(fwd != NULL, "just checking");
       Copy::aligned_conjoint_words(cast_from_oop<HeapWord*>(obj), cast_from_oop<HeapWord*>(fwd), obj->size());
-      fwd->init_mark_raw();
+      fwd->init_mark();
       _moved++;
     }
   }

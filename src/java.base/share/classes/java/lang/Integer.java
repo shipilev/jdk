@@ -32,9 +32,9 @@ import java.lang.constant.ConstantDesc;
 import java.util.Objects;
 import java.util.Optional;
 
-import jdk.internal.HotSpotIntrinsicCandidate;
 import jdk.internal.misc.CDS;
 import jdk.internal.misc.VM;
+import jdk.internal.vm.annotation.IntrinsicCandidate;
 
 import static java.lang.String.COMPACT_STRINGS;
 import static java.lang.String.LATIN1;
@@ -50,6 +50,12 @@ import static java.lang.String.UTF16;
  * {@code int}, as well as other constants and methods useful when
  * dealing with an {@code int}.
  *
+ * <p>This is a <a href="{@docRoot}/java.base/java/lang/doc-files/ValueBased.html">value-based</a>
+ * class; programmers should treat instances that are
+ * {@linkplain #equals(Object) equal} as interchangeable and should not
+ * use instances for synchronization, or unpredictable behavior may
+ * occur. For example, in a future release, synchronization may fail.
+ *
  * <p>Implementation note: The implementations of the "bit twiddling"
  * methods (such as {@link #highestOneBit(int) highestOneBit} and
  * {@link #numberOfTrailingZeros(int) numberOfTrailingZeros}) are
@@ -62,6 +68,7 @@ import static java.lang.String.UTF16;
  * @author  Joseph D. Darcy
  * @since 1.0
  */
+@jdk.internal.ValueBased
 public final class Integer extends Number
         implements Comparable<Integer>, Constable, ConstantDesc {
     /**
@@ -434,7 +441,7 @@ public final class Integer extends Number
      * @param   i   an integer to be converted.
      * @return  a string representation of the argument in base&nbsp;10.
      */
-    @HotSpotIntrinsicCandidate
+    @IntrinsicCandidate
     public static String toString(int i) {
         int size = stringSize(i);
         if (COMPACT_STRINGS) {
@@ -1059,7 +1066,7 @@ public final class Integer extends Number
      * @return an {@code Integer} instance representing {@code i}.
      * @since  1.5
      */
-    @HotSpotIntrinsicCandidate
+    @IntrinsicCandidate
     public static Integer valueOf(int i) {
         if (i >= IntegerCache.low && i <= IntegerCache.high)
             return IntegerCache.cache[i + (-IntegerCache.low)];
@@ -1085,7 +1092,7 @@ public final class Integer extends Number
      * {@link #valueOf(int)} is generally a better choice, as it is
      * likely to yield significantly better space and time performance.
      */
-    @Deprecated(since="9")
+    @Deprecated(since="9", forRemoval = true)
     public Integer(int value) {
         this.value = value;
     }
@@ -1107,7 +1114,7 @@ public final class Integer extends Number
      * {@code int} primitive, or use {@link #valueOf(String)}
      * to convert a string to an {@code Integer} object.
      */
-    @Deprecated(since="9")
+    @Deprecated(since="9", forRemoval = true)
     public Integer(String s) throws NumberFormatException {
         this.value = parseInt(s, 10);
     }
@@ -1134,7 +1141,7 @@ public final class Integer extends Number
      * Returns the value of this {@code Integer} as an
      * {@code int}.
      */
-    @HotSpotIntrinsicCandidate
+    @IntrinsicCandidate
     public int intValue() {
         return value;
     }
@@ -1632,7 +1639,7 @@ public final class Integer extends Number
      *     is equal to zero.
      * @since 1.5
      */
-    @HotSpotIntrinsicCandidate
+    @IntrinsicCandidate
     public static int numberOfLeadingZeros(int i) {
         // HD, Count leading 0's
         if (i <= 0)
@@ -1659,7 +1666,7 @@ public final class Integer extends Number
      *     to zero.
      * @since 1.5
      */
-    @HotSpotIntrinsicCandidate
+    @IntrinsicCandidate
     public static int numberOfTrailingZeros(int i) {
         // HD, Count trailing 0's
         i = ~i & (i - 1);
@@ -1682,7 +1689,7 @@ public final class Integer extends Number
      *     representation of the specified {@code int} value.
      * @since 1.5
      */
-    @HotSpotIntrinsicCandidate
+    @IntrinsicCandidate
     public static int bitCount(int i) {
         // HD, Figure 5-2
         i = i - ((i >>> 1) & 0x55555555);
@@ -1783,7 +1790,7 @@ public final class Integer extends Number
      *     {@code int} value.
      * @since 1.5
      */
-    @HotSpotIntrinsicCandidate
+    @IntrinsicCandidate
     public static int reverseBytes(int i) {
         return (i << 24)            |
                ((i & 0xff00) << 8)  |

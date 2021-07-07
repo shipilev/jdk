@@ -211,6 +211,11 @@ reg_class ptr_reg %{
   return _PTR_REG_mask;
 %}
 
+// Class for all pointer registers (excluding extended registers)
+reg_class ptr_reg_base %{
+  return _PTR_REG_BASE_mask;
+%}
+
 // Class for all pointer registers (excluding RSP and RBP)
 reg_class ptr_reg_no_rbp %{
   return _PTR_REG_NO_RBP_mask;
@@ -314,6 +319,7 @@ source_hpp %{
 extern RegMask _ANY_REG_mask;
 extern RegMask _PTR_REG_mask;
 extern RegMask _PTR_REG_NO_RBP_mask;
+extern RegMask _PTR_REG_BASE_mask;
 extern RegMask _PTR_NO_RAX_REG_mask;
 extern RegMask _PTR_NO_RAX_RBX_REG_mask;
 extern RegMask _LONG_REG_mask;
@@ -342,6 +348,7 @@ source %{
 
 RegMask _ANY_REG_mask;
 RegMask _PTR_REG_mask;
+RegMask _PTR_REG_BASE_mask;
 RegMask _PTR_REG_NO_RBP_mask;
 RegMask _PTR_NO_RAX_REG_mask;
 RegMask _PTR_NO_RAX_RBX_REG_mask;
@@ -379,6 +386,24 @@ void reg_mask_init() {
   _PTR_REG_mask.Remove(OptoReg::as_OptoReg(rsp->as_VMReg()->next()));
   _PTR_REG_mask.Remove(OptoReg::as_OptoReg(r15->as_VMReg()));
   _PTR_REG_mask.Remove(OptoReg::as_OptoReg(r15->as_VMReg()->next()));
+
+  _PTR_REG_BASE_mask = _PTR_REG_mask;
+  _PTR_REG_BASE_mask.Remove(OptoReg::as_OptoReg(r8->as_VMReg()));
+  _PTR_REG_BASE_mask.Remove(OptoReg::as_OptoReg(r8->as_VMReg()->next()));
+  _PTR_REG_BASE_mask.Remove(OptoReg::as_OptoReg(r9->as_VMReg()));
+  _PTR_REG_BASE_mask.Remove(OptoReg::as_OptoReg(r9->as_VMReg()->next()));
+  _PTR_REG_BASE_mask.Remove(OptoReg::as_OptoReg(r10->as_VMReg()));
+  _PTR_REG_BASE_mask.Remove(OptoReg::as_OptoReg(r10->as_VMReg()->next()));
+  _PTR_REG_BASE_mask.Remove(OptoReg::as_OptoReg(r11->as_VMReg()));
+  _PTR_REG_BASE_mask.Remove(OptoReg::as_OptoReg(r11->as_VMReg()->next()));
+  _PTR_REG_BASE_mask.Remove(OptoReg::as_OptoReg(r12->as_VMReg()));
+  _PTR_REG_BASE_mask.Remove(OptoReg::as_OptoReg(r12->as_VMReg()->next()));
+  _PTR_REG_BASE_mask.Remove(OptoReg::as_OptoReg(r13->as_VMReg()));
+  _PTR_REG_BASE_mask.Remove(OptoReg::as_OptoReg(r13->as_VMReg()->next()));
+  _PTR_REG_BASE_mask.Remove(OptoReg::as_OptoReg(r14->as_VMReg()));
+  _PTR_REG_BASE_mask.Remove(OptoReg::as_OptoReg(r14->as_VMReg()->next()));
+  _PTR_REG_BASE_mask.Remove(OptoReg::as_OptoReg(r15->as_VMReg()));
+  _PTR_REG_BASE_mask.Remove(OptoReg::as_OptoReg(r15->as_VMReg()->next()));
 
   _STACK_OR_PTR_REG_mask = _PTR_REG_mask;
   _STACK_OR_PTR_REG_mask.OR(STACK_OR_STACK_SLOTS_mask());
@@ -3518,6 +3543,20 @@ operand rRegP()
   match(rsi_RegP);
   match(rbp_RegP);  // See Q&A below about
   match(r15_RegP);  // r15_RegP and rbp_RegP.
+
+  format %{ %}
+  interface(REG_INTER);
+%}
+
+operand rRegPoll()
+%{
+  constraint(ALLOC_IN_RC(ptr_reg_base));
+  match(RegP);
+  match(rax_RegP);
+  match(rbx_RegP);
+  match(rdi_RegP);
+  match(rsi_RegP);
+  match(rbp_RegP);
 
   format %{ %}
   interface(REG_INTER);
@@ -12959,7 +12998,7 @@ instruct cmpFastUnlock(rFlagsReg cr, rRegP object, rax_RegP box, rRegP tmp) %{
 
 // ============================================================================
 // Safepoint Instructions
-instruct safePoint_poll_tls(rFlagsReg cr, rRegP poll)
+instruct safePoint_poll_tls(rFlagsReg cr, rRegPoll poll)
 %{
   match(SafePoint poll);
   effect(KILL cr, USE poll);
@@ -12971,7 +13010,11 @@ instruct safePoint_poll_tls(rFlagsReg cr, rRegP poll)
   ins_encode %{
     __ relocate(relocInfo::poll_type);
     address pre_pc = __ pc();
-    __ testl(rax, Address($poll$$Register, 0));
+    if (UseNewCode) {
+      __ testl($poll$$Register, Address($poll$$Register, 0));
+    } else {
+      __ testl(rax, Address($poll$$Register, 0));
+    }
     assert(nativeInstruction_at(pre_pc)->is_safepoint_poll(), "must emit test %%eax [reg]");
   %}
   ins_pipe(ialu_reg_mem);

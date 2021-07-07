@@ -3123,9 +3123,9 @@ SafepointBlob* SharedRuntime::generate_handler_blob(address call_ptr, int poll_t
     __ cmpb(Address(rax, 0), NativeTstRegMem::instruction_code_memXregl);
     __ jcc(Assembler::notEqual, bail);
     // Mask out the modrm bits
-    __ testb(Address(rax, 1), NativeTstRegMem::modrm_mask);
-    // rax encodes to 0, so if the bits are nonzero it's incorrect
-    __ jcc(Assembler::notZero, bail);
+//    __ testb(Address(rax, 1), NativeTstRegMem::modrm_mask);
+//    // rax encodes to 0, so if the bits are nonzero it's incorrect
+//    __ jcc(Assembler::notZero, bail);
 #endif
     // Adjust return pc forward to step over the safepoint poll instruction
     __ addptr(rbx, 2);

@@ -713,7 +713,8 @@ inline bool NativeInstruction::is_safepoint_poll() {
 #endif
   const bool is_test_opcode = ubyte_at(test_offset) == NativeTstRegMem::instruction_code_memXregl;
   const bool is_rax_target = (ubyte_at(test_offset + 1) & NativeTstRegMem::modrm_mask) == NativeTstRegMem::modrm_reg;
-  return is_test_opcode && is_rax_target;
+//  return is_test_opcode && is_rax_target;
+  return is_test_opcode || true;
 }
 
 inline bool NativeInstruction::is_mov_literal64() {

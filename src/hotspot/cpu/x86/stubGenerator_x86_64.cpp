@@ -1169,159 +1169,791 @@ class StubGenerator: public StubCodeGenerator {
 #endif
   }
 
-  // Copy big chunks forward
-  //
-  // Inputs:
-  //   end_from     - source arrays end address
-  //   end_to       - destination array end address
-  //   qword_count  - 64-bits element count, negative
-  //   to           - scratch
-  //   L_copy_bytes - entry label
-  //   L_copy_8_bytes  - exit  label
-  //
-  void copy_bytes_forward(Register end_from, Register end_to,
-                             Register qword_count, Register to,
-                             Label& L_copy_bytes, Label& L_copy_8_bytes) {
-    DEBUG_ONLY(__ stop("enter at entry label, not here"));
-    Label L_loop;
-    __ align(OptoLoopAlignment);
-    if (UseUnalignedLoadStores) {
-      Label L_end;
-      __ BIND(L_loop);
-      if (UseAVX >= 2) {
-        __ vmovdqu(xmm0, Address(end_from, qword_count, Address::times_8, -56));
-        __ vmovdqu(Address(end_to, qword_count, Address::times_8, -56), xmm0);
-        __ vmovdqu(xmm1, Address(end_from, qword_count, Address::times_8, -24));
-        __ vmovdqu(Address(end_to, qword_count, Address::times_8, -24), xmm1);
-      } else {
-        __ movdqu(xmm0, Address(end_from, qword_count, Address::times_8, -56));
-        __ movdqu(Address(end_to, qword_count, Address::times_8, -56), xmm0);
-        __ movdqu(xmm1, Address(end_from, qword_count, Address::times_8, -40));
-        __ movdqu(Address(end_to, qword_count, Address::times_8, -40), xmm1);
-        __ movdqu(xmm2, Address(end_from, qword_count, Address::times_8, -24));
-        __ movdqu(Address(end_to, qword_count, Address::times_8, -24), xmm2);
-        __ movdqu(xmm3, Address(end_from, qword_count, Address::times_8, - 8));
-        __ movdqu(Address(end_to, qword_count, Address::times_8, - 8), xmm3);
-      }
-
-      __ BIND(L_copy_bytes);
-      __ addptr(qword_count, 8);
-      __ jcc(Assembler::lessEqual, L_loop);
-      __ subptr(qword_count, 4);  // sub(8) and add(4)
-      __ jccb(Assembler::greater, L_end);
-      // Copy trailing 32 bytes
-      if (UseAVX >= 2) {
-        __ vmovdqu(xmm0, Address(end_from, qword_count, Address::times_8, -24));
-        __ vmovdqu(Address(end_to, qword_count, Address::times_8, -24), xmm0);
-      } else {
-        __ movdqu(xmm0, Address(end_from, qword_count, Address::times_8, -24));
-        __ movdqu(Address(end_to, qword_count, Address::times_8, -24), xmm0);
-        __ movdqu(xmm1, Address(end_from, qword_count, Address::times_8, - 8));
-        __ movdqu(Address(end_to, qword_count, Address::times_8, - 8), xmm1);
-      }
-      __ addptr(qword_count, 4);
-      __ BIND(L_end);
-      if (UseAVX >= 2) {
-        // clean upper bits of YMM registers
-        __ vpxor(xmm0, xmm0);
-        __ vpxor(xmm1, xmm1);
-      }
+  int copy_dest_alignment() {
+    if (UseAVX >= 3) {
+      return 64;
+    } else if (UseAVX >= 1) {
+      return 32;
     } else {
-      // Copy 32-bytes per iteration
-      __ BIND(L_loop);
-      __ movq(to, Address(end_from, qword_count, Address::times_8, -24));
-      __ movq(Address(end_to, qword_count, Address::times_8, -24), to);
-      __ movq(to, Address(end_from, qword_count, Address::times_8, -16));
-      __ movq(Address(end_to, qword_count, Address::times_8, -16), to);
-      __ movq(to, Address(end_from, qword_count, Address::times_8, - 8));
-      __ movq(Address(end_to, qword_count, Address::times_8, - 8), to);
-      __ movq(to, Address(end_from, qword_count, Address::times_8, - 0));
-      __ movq(Address(end_to, qword_count, Address::times_8, - 0), to);
-
-      __ BIND(L_copy_bytes);
-      __ addptr(qword_count, 4);
-      __ jcc(Assembler::lessEqual, L_loop);
+      // TODO: Really? Should be 8 with -UnalignedStores?
+      return 16;
     }
-    __ subptr(qword_count, 4);
-    __ jcc(Assembler::less, L_copy_8_bytes); // Copy trailing qwords
+  }
+
+  // TODO: Argument descriptions.
+  void copy_bytes_dispatch(Register byte_count,
+                           Label& L_entry_small, Label& L_entry_large) {
+    // Handle small array copies first: less than a qword.
+    // Larger array copies can accept a bit of hit due to complicated control
+    // flow, but smaller ones have nothing to amortize these overheads.
+    __ cmpptr(byte_count, 8);
+    __ jccb(Assembler::less, L_entry_small);
+
+    // If greater than 128 bytes, then it makes sense to prepare and go to
+    // the aligned copy.
+    if (UseUnalignedLoadStores) {
+      __ cmpptr(byte_count, 128);
+      __ jcc(Assembler::greater, L_entry_large);
+    }
+  }
+
+  // Copies aligned destination forward.
+  // TODO: Argument descriptions.
+  void copy_bytes_forward_large_aligned(Register from, Register to,
+                                Register qword_count, Register byte_count,
+                                Label& L_entry_large, Label& L_entry_small) {
+    Register tmp1 = rscratch1;
+    Register tmp2 = rscratch2;
+
+    assert_different_registers(from, to, qword_count, byte_count, tmp1, tmp2);
+
+#ifdef ASSERT
+    if (!UseUnalignedLoadStores) {
+      __ stop("Large copy assumes unaligned load stores");
+    }
+
+    Label L_ok;
+    __ lea(tmp1, Address(to, qword_count, Address::times_8));
+    __ testptr(tmp1, copy_dest_alignment() - 1);
+    __ jccb(Assembler::zero, L_ok);
+      __ stop("Invariant: destination should be aligned");
+    __ BIND(L_ok);
+#endif
+
+    Label L_tail_128, L_tail_64, L_tail_32, L_tail_16, L_tail_end;
+
+    // Bulk copy assumes some minimal amount of elements available.
+    // We cannot enter with less elements, lest we overflow. Therefore,
+    // try to enter at appropriate bulk tail for smaller arrays.
+    __ addptr(qword_count, 16);
+    __ jcc(Assembler::greater, L_tail_end);
+
+    __ addptr(qword_count, 16); // sub(16), add(32)
+    __ jcc(Assembler::greater, L_tail_16);
+
+    if (UseAVX >= 1) {
+      __ addptr(qword_count, 32); // sub(32), add(64)
+      __ jcc(Assembler::greater, L_tail_32);
+    }
+
+    if (UseAVX >= 3) {
+      __ addptr(qword_count, 64); // sub(64), add(128)
+      __ jcc(Assembler::greater, L_tail_64);
+
+      __ addptr(qword_count, 128); // sub(128), add(256)
+      __ jcc(Assembler::greater, L_tail_128);
+    }
+
+    // Massively parallel copy: moves lots of data on each iteration.
+    //
+    // Note: when choosing how exactly to do this, consider two effects:
+    //
+    // 1) On Intel, interleaving loads with stores sets up for 4K aliasing:
+    // loads conflict with stores and stall. On AMD, at least on newer Zen arches,
+    // this effect is barely pronounced.
+    //
+    // 2) Putting all the loads before all the stores sets up for store buffer
+    // stalling when doing all the stores at once. It seems that storing 16 registers
+    // at once is good enough for both modern Intel and AMD.
+    //
+    Label L_bulk_loop;
+    __ align(OptoLoopAlignment);
+    __ BIND(L_bulk_loop);
+    if (UseAVX >= 3) {
+      __ lea(tmp1, Address(from, qword_count, Address::times_8, -2048));
+      __ lea(tmp2, Address(to,   qword_count, Address::times_8, -2048));
+      for (int i = 0;  i < 16; i++) __ evmovdquq(as_XMMRegister(i), Address(tmp1, i * 64), Assembler::AVX_512bit);
+      for (int i = 0;  i < 16; i++) __ evmovdqaq(Address(tmp2, i * 64), as_XMMRegister(i), Assembler::AVX_512bit);
+      for (int i = 16; i < 32; i++) __ evmovdquq(as_XMMRegister(i), Address(tmp1, i * 64), Assembler::AVX_512bit);
+      for (int i = 16; i < 32; i++) __ evmovdqaq(Address(tmp2, i * 64), as_XMMRegister(i), Assembler::AVX_512bit);
+      __ addptr(qword_count, 256);
+    } else if (UseAVX >= 1) {
+      __ lea(tmp1, Address(from, qword_count, Address::times_8, -512));
+      __ lea(tmp2, Address(to,   qword_count, Address::times_8, -512));
+      for (int i = 0; i < 16; i++)  __ vmovdqu(as_XMMRegister(i), Address(tmp1, i * 32));
+      for (int i = 0; i < 16; i++)  __ vmovdqa(Address(tmp2, i * 32), as_XMMRegister(i));
+      __ addptr(qword_count, 64);
+    } else {
+      __ lea(tmp1, Address(from, qword_count, Address::times_8, -256));
+      __ lea(tmp2, Address(to,   qword_count, Address::times_8, -256));
+      for (int i = 0; i < 16; i++)  __ movdqu(as_XMMRegister(i), Address(tmp1, i * 16));
+      for (int i = 0; i < 16; i++)  __ movdqa(Address(tmp2, i * 16), as_XMMRegister(i));
+      __ addptr(qword_count, 32);
+    }
+    __ jcc(Assembler::lessEqual, L_bulk_loop);
+
+    // Copy the tail that is not covered by small sized copy.
+
+    if (UseAVX >= 3) {
+      __ BIND(L_tail_128);
+        __ subptr(qword_count, 128); // sub(256), add(128)
+        __ jcc(Assembler::greater, L_tail_64);
+          __ lea(tmp1, Address(from, qword_count, Address::times_8, -1024));
+          __ lea(tmp2, Address(to,   qword_count, Address::times_8, -1024));
+          for (int i = 0; i < 16; i++) __ evmovdquq(as_XMMRegister(i), Address(tmp1, i * 64), Assembler::AVX_512bit);
+          for (int i = 0; i < 16; i++) __ evmovdqaq(Address(tmp2, i * 64), as_XMMRegister(i), Assembler::AVX_512bit);
+          __ addptr(qword_count, 128);
+
+      __ BIND(L_tail_64);
+        __ subptr(qword_count, 64); // sub(128), add(64)
+        __ jcc(Assembler::greater, L_tail_32);
+          __ lea(tmp1, Address(from, qword_count, Address::times_8, -512));
+          __ lea(tmp2, Address(to,   qword_count, Address::times_8, -512));
+          for (int i = 0; i < 8; i++) __ evmovdquq(as_XMMRegister(i), Address(tmp1, i * 64), Assembler::AVX_512bit);
+          for (int i = 0; i < 8; i++) __ evmovdqaq(Address(tmp2, i * 64), as_XMMRegister(i), Assembler::AVX_512bit);
+          __ addptr(qword_count, 64);
+    }
+
+    if (UseAVX >= 1) {
+      __ BIND(L_tail_32);
+        __ subptr(qword_count, 32); // sub(64), add(32)
+        __ jcc(Assembler::greater, L_tail_16);
+          __ lea(tmp1, Address(from, qword_count, Address::times_8, -256));
+          __ lea(tmp2, Address(to,   qword_count, Address::times_8, -256));
+          if (UseAVX >= 3) {
+            for (int i = 0; i < 4; i++) __ evmovdquq(as_XMMRegister(i), Address(tmp1, i * 64), Assembler::AVX_512bit);
+            for (int i = 0; i < 4; i++) __ evmovdqaq(Address(tmp2, i * 64), as_XMMRegister(i), Assembler::AVX_512bit);
+          } else {
+            assert(UseAVX >= 1, "sanity");
+            for (int i = 0; i < 8; i++) __ vmovdqu(as_XMMRegister(i), Address(tmp1, i * 32));
+            for (int i = 0; i < 8; i++) __ vmovdqa(Address(tmp2, i * 32), as_XMMRegister(i));
+          }
+          __ addptr(qword_count, 32);
+    }
+
+    __ BIND(L_tail_16);
+      __ subptr(qword_count, 16); // sub(32), add(16)
+      __ jcc(Assembler::greater, L_tail_end);
+        __ lea(tmp1, Address(from, qword_count, Address::times_8, -128));
+        __ lea(tmp2, Address(to,   qword_count, Address::times_8, -128));
+        if (UseAVX >= 3) {
+          for (int i = 0; i < 2; i++) __ evmovdquq(as_XMMRegister(i), Address(tmp1, i * 64), Assembler::AVX_512bit);
+          for (int i = 0; i < 2; i++) __ evmovdqaq(Address(tmp2, i * 64), as_XMMRegister(i), Assembler::AVX_512bit);
+        } else if (UseAVX >= 1) {
+          for (int i = 0; i < 4; i++) __ vmovdqu(as_XMMRegister(i), Address(tmp1, i * 32));
+          for (int i = 0; i < 4; i++) __ vmovdqa(Address(tmp2, i * 32), as_XMMRegister(i));
+        } else {
+          for (int i = 0; i < 8; i++) __ movdqu(as_XMMRegister(i), Address(tmp1, i * 16));
+          for (int i = 0; i < 8; i++) __ movdqa(Address(tmp2, i * 16), as_XMMRegister(i));
+        }
+        __ addptr(qword_count, 16);
+
+    __ BIND(L_tail_end);
+      __ subptr(qword_count, 16);
+
+    // Leaving the accelerated copies, clean registers up
+    if (UseAVX >= 2) {
+      __ vzeroupper();
+    }
+
+    // Call back to small loop to handle the rest
+    __ jmp(L_entry_small);
+  }
+
+  // Copies aligned destination backward.
+  // TODO: Argument descriptions.
+  void copy_bytes_backward_large_aligned(Register from, Register to,
+                                         Register qword_count, Register byte_count,
+                                         Label& L_entry_large, Label& L_entry_small) {
+    Register tmp1 = rscratch1;
+    Register tmp2 = rscratch2;
+
+    assert_different_registers(from, to, byte_count, tmp1, tmp2);
+
+#ifdef ASSERT
+    if (!UseUnalignedLoadStores) {
+      __ stop("Large copy assumes unaligned load stores");
+    }
+
+    Label L_ok;
+    __ lea(tmp1, Address(to, byte_count));
+    __ testptr(tmp1, copy_dest_alignment() - 1);
+    __ jccb(Assembler::zero, L_ok);
+    __ stop("Invariant: destination should be aligned");
+    __ BIND(L_ok);
+#endif
+
+    Label L_tail_128, L_tail_64, L_tail_32, L_tail_16, L_tail_end;
+
+    // TODO: subptr/addptr weaving? cmpptr is more understandable here, though.
+
+    // Bulk copy assumes some minimal amount of elements available.
+    // We cannot enter with less elements, lest we overflow. Therefore,
+    // try to enter at appropriate bulk tail for smaller arrays.
+    __ cmpptr(byte_count, 16*8);
+    __ jcc(Assembler::less, L_tail_end);
+
+    __ cmpptr(byte_count, 32*8);
+    __ jcc(Assembler::less, L_tail_16);
+
+    if (UseAVX >= 1) {
+      __ cmpptr(byte_count, 64*8);
+      __ jcc(Assembler::less, L_tail_32);
+    }
+
+    if (UseAVX >= 3) {
+      __ cmpptr(byte_count, 128*8);
+      __ jcc(Assembler::less, L_tail_64);
+
+      __ cmpptr(byte_count, 256*8);
+      __ jcc(Assembler::less, L_tail_128);
+    }
+
+    // Massively parallel copy: moves lots of data on each iteration.
+    //
+    // Note: when choosing how exactly to do this, consider two effects:
+    //
+    // 1) On Intel, interleaving loads with stores sets up for 4K aliasing:
+    // loads conflict with stores and stall. On AMD, at least on newer Zen arches,
+    // this effect is barely pronounced.
+    //
+    // 2) Putting all the loads before all the stores sets up for store buffer
+    // stalling when doing all the stores at once. It seems that storing 16 registers
+    // at once is good enough for both modern Intel and AMD.
+    //
+    Label L_bulk_loop;
+    __ align(OptoLoopAlignment);
+    __ BIND(L_bulk_loop);
+    if (UseAVX >= 3) {
+      __ lea(tmp1, Address(from, byte_count, Address::times_1, -64));
+      __ lea(tmp2, Address(to,   byte_count, Address::times_1, -64));
+      for (int i = 0;  i < 16; i++) __ evmovdquq(as_XMMRegister(i), Address(tmp1, -i * 64), Assembler::AVX_512bit);
+      for (int i = 0;  i < 16; i++) __ evmovdqaq(Address(tmp2, -i * 64), as_XMMRegister(i), Assembler::AVX_512bit);
+      for (int i = 16; i < 32; i++) __ evmovdquq(as_XMMRegister(i), Address(tmp1, -i * 64), Assembler::AVX_512bit);
+      for (int i = 16; i < 32; i++) __ evmovdqaq(Address(tmp2, -i * 64), as_XMMRegister(i), Assembler::AVX_512bit);
+      __ subptr(byte_count, 256*8);
+      __ cmpptr(byte_count, 256*8);
+    } else if (UseAVX >= 1) {
+      __ lea(tmp1, Address(from, byte_count, Address::times_1, -32));
+      __ lea(tmp2, Address(to,   byte_count, Address::times_1, -32));
+      for (int i = 0; i < 16; i++)  __ vmovdqu(as_XMMRegister(i), Address(tmp1, -i * 32));
+      for (int i = 0; i < 16; i++)  __ vmovdqa(Address(tmp2, -i * 32), as_XMMRegister(i));
+      __ subptr(byte_count, 64*8);
+      __ cmpptr(byte_count, 64*8);
+    } else {
+      __ lea(tmp1, Address(from, byte_count, Address::times_1, -16));
+      __ lea(tmp2, Address(to,   byte_count, Address::times_1, -16));
+      for (int i = 0; i < 16; i++) __ movdqu(as_XMMRegister(i), Address(tmp1, -i*16));
+      for (int i = 0; i < 16; i++) __ movdqa(Address(tmp2,-i*16), as_XMMRegister(i));
+      __ subptr(byte_count, 32*8);
+      __ cmpptr(byte_count, 32*8);
+    }
+    __ jcc(Assembler::greaterEqual, L_bulk_loop);
+
+    // Copy the tail that is not covered by small sized copy.
+
+    if (UseAVX >= 3) {
+      __ BIND(L_tail_128);
+        __ cmpptr(byte_count, 128*8);
+        __ jcc(Assembler::less, L_tail_64);
+          __ lea(tmp1, Address(from, byte_count, Address::times_1, -64));
+          __ lea(tmp2, Address(to,   byte_count, Address::times_1, -64));
+          for (int i = 0; i < 16; i++) __ evmovdquq(as_XMMRegister(i), Address(tmp1, -i * 64), Assembler::AVX_512bit);
+          for (int i = 0; i < 16; i++) __ evmovdqaq(Address(tmp2, -i * 64), as_XMMRegister(i), Assembler::AVX_512bit);
+          __ subptr(byte_count, 128*8);
+
+      __ BIND(L_tail_64);
+        __ cmpptr(byte_count, 64*8);
+        __ jcc(Assembler::less, L_tail_32);
+          __ lea(tmp1, Address(from, byte_count, Address::times_1, -64));
+          __ lea(tmp2, Address(to,   byte_count, Address::times_1, -64));
+          for (int i = 0; i < 8; i++) __ evmovdquq(as_XMMRegister(i), Address(tmp1, -i * 64), Assembler::AVX_512bit);
+          for (int i = 0; i < 8; i++) __ evmovdqaq(Address(tmp2, -i * 64), as_XMMRegister(i), Assembler::AVX_512bit);
+          __ subptr(byte_count, 64*8);
+    }
+
+    if (UseAVX >= 1) {
+      __ BIND(L_tail_32);
+        __ cmpptr(byte_count, 32*8);
+        __ jcc(Assembler::less, L_tail_16);
+          if (UseAVX >= 3) {
+            __ lea(tmp1, Address(from, byte_count, Address::times_1, -64));
+            __ lea(tmp2, Address(to,   byte_count, Address::times_1, -64));
+            for (int i = 0; i < 4; i++) __ evmovdquq(as_XMMRegister(i), Address(tmp1, -i * 64), Assembler::AVX_512bit);
+            for (int i = 0; i < 4; i++) __ evmovdqaq(Address(tmp2, -i * 64), as_XMMRegister(i), Assembler::AVX_512bit);
+          } else {
+            assert(UseAVX >= 1, "sanity");
+            __ lea(tmp1, Address(from, byte_count, Address::times_1, -32));
+            __ lea(tmp2, Address(to,   byte_count, Address::times_1, -32));
+            for (int i = 0; i < 8; i++) __ vmovdqu(as_XMMRegister(i), Address(tmp1, -i * 32));
+            for (int i = 0; i < 8; i++) __ vmovdqa(Address(tmp2, -i * 32), as_XMMRegister(i));
+          }
+          __ subptr(byte_count, 32*8);
+    }
+
+    __ BIND(L_tail_16);
+      __ cmpptr(byte_count, 16*8);
+      __ jcc(Assembler::less, L_tail_end);
+        if (UseAVX >= 3) {
+          __ lea(tmp1, Address(from, byte_count, Address::times_1, -64));
+          __ lea(tmp2, Address(to,   byte_count, Address::times_1, -64));
+          for (int i = 0; i < 2; i++) __ evmovdquq(as_XMMRegister(i), Address(tmp1, -i * 64), Assembler::AVX_512bit);
+          for (int i = 0; i < 2; i++) __ evmovdqaq(Address(tmp2, -i * 64), as_XMMRegister(i), Assembler::AVX_512bit);
+        } else if (UseAVX >= 1) {
+          __ lea(tmp1, Address(from, byte_count, Address::times_1, -32));
+          __ lea(tmp2, Address(to,   byte_count, Address::times_1, -32));
+          for (int i = 0; i < 4; i++) __ vmovdqu(as_XMMRegister(i), Address(tmp1, -i * 32));
+          for (int i = 0; i < 4; i++) __ vmovdqa(Address(tmp2, -i * 32), as_XMMRegister(i));
+        } else {
+          __ lea(tmp1, Address(from, byte_count, Address::times_1, -16));
+          __ lea(tmp2, Address(to,   byte_count, Address::times_1, -16));
+          for (int i = 0; i < 8; i++) __ movdqu(as_XMMRegister(i), Address(tmp1, -i * 16));
+          for (int i = 0; i < 8; i++) __ movdqa(Address(tmp2, -i * 16), as_XMMRegister(i));
+        }
+        __ subptr(byte_count, 16*8);
+
+    __ BIND(L_tail_end);
+
+    // Leaving the accelerated copies, clean registers up
+    if (UseAVX >= 2) {
+      __ vzeroupper();
+    }
+
+    // Prepare qword count after byte_count modifications.
+    // TODO: Needed, or L_entry_small can handle it?
+    __ movptr(qword_count, byte_count);
+    __ shrptr(qword_count, 3);
+
+    // Call back to small loop to handle the rest
+    __ jmp(L_entry_small);
+  }
+
+  // Copy small chunks forward
+  // TODO: Argument descriptions
+  void copy_bytes_forward_small(Register from, Register to,
+                                Register qword_count, Register byte_count,
+                                Label& L_entry_small_bytes, Label& L_entry_small_qwords,
+                                int unit_size) {
+
+    assert_different_registers(from, to, qword_count, byte_count);
+
+    // This requires preparing the qword_count and src/dst addresses:
+    __ movptr(qword_count, byte_count);
+    __ shrptr(qword_count, 3);
+
+    // Re-purpose these registers for end_*, and protect old registers from accidental use.
+    Register end_from = from;
+    Register end_to = to;
+    __ lea(end_from, Address(from, qword_count, Address::times_8));
+    __ lea(end_to,   Address(to,   qword_count, Address::times_8));
+    from = noreg;
+    to = noreg;
+
+    __ negptr(qword_count);
+
+    // Enter here from large copies too. When entering from there, expected registers
+    // (end_from, end_to, qword_count) should have been set up already, like with our
+    // prolog above.
+    __ BIND(L_entry_small_qwords);
+
+    Label L_small_qwords_4, L_small_qwords_2, L_small_qwords_1, L_small_bytes_2, L_small_bytes_1;
+    Label L_exit;
+
+    // Loop: copy every four qwords, while possible.
+
+    __ BIND(L_small_qwords_4);
+      __ align(OptoLoopAlignment);
+      __ cmpptr(qword_count, -4);
+      __ jccb(Assembler::greater, L_small_qwords_2);
+        if (UseUnalignedLoadStores) {
+          if (UseAVX >= 1) {
+            __ vmovdqu(xmm0, Address(end_from, qword_count, Address::times_8));
+            __ vmovdqu(Address(end_to, qword_count, Address::times_8), xmm0);
+          } else {
+            for (int i = 0; i < 2; i++) {
+              __ movdqu(as_XMMRegister(i), Address(end_from, qword_count, Address::times_8, i * 16));
+            }
+            for (int i = 0; i < 2; i++) {
+              __ movdqu(Address(end_to, qword_count, Address::times_8, i * 16), as_XMMRegister(i));
+            }
+          }
+        } else {
+          for (int i = 0; i < 4; i++) {
+            __ movq(rax, Address(end_from, qword_count, Address::times_8, i * 8));
+            __ movq(Address(end_to, qword_count, Address::times_8, i * 8), rax);
+          }
+        }
+        __ addptr(qword_count, 4);
+        __ jmpb(L_small_qwords_4);
+
+    // Copy trailing two qwords, if present
+
+    __ BIND(L_small_qwords_2);
+      __ cmpptr(qword_count, -2);
+      __ jccb(Assembler::greater, L_small_qwords_1);
+        if (UseUnalignedLoadStores) {
+          __ movdqu(xmm0, Address(end_from, qword_count, Address::times_8));
+          __ movdqu(Address(end_to, qword_count, Address::times_8), xmm0);
+        } else {
+          for (int i = 0; i < 2; i++) {
+            __ movq(rax, Address(end_from, qword_count, Address::times_8, i * 8));
+            __ movq(Address(end_to, qword_count, Address::times_8, i * 8), rax);
+          }
+        }
+        __ addptr(qword_count, 2);
+
+    // Copy trailing qword, if present
+
+    __ BIND(L_small_qwords_1);
+      __ cmpptr(qword_count, -1);
+      __ jccb(Assembler::greater, L_entry_small_bytes);
+        __ movq(rax, Address(end_from, qword_count, Address::times_8));
+        __ movq(Address(end_to, qword_count, Address::times_8), rax);
+
+    // qword_count is not used anymore
+    DEBUG_ONLY(qword_count = noreg;)
+
+    // Enter here to copy individual bytes.
+    // There is no need to check for trailing bytes when we know that
+    // copied unit size is large enough to never see the small byte tail.
+    __ BIND(L_entry_small_bytes);
+
+    if (unit_size <= 4) {
+      __ testptr(byte_count, 4);
+      __ jccb(Assembler::zero, L_small_bytes_2);
+        __ movl(rax, Address(end_from, 0));
+        __ movl(Address(end_to, 0), rax);
+        __ addptr(end_from, 4);
+        __ addptr(end_to, 4);
+    }
+
+    __ BIND(L_small_bytes_2);
+
+    if (unit_size <= 2) {
+      __ testptr(byte_count, 2);
+      __ jccb(Assembler::zero, L_small_bytes_1);
+        __ movw(rax, Address(end_from, 0));
+        __ movw(Address(end_to, 0), rax);
+        __ addptr(end_from, 2);
+        __ addptr(end_to, 2);
+    }
+
+    __ BIND(L_small_bytes_1);
+
+    if (unit_size <= 1) {
+      __ testptr(byte_count, 1);
+      __ jccb(Assembler::zero, L_exit);
+        __ movb(rax, Address(end_from, 0));
+        __ movb(Address(end_to, 0), rax);
+    }
+
+    __ BIND(L_exit);
+  }
+
+  // Copy big chunks forward
+  // TODO: Argument descriptions
+  void copy_bytes_forward_large(Register from, Register to,
+                                Register qword_count, Register byte_count,
+                                Label& L_entry_large, Label& L_entry_small_qwords) {
+    Register tmp1 = rscratch1;
+    Register tmp2 = rscratch2;
+
+    assert_different_registers(from, to, qword_count, byte_count, tmp1, tmp2);
+
+    __ BIND(L_entry_large);
+
+#ifdef ASSERT
+    if (!UseUnalignedLoadStores) {
+      __ stop("Large copy assumes unaligned load stores");
+    }
+#endif
+
+    Label L_adjust_2byte, L_adjust_4byte, L_adjust_8byte, L_adjust_16byte, L_adjust_32byte, L_adjust_done;
+
+    // Pre-align slide: do enough individual copies to align destination.
+    // At this point we know there is enough elements to hit the proper alignment,
+    // don't need to check byte_count.
+
+    int align = copy_dest_alignment();
+    __ movptr(tmp1, to);
+    __ andptr(tmp1, align - 1);
+    __ subptr(tmp1, align);
+    __ negptr(tmp1);
+    __ andptr(tmp1, align - 1);
+
+    // tmp1 holds the number of excess bytes are found; pre-slide will consume
+    // them. Adjust byte count here. from/to would get adjusted during the pre-slide.
+    __ subptr(byte_count, tmp1);
+
+      __ testptr(tmp1, 1);
+      __ jccb(Assembler::zero, L_adjust_2byte);
+        __ movb(rax, Address(from, 0));
+        __ movb(Address(to, 0), rax);
+        __ addptr(from, 1);
+        __ addptr(to, 1);
+
+    __ BIND(L_adjust_2byte);
+      __ testptr(tmp1, 2);
+      __ jccb(Assembler::zero, L_adjust_4byte);
+        __ movw(rax, Address(from, 0));
+        __ movw(Address(to, 0), rax);
+        __ addptr(from, 2);
+        __ addptr(to, 2);
+
+    __ BIND(L_adjust_4byte);
+      __ testptr(tmp1, 4);
+      __ jccb(Assembler::zero, L_adjust_8byte);
+        __ movl(rax, Address(from, 0));
+        __ movl(Address(to, 0), rax);
+        __ addptr(from, 4);
+        __ addptr(to, 4);
+
+    __ BIND(L_adjust_8byte);
+      __ testptr(tmp1, 8);
+      __ jccb(Assembler::zero, L_adjust_16byte);
+        __ movq(rax, Address(from, 0));
+        __ movq(Address(to, 0), rax);
+        __ addptr(from, 8);
+        __ addptr(to, 8);
+
+    __ BIND(L_adjust_16byte);
+      if (UseAVX >= 1) {
+        __ testptr(tmp1, 16);
+        __ jccb(Assembler::zero, L_adjust_32byte);
+          __ movdqu(xmm0, Address(from, 0));
+          __ movdqu(Address(to, 0), xmm0);
+          __ addptr(from, 16);
+          __ addptr(to, 16);
+      } else {
+        assert(align < 32, "Expected alignment");
+      }
+
+    __ BIND(L_adjust_32byte);
+      if (UseAVX >= 3) {
+        __ testptr(tmp1, 32);
+        __ jccb(Assembler::zero, L_adjust_done);
+          __ vmovdqu(xmm0, Address(from, 0));
+          __ vmovdqu(Address(to, 0), xmm0);
+          __ addptr(from, 32);
+          __ addptr(to, 32);
+      } else {
+        assert(align < 64, "Expected alignment");
+      }
+
+    __ BIND(L_adjust_done);
+
+    // Pre-slide done! At this point, destination is guaranteed to be aligned.
+    // This allows us to do the bulk copies with aligned stores.
+
+    // Prepare qword count and src/dst addresses
+    __ movptr(qword_count, byte_count);
+    __ shrptr(qword_count, 3);
+
+    Register end_from = from;
+    Register end_to = to;
+    __ lea(end_from, Address(from, qword_count, Address::times_8));
+    __ lea(end_to,   Address(to,   qword_count, Address::times_8));
+    from = noreg;
+    to = noreg;
+
+    __ negptr(qword_count);
+
+    copy_bytes_forward_large_aligned(end_from, end_to,
+                             qword_count, byte_count,
+                             L_entry_large, L_entry_small_qwords);
+  }
+
+  // Copy small chunks backward
+  // TODO: Argument descriptions
+  void copy_bytes_backward_small(Register from, Register to,
+                                 Register qword_count, Register byte_count,
+                                 Label& L_entry_small,
+                                 int unitsize) {
+
+    assert_different_registers(from, to, qword_count, byte_count);
+
+    // This requires preparing the qword_count and src/dst addresses:
+    __ movptr(qword_count, byte_count);
+    __ shrptr(qword_count, 3);
+
+    Label L_small_qwords_4, L_small_qwords_2, L_small_qwords_1, L_small_bytes_2, L_small_bytes_1;
+    Label L_exit;
+
+    // Enter here to copy individual bytes. There is no need to check for trailing bytes when we know that
+    // copied unit size is large enough to never see the small byte tail.
+    // Enter here from large copies too. When entering from there, everything
+    // should have been set up already.
+    __ BIND(L_entry_small);
+
+    if (unitsize <= 4) {
+      __ testptr(byte_count, 4);
+      __ jccb(Assembler::zero, L_small_bytes_2);
+        __ movl(rax, Address(from, byte_count, Address::times_1, -4));
+        __ movl(Address(to, byte_count, Address::times_1, -4), rax);
+        __ subptr(byte_count, 4);
+    }
+
+    __ BIND(L_small_bytes_2);
+
+    if (unitsize <= 2) {
+      __ testptr(byte_count, 2);
+      __ jccb(Assembler::zero, L_small_bytes_1);
+        __ movw(rax, Address(from, byte_count, Address::times_1, -2));
+        __ movw(Address(to, byte_count, Address::times_1, -2), rax);
+        __ subptr(byte_count, 2);
+    }
+
+    __ BIND(L_small_bytes_1);
+
+    if (unitsize <= 1) {
+      __ testptr(byte_count, 1);
+      __ jccb(Assembler::zero, L_small_qwords_4);
+        __ movb(rax, Address(from, byte_count, Address::times_1, -1));
+        __ movb(Address(to, byte_count, Address::times_1, -1), rax);
+        __ decrement(byte_count);
+    }
+
+    // Shortcut if byte count is zero. This optimizes tiny loops,
+    // and allows to enter at L_entry_small without initializing
+    // qword_count.
+    __ testptr(byte_count, byte_count);
+    __ jcc(Assembler::zero, L_exit);
+
+    // byte_count is not used anymore.
+    DEBUG_ONLY(byte_count = noreg;)
+
+    // Loop: copy every four qwords, while possible.
+
+    __ BIND(L_small_qwords_4);
+      __ align(OptoLoopAlignment);
+      __ cmpptr(qword_count, 4);
+      __ jccb(Assembler::less, L_small_qwords_2);
+        if (UseUnalignedLoadStores) {
+          if (UseAVX >= 1) {
+            __ vmovdqu(xmm0, Address(from, qword_count, Address::times_8, -32));
+            __ vmovdqu(Address(to, qword_count, Address::times_8, -32), xmm0);
+          } else {
+            for (int i = 0; i < 2; i++) {
+              __ movdqu(as_XMMRegister(i), Address(from, qword_count, Address::times_8, -i * 16 - 16));
+            }
+            for (int i = 0; i < 2; i++) {
+              __ movdqu(Address(to, qword_count, Address::times_8, -i * 16 - 16), as_XMMRegister(i));
+            }
+          }
+        } else {
+          for (int i = 0; i < 4; i++) {
+            __ movq(rax, Address(from, qword_count, Address::times_8, -i * 8 - 8));
+            __ movq(Address(to, qword_count, Address::times_8, -i * 8 - 8), rax);
+          }
+        }
+        __ subptr(qword_count, 4);
+        __ jmpb(L_small_qwords_4);
+
+    // Copy trailing two qwords, if present
+
+    __ BIND(L_small_qwords_2);
+      __ cmpptr(qword_count, 2);
+      __ jccb(Assembler::less, L_small_qwords_1);
+        if (UseUnalignedLoadStores) {
+          __ movdqu(xmm0, Address(from, qword_count, Address::times_8, -16));
+          __ movdqu(Address(to, qword_count, Address::times_8, -16), xmm0);
+        } else {
+          for (int i = 0; i < 2; i++) {
+            __ movq(rax, Address(from, qword_count, Address::times_8, -i * 8 - 8));
+            __ movq(Address(to, qword_count, Address::times_8, -i * 8 - 8), rax);
+          }
+        }
+        __ subptr(qword_count, 2);
+
+    // Copy trailing qword, if present
+
+    __ BIND(L_small_qwords_1);
+      __ cmpptr(qword_count, 1);
+      __ jccb(Assembler::less, L_exit);
+        __ movq(rax, Address(from, qword_count, Address::times_8, -8));
+        __ movq(Address(to, qword_count, Address::times_8, -8), rax);
+
+    __ BIND(L_exit);
   }
 
   // Copy big chunks backward
-  //
-  // Inputs:
-  //   from         - source arrays address
-  //   dest         - destination array address
-  //   qword_count  - 64-bits element count
-  //   to           - scratch
-  //   L_copy_bytes - entry label
-  //   L_copy_8_bytes  - exit  label
-  //
-  void copy_bytes_backward(Register from, Register dest,
-                              Register qword_count, Register to,
-                              Label& L_copy_bytes, Label& L_copy_8_bytes) {
-    DEBUG_ONLY(__ stop("enter at entry label, not here"));
-    Label L_loop;
-    __ align(OptoLoopAlignment);
-    if (UseUnalignedLoadStores) {
-      Label L_end;
-      __ BIND(L_loop);
-      if (UseAVX >= 2) {
-        __ vmovdqu(xmm0, Address(from, qword_count, Address::times_8, 32));
-        __ vmovdqu(Address(dest, qword_count, Address::times_8, 32), xmm0);
-        __ vmovdqu(xmm1, Address(from, qword_count, Address::times_8,  0));
-        __ vmovdqu(Address(dest, qword_count, Address::times_8,  0), xmm1);
-      } else {
-        __ movdqu(xmm0, Address(from, qword_count, Address::times_8, 48));
-        __ movdqu(Address(dest, qword_count, Address::times_8, 48), xmm0);
-        __ movdqu(xmm1, Address(from, qword_count, Address::times_8, 32));
-        __ movdqu(Address(dest, qword_count, Address::times_8, 32), xmm1);
-        __ movdqu(xmm2, Address(from, qword_count, Address::times_8, 16));
-        __ movdqu(Address(dest, qword_count, Address::times_8, 16), xmm2);
-        __ movdqu(xmm3, Address(from, qword_count, Address::times_8,  0));
-        __ movdqu(Address(dest, qword_count, Address::times_8,  0), xmm3);
-      }
+  // TODO: Argument descriptions
+  void copy_bytes_backward_large(Register from, Register to,
+                                 Register qword_count, Register byte_count,
+                                 Label& L_entry_large, Label& L_entry_small) {
+    Register tmp1 = rscratch1;
+    Register tmp2 = rscratch2;
 
-      __ BIND(L_copy_bytes);
-      __ subptr(qword_count, 8);
-      __ jcc(Assembler::greaterEqual, L_loop);
+    assert_different_registers(from, to, qword_count, byte_count, tmp1, tmp2);
 
-      __ addptr(qword_count, 4);  // add(8) and sub(4)
-      __ jccb(Assembler::less, L_end);
-      // Copy trailing 32 bytes
-      if (UseAVX >= 2) {
-        __ vmovdqu(xmm0, Address(from, qword_count, Address::times_8, 0));
-        __ vmovdqu(Address(dest, qword_count, Address::times_8, 0), xmm0);
-      } else {
-        __ movdqu(xmm0, Address(from, qword_count, Address::times_8, 16));
-        __ movdqu(Address(dest, qword_count, Address::times_8, 16), xmm0);
-        __ movdqu(xmm1, Address(from, qword_count, Address::times_8,  0));
-        __ movdqu(Address(dest, qword_count, Address::times_8,  0), xmm1);
-      }
-      __ subptr(qword_count, 4);
-      __ BIND(L_end);
-      if (UseAVX >= 2) {
-        // clean upper bits of YMM registers
-        __ vpxor(xmm0, xmm0);
-        __ vpxor(xmm1, xmm1);
-      }
-    } else {
-      // Copy 32-bytes per iteration
-      __ BIND(L_loop);
-      __ movq(to, Address(from, qword_count, Address::times_8, 24));
-      __ movq(Address(dest, qword_count, Address::times_8, 24), to);
-      __ movq(to, Address(from, qword_count, Address::times_8, 16));
-      __ movq(Address(dest, qword_count, Address::times_8, 16), to);
-      __ movq(to, Address(from, qword_count, Address::times_8,  8));
-      __ movq(Address(dest, qword_count, Address::times_8,  8), to);
-      __ movq(to, Address(from, qword_count, Address::times_8,  0));
-      __ movq(Address(dest, qword_count, Address::times_8,  0), to);
+    __ BIND(L_entry_large);
 
-      __ BIND(L_copy_bytes);
-      __ subptr(qword_count, 4);
-      __ jcc(Assembler::greaterEqual, L_loop);
+#ifdef ASSERT
+    if (!UseUnalignedLoadStores) {
+      __ stop("Large copy assumes unaligned load stores");
     }
-    __ addptr(qword_count, 4);
-    __ jcc(Assembler::greater, L_copy_8_bytes); // Copy trailing qwords
+#endif
+
+    Label L_adjust_2byte, L_adjust_4byte, L_adjust_8byte, L_adjust_16byte, L_adjust_32byte, L_adjust_done;
+
+    // Pre-align slide: do enough individual copies to align destination.
+    // At this point we know there is enough elements to hit the proper alignment,
+    // don't need to check byte_count.
+
+    int align = copy_dest_alignment();
+    __ lea(tmp1, Address(to, byte_count, Address::times_1));
+    __ andptr(tmp1, align - 1);
+
+    // tmp1 holds the number of excess bytes are found; pre-slide will consume
+    // them.
+
+      __ testptr(tmp1, 1);
+      __ jccb(Assembler::zero, L_adjust_2byte);
+        __ movb(rax, Address(from, byte_count, Address::times_1, -1));
+        __ movb(Address(to, byte_count, Address::times_1, -1), rax);
+        __ decrement(byte_count);
+
+    __ BIND(L_adjust_2byte);
+      __ testptr(tmp1, 2);
+      __ jccb(Assembler::zero, L_adjust_4byte);
+        __ movw(rax, Address(from, byte_count, Address::times_1, -2));
+        __ movw(Address(to, byte_count, Address::times_1, -2), rax);
+        __ subptr(byte_count, 2);
+
+    __ BIND(L_adjust_4byte);
+      __ testptr(tmp1, 4);
+      __ jccb(Assembler::zero, L_adjust_8byte);
+        __ movl(rax, Address(from, byte_count, Address::times_1, -4));
+        __ movl(Address(to, byte_count, Address::times_1, -4), rax);
+        __ subptr(byte_count, 4);
+
+    __ BIND(L_adjust_8byte);
+      __ testptr(tmp1, 8);
+      __ jccb(Assembler::zero, L_adjust_16byte);
+        __ movq(rax, Address(from, byte_count, Address::times_1, -8));
+        __ movq(Address(to, byte_count, Address::times_1, -8), rax);
+        __ subptr(byte_count, 8);
+
+    __ BIND(L_adjust_16byte);
+      if (UseAVX >= 1) {
+        __ testptr(tmp1, 16);
+        __ jccb(Assembler::zero, L_adjust_32byte);
+          __ movdqu(xmm0, Address(from, byte_count, Address::times_1, -16));
+          __ movdqu(Address(to, byte_count, Address::times_1, -16), xmm0);
+          __ subptr(byte_count, 16);
+      } else {
+        assert(align < 32, "Expected alignment");
+      }
+
+    __ BIND(L_adjust_32byte);
+      if (UseAVX >= 3) {
+        __ testptr(tmp1, 32);
+        __ jccb(Assembler::zero, L_adjust_done);
+          __ vmovdqu(xmm0, Address(from, byte_count, Address::times_1, -32));
+          __ vmovdqu(Address(to, byte_count, Address::times_1, -32), xmm0);
+          __ subptr(byte_count, 32);
+      } else {
+        assert(align < 64, "Expected alignment");
+      }
+
+    __ BIND(L_adjust_done);
+
+    // Pre-slide done! At this point, destination is guaranteed to be aligned.
+    // This allows us to do the bulk copies with aligned stores.
+
+    copy_bytes_backward_large_aligned(from, to,
+                             qword_count, byte_count,
+                             L_entry_large, L_entry_small);
   }
 
 #ifndef PRODUCT
@@ -1796,17 +2428,10 @@ class StubGenerator: public StubCodeGenerator {
     StubCodeMark mark(this, "StubRoutines", name);
     address start = __ pc();
 
-    Label L_copy_bytes, L_copy_8_bytes, L_copy_4_bytes, L_copy_2_bytes;
-    Label L_copy_byte, L_exit;
     const Register from        = rdi;  // source array address
     const Register to          = rsi;  // destination array address
-    const Register count       = rdx;  // elements count
-    const Register byte_count  = rcx;
-    const Register qword_count = count;
-    const Register end_from    = from; // source array end address
-    const Register end_to      = to;   // destination array end address
-    // End pointers are inclusive, and if count is not zero they point
-    // to the last unit copied:  end_to[0] := end_from[0]
+    const Register byte_count  = rdx;  // elements count
+    const Register qword_count = rcx;
 
     __ enter(); // required for proper stackwalking of RuntimeStub frame
     assert_clean_int(c_rarg2, rax);    // Make sure 'count' is clean int.
@@ -1820,54 +2445,23 @@ class StubGenerator: public StubCodeGenerator {
     setup_arg_regs(); // from => rdi, to => rsi, count => rdx
                       // r9 and r10 may be used to save non-volatile registers
 
+    Label L_entry_large, L_entry_small_bytes, L_entry_small_qwords;
+
+    // Dispatch to large loop, or small bytes, or fall-through to small loop.
+    copy_bytes_dispatch(byte_count,
+                                L_entry_small_bytes, L_entry_large);
+
     {
       // UnsafeCopyMemory page error: continue after ucm
       UnsafeCopyMemoryMark ucmm(this, !aligned, true);
       // 'from', 'to' and 'count' are now valid
-      __ movptr(byte_count, count);
-      __ shrptr(count, 3); // count => qword_count
 
-      // Copy from low to high addresses.  Use 'to' as scratch.
-      __ lea(end_from, Address(from, qword_count, Address::times_8, -8));
-      __ lea(end_to,   Address(to,   qword_count, Address::times_8, -8));
-      __ negptr(qword_count); // make the count negative
-      __ jmp(L_copy_bytes);
-
-      // Copy trailing qwords
-    __ BIND(L_copy_8_bytes);
-      __ movq(rax, Address(end_from, qword_count, Address::times_8, 8));
-      __ movq(Address(end_to, qword_count, Address::times_8, 8), rax);
-      __ increment(qword_count);
-      __ jcc(Assembler::notZero, L_copy_8_bytes);
-
-      // Check for and copy trailing dword
-    __ BIND(L_copy_4_bytes);
-      __ testl(byte_count, 4);
-      __ jccb(Assembler::zero, L_copy_2_bytes);
-      __ movl(rax, Address(end_from, 8));
-      __ movl(Address(end_to, 8), rax);
-
-      __ addptr(end_from, 4);
-      __ addptr(end_to, 4);
-
-      // Check for and copy trailing word
-    __ BIND(L_copy_2_bytes);
-      __ testl(byte_count, 2);
-      __ jccb(Assembler::zero, L_copy_byte);
-      __ movw(rax, Address(end_from, 8));
-      __ movw(Address(end_to, 8), rax);
-
-      __ addptr(end_from, 2);
-      __ addptr(end_to, 2);
-
-      // Check for and copy trailing byte
-    __ BIND(L_copy_byte);
-      __ testl(byte_count, 1);
-      __ jccb(Assembler::zero, L_exit);
-      __ movb(rax, Address(end_from, 8));
-      __ movb(Address(end_to, 8), rax);
+      copy_bytes_forward_small(from, to,
+                               qword_count, byte_count,
+                               L_entry_small_bytes, L_entry_small_qwords,
+                               1);
     }
-  __ BIND(L_exit);
+
     address ucme_exit_pc = __ pc();
     restore_arg_regs();
     inc_counter_np(SharedRuntime::_jbyte_array_copy_ctr); // Update counter after rscratch1 is free
@@ -1878,9 +2472,10 @@ class StubGenerator: public StubCodeGenerator {
 
     {
       UnsafeCopyMemoryMark ucmm(this, !aligned, false, ucme_exit_pc);
-      // Copy in multi-bytes chunks
-      copy_bytes_forward(end_from, end_to, qword_count, rax, L_copy_bytes, L_copy_8_bytes);
-      __ jmp(L_copy_4_bytes);
+
+      copy_bytes_forward_large(from, to,
+                               qword_count, byte_count,
+                               L_entry_large, L_entry_small_qwords);
     }
     return start;
   }
@@ -1916,8 +2511,6 @@ class StubGenerator: public StubCodeGenerator {
     const Register from        = rdi;  // source array address
     const Register to          = rsi;  // destination array address
     const Register count       = rdx;  // elements count
-    const Register byte_count  = rcx;
-    const Register qword_count = count;
 
     __ enter(); // required for proper stackwalking of RuntimeStub frame
     assert_clean_int(c_rarg2, rax);    // Make sure 'count' is clean int.
@@ -1932,43 +2525,29 @@ class StubGenerator: public StubCodeGenerator {
     setup_arg_regs(); // from => rdi, to => rsi, count => rdx
                       // r9 and r10 may be used to save non-volatile registers
 
+    // Adjust qword count for bytes: /8
+    Register qword_count = rcx;
+    __ movptr(qword_count, count);
+    __ shrptr(qword_count, 3);
+
+    // Adjust byte count for bytes: the same
+    Register byte_count = count;
+
+    Label L_entry_large, L_entry_small;
+
+    // Dispatch to large loop, or small bytes, or fall-through to small loop.
+    copy_bytes_dispatch(byte_count,
+                        L_entry_small, L_entry_large);
+
     {
       // UnsafeCopyMemory page error: continue after ucm
       UnsafeCopyMemoryMark ucmm(this, !aligned, true);
       // 'from', 'to' and 'count' are now valid
-      __ movptr(byte_count, count);
-      __ shrptr(count, 3);   // count => qword_count
 
-      // Copy from high to low addresses.
-
-      // Check for and copy trailing byte
-      __ testl(byte_count, 1);
-      __ jcc(Assembler::zero, L_copy_2_bytes);
-      __ movb(rax, Address(from, byte_count, Address::times_1, -1));
-      __ movb(Address(to, byte_count, Address::times_1, -1), rax);
-      __ decrement(byte_count); // Adjust for possible trailing word
-
-      // Check for and copy trailing word
-    __ BIND(L_copy_2_bytes);
-      __ testl(byte_count, 2);
-      __ jcc(Assembler::zero, L_copy_4_bytes);
-      __ movw(rax, Address(from, byte_count, Address::times_1, -2));
-      __ movw(Address(to, byte_count, Address::times_1, -2), rax);
-
-      // Check for and copy trailing dword
-    __ BIND(L_copy_4_bytes);
-      __ testl(byte_count, 4);
-      __ jcc(Assembler::zero, L_copy_bytes);
-      __ movl(rax, Address(from, qword_count, Address::times_8));
-      __ movl(Address(to, qword_count, Address::times_8), rax);
-      __ jmp(L_copy_bytes);
-
-      // Copy trailing qwords
-    __ BIND(L_copy_8_bytes);
-      __ movq(rax, Address(from, qword_count, Address::times_8, -8));
-      __ movq(Address(to, qword_count, Address::times_8, -8), rax);
-      __ decrement(qword_count);
-      __ jcc(Assembler::notZero, L_copy_8_bytes);
+      copy_bytes_backward_small(from, to,
+                                qword_count, byte_count,
+                                L_entry_small,
+                                1);
     }
     restore_arg_regs();
     inc_counter_np(SharedRuntime::_jbyte_array_copy_ctr); // Update counter after rscratch1 is free
@@ -1980,8 +2559,11 @@ class StubGenerator: public StubCodeGenerator {
     {
       // UnsafeCopyMemory page error: continue after ucm
       UnsafeCopyMemoryMark ucmm(this, !aligned, true);
+
       // Copy in multi-bytes chunks
-      copy_bytes_backward(from, to, qword_count, rax, L_copy_bytes, L_copy_8_bytes);
+      copy_bytes_backward_large(from, to,
+                                qword_count, byte_count,
+                                L_entry_large, L_entry_small);
     }
     restore_arg_regs();
     inc_counter_np(SharedRuntime::_jbyte_array_copy_ctr); // Update counter after rscratch1 is free
@@ -2024,16 +2606,9 @@ class StubGenerator: public StubCodeGenerator {
     StubCodeMark mark(this, "StubRoutines", name);
     address start = __ pc();
 
-    Label L_copy_bytes, L_copy_8_bytes, L_copy_4_bytes,L_copy_2_bytes,L_exit;
     const Register from        = rdi;  // source array address
     const Register to          = rsi;  // destination array address
     const Register count       = rdx;  // elements count
-    const Register word_count  = rcx;
-    const Register qword_count = count;
-    const Register end_from    = from; // source array end address
-    const Register end_to      = to;   // destination array end address
-    // End pointers are inclusive, and if count is not zero they point
-    // to the last unit copied:  end_to[0] := end_from[0]
 
     __ enter(); // required for proper stackwalking of RuntimeStub frame
     assert_clean_int(c_rarg2, rax);    // Make sure 'count' is clean int.
@@ -2047,47 +2622,32 @@ class StubGenerator: public StubCodeGenerator {
     setup_arg_regs(); // from => rdi, to => rsi, count => rdx
                       // r9 and r10 may be used to save non-volatile registers
 
+    // Adjust qword count for shorts: /4
+    Register qword_count = rcx;
+    __ movptr(qword_count, count);
+    __ shrptr(qword_count, 2);
+
+    // Adjust byte count for shorts: *2
+    Register byte_count = count;
+    __ shlptr(byte_count, 1);
+
+    Label L_entry_large, L_entry_small_bytes, L_entry_small_qwords;
+
+    // Dispatch to large loop, or small bytes, or fall-through to small loop.
+    copy_bytes_dispatch(byte_count,
+                     L_entry_small_bytes, L_entry_large);
+
     {
       // UnsafeCopyMemory page error: continue after ucm
       UnsafeCopyMemoryMark ucmm(this, !aligned, true);
       // 'from', 'to' and 'count' are now valid
-      __ movptr(word_count, count);
-      __ shrptr(count, 2); // count => qword_count
 
-      // Copy from low to high addresses.  Use 'to' as scratch.
-      __ lea(end_from, Address(from, qword_count, Address::times_8, -8));
-      __ lea(end_to,   Address(to,   qword_count, Address::times_8, -8));
-      __ negptr(qword_count);
-      __ jmp(L_copy_bytes);
-
-      // Copy trailing qwords
-    __ BIND(L_copy_8_bytes);
-      __ movq(rax, Address(end_from, qword_count, Address::times_8, 8));
-      __ movq(Address(end_to, qword_count, Address::times_8, 8), rax);
-      __ increment(qword_count);
-      __ jcc(Assembler::notZero, L_copy_8_bytes);
-
-      // Original 'dest' is trashed, so we can't use it as a
-      // base register for a possible trailing word copy
-
-      // Check for and copy trailing dword
-    __ BIND(L_copy_4_bytes);
-      __ testl(word_count, 2);
-      __ jccb(Assembler::zero, L_copy_2_bytes);
-      __ movl(rax, Address(end_from, 8));
-      __ movl(Address(end_to, 8), rax);
-
-      __ addptr(end_from, 4);
-      __ addptr(end_to, 4);
-
-      // Check for and copy trailing word
-    __ BIND(L_copy_2_bytes);
-      __ testl(word_count, 1);
-      __ jccb(Assembler::zero, L_exit);
-      __ movw(rax, Address(end_from, 8));
-      __ movw(Address(end_to, 8), rax);
+      copy_bytes_forward_small(from, to,
+                               qword_count, byte_count,
+                               L_entry_small_bytes, L_entry_small_qwords,
+                               2);
     }
-  __ BIND(L_exit);
+
     address ucme_exit_pc = __ pc();
     restore_arg_regs();
     inc_counter_np(SharedRuntime::_jshort_array_copy_ctr); // Update counter after rscratch1 is free
@@ -2098,9 +2658,10 @@ class StubGenerator: public StubCodeGenerator {
 
     {
       UnsafeCopyMemoryMark ucmm(this, !aligned, false, ucme_exit_pc);
-      // Copy in multi-bytes chunks
-      copy_bytes_forward(end_from, end_to, qword_count, rax, L_copy_bytes, L_copy_8_bytes);
-      __ jmp(L_copy_4_bytes);
+
+      copy_bytes_forward_large(from, to,
+                               qword_count, byte_count,
+                              L_entry_large, L_entry_small_qwords);
     }
 
     return start;
@@ -2155,12 +2716,9 @@ class StubGenerator: public StubCodeGenerator {
     StubCodeMark mark(this, "StubRoutines", name);
     address start = __ pc();
 
-    Label L_copy_bytes, L_copy_8_bytes, L_copy_4_bytes;
     const Register from        = rdi;  // source array address
     const Register to          = rsi;  // destination array address
     const Register count       = rdx;  // elements count
-    const Register word_count  = rcx;
-    const Register qword_count = count;
 
     __ enter(); // required for proper stackwalking of RuntimeStub frame
     assert_clean_int(c_rarg2, rax);    // Make sure 'count' is clean int.
@@ -2175,35 +2733,30 @@ class StubGenerator: public StubCodeGenerator {
     setup_arg_regs(); // from => rdi, to => rsi, count => rdx
                       // r9 and r10 may be used to save non-volatile registers
 
+    Label L_entry_large, L_entry_small;
+
+    // Adjust qword count for shorts: /4
+    Register qword_count = rcx;
+    __ movptr(qword_count, count);
+    __ shrptr(qword_count, 2);
+
+    // Adjust qword count for shorts: *2
+    Register byte_count = count;
+    __ shlptr(byte_count, 1);
+
+    // Dispatch to large loop, or small bytes, or fall-through to small loop.
+    copy_bytes_dispatch(byte_count,
+                     L_entry_small, L_entry_large);
+
     {
       // UnsafeCopyMemory page error: continue after ucm
       UnsafeCopyMemoryMark ucmm(this, !aligned, true);
       // 'from', 'to' and 'count' are now valid
-      __ movptr(word_count, count);
-      __ shrptr(count, 2); // count => qword_count
 
-      // Copy from high to low addresses.  Use 'to' as scratch.
-
-      // Check for and copy trailing word
-      __ testl(word_count, 1);
-      __ jccb(Assembler::zero, L_copy_4_bytes);
-      __ movw(rax, Address(from, word_count, Address::times_2, -2));
-      __ movw(Address(to, word_count, Address::times_2, -2), rax);
-
-     // Check for and copy trailing dword
-    __ BIND(L_copy_4_bytes);
-      __ testl(word_count, 2);
-      __ jcc(Assembler::zero, L_copy_bytes);
-      __ movl(rax, Address(from, qword_count, Address::times_8));
-      __ movl(Address(to, qword_count, Address::times_8), rax);
-      __ jmp(L_copy_bytes);
-
-      // Copy trailing qwords
-    __ BIND(L_copy_8_bytes);
-      __ movq(rax, Address(from, qword_count, Address::times_8, -8));
-      __ movq(Address(to, qword_count, Address::times_8, -8), rax);
-      __ decrement(qword_count);
-      __ jcc(Assembler::notZero, L_copy_8_bytes);
+      copy_bytes_backward_small(from, to,
+                                qword_count, byte_count,
+                               L_entry_small,
+                               2);
     }
     restore_arg_regs();
     inc_counter_np(SharedRuntime::_jshort_array_copy_ctr); // Update counter after rscratch1 is free
@@ -2216,7 +2769,10 @@ class StubGenerator: public StubCodeGenerator {
       // UnsafeCopyMemory page error: continue after ucm
       UnsafeCopyMemoryMark ucmm(this, !aligned, true);
       // Copy in multi-bytes chunks
-      copy_bytes_backward(from, to, qword_count, rax, L_copy_bytes, L_copy_8_bytes);
+
+      copy_bytes_backward_large(from, to,
+                                qword_count, byte_count,
+                                L_entry_large, L_entry_small);
     }
     restore_arg_regs();
     inc_counter_np(SharedRuntime::_jshort_array_copy_ctr); // Update counter after rscratch1 is free
@@ -2264,12 +2820,6 @@ class StubGenerator: public StubCodeGenerator {
     const Register from        = rdi;  // source array address
     const Register to          = rsi;  // destination array address
     const Register count       = rdx;  // elements count
-    const Register dword_count = rcx;
-    const Register qword_count = count;
-    const Register end_from    = from; // source array end address
-    const Register end_to      = to;   // destination array end address
-    // End pointers are inclusive, and if count is not zero they point
-    // to the last unit copied:  end_to[0] := end_from[0]
 
     __ enter(); // required for proper stackwalking of RuntimeStub frame
     assert_clean_int(c_rarg2, rax);    // Make sure 'count' is clean int.
@@ -2283,6 +2833,22 @@ class StubGenerator: public StubCodeGenerator {
     setup_arg_regs_using_thread(); // from => rdi, to => rsi, count => rdx
                                    // r9 is used to save r15_thread
 
+    // Save the element count for GC barriers
+    const Register saved_count = r8;
+    __ movptr(saved_count, count);
+
+    // Adjust qword count for ints: /2
+    Register qword_count = rcx;
+    __ movptr(qword_count, count);
+    __ shrptr(qword_count, 1);
+
+    // Adjust byte count for ints: *4
+    Register byte_count = count;
+    __ shlptr(byte_count, 2);
+
+    // Final register definition checks
+    assert_different_registers(from, to, qword_count, byte_count, saved_count, rscratch1, rscratch2, r9);
+
     DecoratorSet decorators = IN_HEAP | IS_ARRAY | ARRAYCOPY_DISJOINT;
     if (dest_uninitialized) {
       decorators |= IS_DEST_UNINITIALIZED;
@@ -2293,38 +2859,27 @@ class StubGenerator: public StubCodeGenerator {
 
     BasicType type = is_oop ? T_OBJECT : T_INT;
     BarrierSetAssembler *bs = BarrierSet::barrier_set()->barrier_set_assembler();
-    bs->arraycopy_prologue(_masm, decorators, type, from, to, count);
+    bs->arraycopy_prologue(_masm, decorators, type, from, to, saved_count);
+
+    Label L_entry_large, L_entry_small_bytes, L_entry_small_qwords;
+
+    // Dispatch to large loop, or small bytes, or fall-through to small loop.
+    copy_bytes_dispatch(byte_count,
+                                L_entry_small_bytes, L_entry_large);
 
     {
       // UnsafeCopyMemory page error: continue after ucm
       UnsafeCopyMemoryMark ucmm(this, !is_oop && !aligned, true);
       // 'from', 'to' and 'count' are now valid
-      __ movptr(dword_count, count);
-      __ shrptr(count, 1); // count => qword_count
 
-      // Copy from low to high addresses.  Use 'to' as scratch.
-      __ lea(end_from, Address(from, qword_count, Address::times_8, -8));
-      __ lea(end_to,   Address(to,   qword_count, Address::times_8, -8));
-      __ negptr(qword_count);
-      __ jmp(L_copy_bytes);
-
-      // Copy trailing qwords
-    __ BIND(L_copy_8_bytes);
-      __ movq(rax, Address(end_from, qword_count, Address::times_8, 8));
-      __ movq(Address(end_to, qword_count, Address::times_8, 8), rax);
-      __ increment(qword_count);
-      __ jcc(Assembler::notZero, L_copy_8_bytes);
-
-      // Check for and copy trailing dword
-    __ BIND(L_copy_4_bytes);
-      __ testl(dword_count, 1); // Only byte test since the value is 0 or 1
-      __ jccb(Assembler::zero, L_exit);
-      __ movl(rax, Address(end_from, 8));
-      __ movl(Address(end_to, 8), rax);
+      copy_bytes_forward_small(from, to,
+                               qword_count, byte_count,
+                               L_entry_small_bytes, L_entry_small_qwords,
+                               4);
     }
-  __ BIND(L_exit);
+
     address ucme_exit_pc = __ pc();
-    bs->arraycopy_epilogue(_masm, decorators, type, from, to, dword_count);
+    bs->arraycopy_epilogue(_masm, decorators, type, from, to, saved_count);
     restore_arg_regs_using_thread();
     inc_counter_np(SharedRuntime::_jint_array_copy_ctr); // Update counter after rscratch1 is free
     __ vzeroupper();
@@ -2334,9 +2889,10 @@ class StubGenerator: public StubCodeGenerator {
 
     {
       UnsafeCopyMemoryMark ucmm(this, !is_oop && !aligned, false, ucme_exit_pc);
-      // Copy in multi-bytes chunks
-      copy_bytes_forward(end_from, end_to, qword_count, rax, L_copy_bytes, L_copy_8_bytes);
-      __ jmp(L_copy_4_bytes);
+
+      copy_bytes_forward_large(from, to,
+                               qword_count, byte_count,
+                               L_entry_large, L_entry_small_qwords);
     }
 
     return start;
@@ -2374,8 +2930,6 @@ class StubGenerator: public StubCodeGenerator {
     const Register from        = rdi;  // source array address
     const Register to          = rsi;  // destination array address
     const Register count       = rdx;  // elements count
-    const Register dword_count = rcx;
-    const Register qword_count = count;
 
     __ enter(); // required for proper stackwalking of RuntimeStub frame
     assert_clean_int(c_rarg2, rax);    // Make sure 'count' is clean int.
@@ -2390,6 +2944,22 @@ class StubGenerator: public StubCodeGenerator {
     setup_arg_regs_using_thread(); // from => rdi, to => rsi, count => rdx
                                    // r9 is used to save r15_thread
 
+    // Save the element count for GC barriers
+    const Register saved_count = r8;
+    __ movptr(saved_count, count);
+
+    // Adjust qword count for ints: /2
+    Register qword_count = rcx;
+    __ movptr(qword_count, count);
+    __ shrptr(qword_count, 1);
+
+    // Adjust byte count for ints: *4
+    Register byte_count = count;
+    __ shlptr(byte_count, 2);
+
+    // Final register definition checks
+    assert_different_registers(from, to, qword_count, byte_count, saved_count, rscratch1, rscratch2, r9);
+
     DecoratorSet decorators = IN_HEAP | IS_ARRAY;
     if (dest_uninitialized) {
       decorators |= IS_DEST_UNINITIALIZED;
@@ -2401,31 +2971,25 @@ class StubGenerator: public StubCodeGenerator {
     BasicType type = is_oop ? T_OBJECT : T_INT;
     BarrierSetAssembler *bs = BarrierSet::barrier_set()->barrier_set_assembler();
     // no registers are destroyed by this call
-    bs->arraycopy_prologue(_masm, decorators, type, from, to, count);
+    bs->arraycopy_prologue(_masm, decorators, type, from, to, saved_count);
 
-    assert_clean_int(count, rax); // Make sure 'count' is clean int.
+    assert_clean_int(qword_count, rax); // Make sure 'count' is clean int.
+
+    Label L_entry_large, L_entry_small;
+
+    // Dispatch to large loop, or small bytes, or fall-through to small loop.
+    copy_bytes_dispatch(byte_count,
+                        L_entry_small, L_entry_large);
+
     {
       // UnsafeCopyMemory page error: continue after ucm
       UnsafeCopyMemoryMark ucmm(this, !is_oop && !aligned, true);
       // 'from', 'to' and 'count' are now valid
-      __ movptr(dword_count, count);
-      __ shrptr(count, 1); // count => qword_count
 
-      // Copy from high to low addresses.  Use 'to' as scratch.
-
-      // Check for and copy trailing dword
-      __ testl(dword_count, 1);
-      __ jcc(Assembler::zero, L_copy_bytes);
-      __ movl(rax, Address(from, dword_count, Address::times_4, -4));
-      __ movl(Address(to, dword_count, Address::times_4, -4), rax);
-      __ jmp(L_copy_bytes);
-
-      // Copy trailing qwords
-    __ BIND(L_copy_8_bytes);
-      __ movq(rax, Address(from, qword_count, Address::times_8, -8));
-      __ movq(Address(to, qword_count, Address::times_8, -8), rax);
-      __ decrement(qword_count);
-      __ jcc(Assembler::notZero, L_copy_8_bytes);
+      copy_bytes_backward_small(from, to,
+                                qword_count, byte_count,
+                                L_entry_small,
+                                4);
     }
     if (is_oop) {
       __ jmp(L_exit);
@@ -2441,11 +3005,13 @@ class StubGenerator: public StubCodeGenerator {
       // UnsafeCopyMemory page error: continue after ucm
       UnsafeCopyMemoryMark ucmm(this, !is_oop && !aligned, true);
       // Copy in multi-bytes chunks
-      copy_bytes_backward(from, to, qword_count, rax, L_copy_bytes, L_copy_8_bytes);
+      copy_bytes_backward_large(from, to,
+                                qword_count, byte_count,
+                                L_entry_large, L_entry_small);
     }
 
   __ BIND(L_exit);
-    bs->arraycopy_epilogue(_masm, decorators, type, from, to, dword_count);
+    bs->arraycopy_epilogue(_masm, decorators, type, from, to, saved_count);
     restore_arg_regs_using_thread();
     inc_counter_np(SharedRuntime::_jint_array_copy_ctr); // Update counter after rscratch1 is free
     __ xorptr(rax, rax); // return 0
@@ -2486,12 +3052,7 @@ class StubGenerator: public StubCodeGenerator {
     Label L_copy_bytes, L_copy_8_bytes, L_exit;
     const Register from        = rdi;  // source array address
     const Register to          = rsi;  // destination array address
-    const Register qword_count = rdx;  // elements count
-    const Register end_from    = from; // source array end address
-    const Register end_to      = rcx;  // destination array end address
-    const Register saved_count = r11;
-    // End pointers are inclusive, and if count is not zero they point
-    // to the last unit copied:  end_to[0] := end_from[0]
+    const Register count       = rdx;  // elements count
 
     __ enter(); // required for proper stackwalking of RuntimeStub frame
     // Save no-overlap entry point for generate_conjoint_long_oop_copy()
@@ -2507,6 +3068,21 @@ class StubGenerator: public StubCodeGenerator {
                                      // r9 is used to save r15_thread
     // 'from', 'to' and 'qword_count' are now valid
 
+    // Save the element count for GC barriers
+    const Register saved_count = r8;
+    __ movptr(saved_count, count);
+
+    // Adjust qword count for longs: the same.
+    Register qword_count = count;
+
+    // Adjust byte count for longs: *8
+    Register byte_count = rcx;
+    __ movptr(byte_count, count);
+    __ shlptr(byte_count, 3);
+
+    // Final register definition checks
+    assert_different_registers(from, to, qword_count, byte_count, saved_count, rscratch1, rscratch2, r9);
+
     DecoratorSet decorators = IN_HEAP | IS_ARRAY | ARRAYCOPY_DISJOINT;
     if (dest_uninitialized) {
       decorators |= IS_DEST_UNINITIALIZED;
@@ -2517,23 +3093,22 @@ class StubGenerator: public StubCodeGenerator {
 
     BasicType type = is_oop ? T_OBJECT : T_LONG;
     BarrierSetAssembler *bs = BarrierSet::barrier_set()->barrier_set_assembler();
-    bs->arraycopy_prologue(_masm, decorators, type, from, to, qword_count);
+    bs->arraycopy_prologue(_masm, decorators, type, from, to, saved_count);
+
+    Label L_entry_large, L_entry_small_bytes, L_entry_small_qwords;
+
+    // Dispatch to large loop, or small bytes, or fall-through to small loop.
+    copy_bytes_dispatch(byte_count,
+                     L_entry_small_bytes, L_entry_large);
+
     {
       // UnsafeCopyMemory page error: continue after ucm
       UnsafeCopyMemoryMark ucmm(this, !is_oop && !aligned, true);
 
-      // Copy from low to high addresses.  Use 'to' as scratch.
-      __ lea(end_from, Address(from, qword_count, Address::times_8, -8));
-      __ lea(end_to,   Address(to,   qword_count, Address::times_8, -8));
-      __ negptr(qword_count);
-      __ jmp(L_copy_bytes);
-
-      // Copy trailing qwords
-    __ BIND(L_copy_8_bytes);
-      __ movq(rax, Address(end_from, qword_count, Address::times_8, 8));
-      __ movq(Address(end_to, qword_count, Address::times_8, 8), rax);
-      __ increment(qword_count);
-      __ jcc(Assembler::notZero, L_copy_8_bytes);
+      copy_bytes_forward_small(from, to,
+                               qword_count, byte_count,
+                               L_entry_small_bytes, L_entry_small_qwords,
+                               8);
     }
     if (is_oop) {
       __ jmp(L_exit);
@@ -2549,12 +3124,18 @@ class StubGenerator: public StubCodeGenerator {
     {
       // UnsafeCopyMemory page error: continue after ucm
       UnsafeCopyMemoryMark ucmm(this, !is_oop && !aligned, true);
-      // Copy in multi-bytes chunks
-      copy_bytes_forward(end_from, end_to, qword_count, rax, L_copy_bytes, L_copy_8_bytes);
+
+      copy_bytes_forward_large(from, to,
+                               qword_count, byte_count,
+                               L_entry_large, L_entry_small_qwords);
     }
 
     __ BIND(L_exit);
-    bs->arraycopy_epilogue(_masm, decorators, type, from, to, qword_count);
+    if (is_oop) {
+      // TODO: WTF. What garbles our precious R11?
+      __ movptr(r11, saved_count);
+    }
+    bs->arraycopy_epilogue(_masm, decorators, type, from, to, saved_count);
     restore_arg_regs_using_thread();
     if (is_oop) {
       inc_counter_np(SharedRuntime::_oop_array_copy_ctr); // Update counter after rscratch1 is free
@@ -2596,8 +3177,7 @@ class StubGenerator: public StubCodeGenerator {
     Label L_copy_bytes, L_copy_8_bytes, L_exit;
     const Register from        = rdi;  // source array address
     const Register to          = rsi;  // destination array address
-    const Register qword_count = rdx;  // elements count
-    const Register saved_count = rcx;
+    const Register count       = rdx;  // elements count
 
     __ enter(); // required for proper stackwalking of RuntimeStub frame
     assert_clean_int(c_rarg2, rax);    // Make sure 'count' is clean int.
@@ -2613,6 +3193,21 @@ class StubGenerator: public StubCodeGenerator {
                                    // r9 is used to save r15_thread
     // 'from', 'to' and 'qword_count' are now valid
 
+    // Save the element count for GC barriers
+    const Register saved_count = r8;
+    __ movptr(saved_count, count);
+
+    // Adjust qword count for longs: the same
+    Register qword_count = count;
+
+    // Adjust byte count for longs: *8
+    Register byte_count = rcx;
+    __ movptr(byte_count, count);
+    __ shlptr(byte_count, 3);
+
+    // Final register definition checks
+    assert_different_registers(from, to, qword_count, byte_count, saved_count, rscratch1, rscratch2, r9);
+
     DecoratorSet decorators = IN_HEAP | IS_ARRAY;
     if (dest_uninitialized) {
       decorators |= IS_DEST_UNINITIALIZED;
@@ -2623,19 +3218,22 @@ class StubGenerator: public StubCodeGenerator {
 
     BasicType type = is_oop ? T_OBJECT : T_LONG;
     BarrierSetAssembler *bs = BarrierSet::barrier_set()->barrier_set_assembler();
-    bs->arraycopy_prologue(_masm, decorators, type, from, to, qword_count);
+    bs->arraycopy_prologue(_masm, decorators, type, from, to, saved_count);
+
+    Label L_entry_large, L_entry_small;
+
+    // Dispatch to large loop, or small bytes, or fall-through to small loop.
+    copy_bytes_dispatch(byte_count,
+                        L_entry_small, L_entry_large);
+
     {
       // UnsafeCopyMemory page error: continue after ucm
       UnsafeCopyMemoryMark ucmm(this, !is_oop && !aligned, true);
 
-      __ jmp(L_copy_bytes);
-
-      // Copy trailing qwords
-    __ BIND(L_copy_8_bytes);
-      __ movq(rax, Address(from, qword_count, Address::times_8, -8));
-      __ movq(Address(to, qword_count, Address::times_8, -8), rax);
-      __ decrement(qword_count);
-      __ jcc(Assembler::notZero, L_copy_8_bytes);
+      copy_bytes_backward_small(from, to,
+                                qword_count, byte_count,
+                                L_entry_small,
+                                8);
     }
     if (is_oop) {
       __ jmp(L_exit);
@@ -2652,10 +3250,16 @@ class StubGenerator: public StubCodeGenerator {
       UnsafeCopyMemoryMark ucmm(this, !is_oop && !aligned, true);
 
       // Copy in multi-bytes chunks
-      copy_bytes_backward(from, to, qword_count, rax, L_copy_bytes, L_copy_8_bytes);
+      copy_bytes_backward_large(from, to,
+                                qword_count, byte_count,
+                                L_entry_large, L_entry_small);
     }
     __ BIND(L_exit);
-    bs->arraycopy_epilogue(_masm, decorators, type, from, to, qword_count);
+    if (is_oop) {
+      // TODO: WTF. What garbles our precious R11?
+      __ movptr(r11, saved_count);
+    }
+    bs->arraycopy_epilogue(_masm, decorators, type, from, to, saved_count);
     restore_arg_regs_using_thread();
     if (is_oop) {
       inc_counter_np(SharedRuntime::_oop_array_copy_ctr); // Update counter after rscratch1 is free

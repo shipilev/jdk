@@ -1526,6 +1526,7 @@ private:
   void movdq(Register dst, XMMRegister src);
 
   // Move Aligned Double Quadword
+  void movdqa(Address     dst, XMMRegister src);
   void movdqa(XMMRegister dst, XMMRegister src);
   void movdqa(XMMRegister dst, Address src);
 
@@ -1538,6 +1539,9 @@ private:
   void vmovdqu(Address dst, XMMRegister src);
   void vmovdqu(XMMRegister dst, Address src);
   void vmovdqu(XMMRegister dst, XMMRegister src);
+
+  // Move Aligned 256bit Vector
+  void vmovdqa(Address dst, XMMRegister src);
 
    // Move Unaligned 512bit Vector
   void evmovdqub(Address dst, XMMRegister src, bool merge, int vector_len);
@@ -1561,6 +1565,9 @@ private:
   void evmovdquq(Address dst, KRegister mask, XMMRegister src, bool merge, int vector_len);
   void evmovdquq(XMMRegister dst, KRegister mask, Address src, bool merge, int vector_len);
   void evmovdquq(XMMRegister dst, KRegister mask, XMMRegister src, bool merge, int vector_len);
+
+  // Move Aligned 512bit Vector
+  void evmovdqaq(Address dst, XMMRegister src, int vector_len);
 
   // Move lower 64bit to high 64bit in 128bit register
   void movlhps(XMMRegister dst, XMMRegister src);

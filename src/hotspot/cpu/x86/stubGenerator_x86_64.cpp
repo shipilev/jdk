@@ -2430,8 +2430,7 @@ class StubGenerator: public StubCodeGenerator {
 
     const Register from        = rdi;  // source array address
     const Register to          = rsi;  // destination array address
-    const Register byte_count  = rdx;  // elements count
-    const Register qword_count = rcx;
+    const Register count       = rdx;  // elements count
 
     __ enter(); // required for proper stackwalking of RuntimeStub frame
     assert_clean_int(c_rarg2, rax);    // Make sure 'count' is clean int.
@@ -2444,6 +2443,18 @@ class StubGenerator: public StubCodeGenerator {
 
     setup_arg_regs(); // from => rdi, to => rsi, count => rdx
                       // r9 and r10 may be used to save non-volatile registers
+
+    // Adjust qword count for bytes: /8
+    Register qword_count = rcx;
+    __ movptr(qword_count, count);
+    __ shrptr(qword_count, 3);
+
+    // Adjust byte count for bytes: the same
+    Register byte_count = r8;
+    __ movptr(byte_count, count);
+
+    // Final register definition checks
+    assert_different_registers(from, to, count, qword_count, byte_count, rscratch1, rscratch2, r9);
 
     Label L_entry_large, L_entry_small_bytes, L_entry_small_qwords;
 
@@ -2531,7 +2542,8 @@ class StubGenerator: public StubCodeGenerator {
     __ shrptr(qword_count, 3);
 
     // Adjust byte count for bytes: the same
-    Register byte_count = count;
+    Register byte_count = r8;
+    __ movptr(byte_count, count);
 
     Label L_entry_large, L_entry_small;
 
@@ -2628,8 +2640,12 @@ class StubGenerator: public StubCodeGenerator {
     __ shrptr(qword_count, 2);
 
     // Adjust byte count for shorts: *2
-    Register byte_count = count;
+    Register byte_count = r8;
+    __ movptr(byte_count, count);
     __ shlptr(byte_count, 1);
+
+    // Final register definition checks
+    assert_different_registers(from, to, count, qword_count, byte_count, rscratch1, rscratch2, r9);
 
     Label L_entry_large, L_entry_small_bytes, L_entry_small_qwords;
 
@@ -2741,8 +2757,12 @@ class StubGenerator: public StubCodeGenerator {
     __ shrptr(qword_count, 2);
 
     // Adjust qword count for shorts: *2
-    Register byte_count = count;
+    Register byte_count = r8;
+    __ movptr(byte_count, count);
     __ shlptr(byte_count, 1);
+
+    // Final register definition checks
+    assert_different_registers(from, to, count, qword_count, byte_count, rscratch1, rscratch2, r9);
 
     // Dispatch to large loop, or small bytes, or fall-through to small loop.
     copy_bytes_dispatch(byte_count,
@@ -2833,21 +2853,18 @@ class StubGenerator: public StubCodeGenerator {
     setup_arg_regs_using_thread(); // from => rdi, to => rsi, count => rdx
                                    // r9 is used to save r15_thread
 
-    // Save the element count for GC barriers
-    const Register saved_count = r8;
-    __ movptr(saved_count, count);
-
     // Adjust qword count for ints: /2
     Register qword_count = rcx;
     __ movptr(qword_count, count);
     __ shrptr(qword_count, 1);
 
     // Adjust byte count for ints: *4
-    Register byte_count = count;
+    Register byte_count = r8;
+    __ movptr(byte_count, count);
     __ shlptr(byte_count, 2);
 
     // Final register definition checks
-    assert_different_registers(from, to, qword_count, byte_count, saved_count, rscratch1, rscratch2, r9);
+    assert_different_registers(from, to, count, qword_count, byte_count, rscratch1, rscratch2, r9);
 
     DecoratorSet decorators = IN_HEAP | IS_ARRAY | ARRAYCOPY_DISJOINT;
     if (dest_uninitialized) {
@@ -2859,7 +2876,7 @@ class StubGenerator: public StubCodeGenerator {
 
     BasicType type = is_oop ? T_OBJECT : T_INT;
     BarrierSetAssembler *bs = BarrierSet::barrier_set()->barrier_set_assembler();
-    bs->arraycopy_prologue(_masm, decorators, type, from, to, saved_count);
+    bs->arraycopy_prologue(_masm, decorators, type, from, to, count);
 
     Label L_entry_large, L_entry_small_bytes, L_entry_small_qwords;
 
@@ -2879,7 +2896,7 @@ class StubGenerator: public StubCodeGenerator {
     }
 
     address ucme_exit_pc = __ pc();
-    bs->arraycopy_epilogue(_masm, decorators, type, from, to, saved_count);
+    bs->arraycopy_epilogue(_masm, decorators, type, from, to, count);
     restore_arg_regs_using_thread();
     inc_counter_np(SharedRuntime::_jint_array_copy_ctr); // Update counter after rscratch1 is free
     __ vzeroupper();
@@ -2944,21 +2961,18 @@ class StubGenerator: public StubCodeGenerator {
     setup_arg_regs_using_thread(); // from => rdi, to => rsi, count => rdx
                                    // r9 is used to save r15_thread
 
-    // Save the element count for GC barriers
-    const Register saved_count = r8;
-    __ movptr(saved_count, count);
-
     // Adjust qword count for ints: /2
     Register qword_count = rcx;
     __ movptr(qword_count, count);
     __ shrptr(qword_count, 1);
 
     // Adjust byte count for ints: *4
-    Register byte_count = count;
+    Register byte_count = r8;
+    __ movptr(byte_count, count);
     __ shlptr(byte_count, 2);
 
     // Final register definition checks
-    assert_different_registers(from, to, qword_count, byte_count, saved_count, rscratch1, rscratch2, r9);
+    assert_different_registers(from, to, count, qword_count, byte_count, rscratch1, rscratch2, r9);
 
     DecoratorSet decorators = IN_HEAP | IS_ARRAY;
     if (dest_uninitialized) {
@@ -2971,7 +2985,7 @@ class StubGenerator: public StubCodeGenerator {
     BasicType type = is_oop ? T_OBJECT : T_INT;
     BarrierSetAssembler *bs = BarrierSet::barrier_set()->barrier_set_assembler();
     // no registers are destroyed by this call
-    bs->arraycopy_prologue(_masm, decorators, type, from, to, saved_count);
+    bs->arraycopy_prologue(_masm, decorators, type, from, to, count);
 
     assert_clean_int(qword_count, rax); // Make sure 'count' is clean int.
 
@@ -3011,7 +3025,7 @@ class StubGenerator: public StubCodeGenerator {
     }
 
   __ BIND(L_exit);
-    bs->arraycopy_epilogue(_masm, decorators, type, from, to, saved_count);
+    bs->arraycopy_epilogue(_masm, decorators, type, from, to, count);
     restore_arg_regs_using_thread();
     inc_counter_np(SharedRuntime::_jint_array_copy_ctr); // Update counter after rscratch1 is free
     __ xorptr(rax, rax); // return 0
@@ -3068,20 +3082,17 @@ class StubGenerator: public StubCodeGenerator {
                                      // r9 is used to save r15_thread
     // 'from', 'to' and 'qword_count' are now valid
 
-    // Save the element count for GC barriers
-    const Register saved_count = r8;
-    __ movptr(saved_count, count);
-
     // Adjust qword count for longs: the same.
-    Register qword_count = count;
+    Register qword_count = rcx;
+    __ movptr(qword_count, count);
 
     // Adjust byte count for longs: *8
-    Register byte_count = rcx;
+    Register byte_count = r8;
     __ movptr(byte_count, count);
     __ shlptr(byte_count, 3);
 
     // Final register definition checks
-    assert_different_registers(from, to, qword_count, byte_count, saved_count, rscratch1, rscratch2, r9);
+    assert_different_registers(from, to, count, qword_count, byte_count, rscratch1, rscratch2, r9);
 
     DecoratorSet decorators = IN_HEAP | IS_ARRAY | ARRAYCOPY_DISJOINT;
     if (dest_uninitialized) {
@@ -3093,7 +3104,7 @@ class StubGenerator: public StubCodeGenerator {
 
     BasicType type = is_oop ? T_OBJECT : T_LONG;
     BarrierSetAssembler *bs = BarrierSet::barrier_set()->barrier_set_assembler();
-    bs->arraycopy_prologue(_masm, decorators, type, from, to, saved_count);
+    bs->arraycopy_prologue(_masm, decorators, type, from, to, count);
 
     Label L_entry_large, L_entry_small_bytes, L_entry_small_qwords;
 
@@ -3133,9 +3144,9 @@ class StubGenerator: public StubCodeGenerator {
     __ BIND(L_exit);
     if (is_oop) {
       // TODO: WTF. What garbles our precious R11?
-      __ movptr(r11, saved_count);
+      __ movptr(r11, count);
     }
-    bs->arraycopy_epilogue(_masm, decorators, type, from, to, saved_count);
+    bs->arraycopy_epilogue(_masm, decorators, type, from, to, count);
     restore_arg_regs_using_thread();
     if (is_oop) {
       inc_counter_np(SharedRuntime::_oop_array_copy_ctr); // Update counter after rscratch1 is free
@@ -3193,20 +3204,17 @@ class StubGenerator: public StubCodeGenerator {
                                    // r9 is used to save r15_thread
     // 'from', 'to' and 'qword_count' are now valid
 
-    // Save the element count for GC barriers
-    const Register saved_count = r8;
-    __ movptr(saved_count, count);
-
     // Adjust qword count for longs: the same
-    Register qword_count = count;
+    Register qword_count = rcx;
+    __ movptr(qword_count, count);
 
     // Adjust byte count for longs: *8
-    Register byte_count = rcx;
+    Register byte_count = r8;
     __ movptr(byte_count, count);
     __ shlptr(byte_count, 3);
 
     // Final register definition checks
-    assert_different_registers(from, to, qword_count, byte_count, saved_count, rscratch1, rscratch2, r9);
+    assert_different_registers(from, to, count, qword_count, byte_count, rscratch1, rscratch2, r9);
 
     DecoratorSet decorators = IN_HEAP | IS_ARRAY;
     if (dest_uninitialized) {
@@ -3218,7 +3226,7 @@ class StubGenerator: public StubCodeGenerator {
 
     BasicType type = is_oop ? T_OBJECT : T_LONG;
     BarrierSetAssembler *bs = BarrierSet::barrier_set()->barrier_set_assembler();
-    bs->arraycopy_prologue(_masm, decorators, type, from, to, saved_count);
+    bs->arraycopy_prologue(_masm, decorators, type, from, to, count);
 
     Label L_entry_large, L_entry_small;
 
@@ -3257,9 +3265,9 @@ class StubGenerator: public StubCodeGenerator {
     __ BIND(L_exit);
     if (is_oop) {
       // TODO: WTF. What garbles our precious R11?
-      __ movptr(r11, saved_count);
+      __ movptr(r11, count);
     }
-    bs->arraycopy_epilogue(_masm, decorators, type, from, to, saved_count);
+    bs->arraycopy_epilogue(_masm, decorators, type, from, to, count);
     restore_arg_regs_using_thread();
     if (is_oop) {
       inc_counter_np(SharedRuntime::_oop_array_copy_ctr); // Update counter after rscratch1 is free

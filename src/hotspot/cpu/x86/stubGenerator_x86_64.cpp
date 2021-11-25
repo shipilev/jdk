@@ -1631,6 +1631,14 @@ class StubGenerator: public StubCodeGenerator {
         __ movl(Address(end_to, 0), rax);
         __ addptr(end_from, 4);
         __ addptr(end_to, 4);
+    } else {
+#ifdef ASSERT
+      Label L_ok;
+      __ testptr(byte_count, 4);
+      __ jccb(Assembler::zero, L_ok);
+        __ stop("Should never have this byte tail");
+      __ BIND(L_ok);
+#endif
     }
 
     __ BIND(L_small_bytes_2);
@@ -1642,6 +1650,14 @@ class StubGenerator: public StubCodeGenerator {
         __ movw(Address(end_to, 0), rax);
         __ addptr(end_from, 2);
         __ addptr(end_to, 2);
+    } else {
+#ifdef ASSERT
+      Label L_ok;
+      __ testptr(byte_count, 2);
+      __ jccb(Assembler::zero, L_ok);
+        __ stop("Should never have this byte tail");
+      __ BIND(L_ok);
+#endif
     }
 
     __ BIND(L_small_bytes_1);
@@ -1651,6 +1667,14 @@ class StubGenerator: public StubCodeGenerator {
       __ jccb(Assembler::zero, L_exit);
         __ movb(rax, Address(end_from, 0));
         __ movb(Address(end_to, 0), rax);
+    } else {
+#ifdef ASSERT
+      Label L_ok;
+      __ testptr(byte_count, 1);
+      __ jccb(Assembler::zero, L_ok);
+        __ stop("Should never have this byte tail");
+      __ BIND(L_ok);
+#endif
     }
 
     __ BIND(L_exit);
@@ -1799,6 +1823,14 @@ class StubGenerator: public StubCodeGenerator {
         __ movl(rax, Address(from, byte_count, Address::times_1, -4));
         __ movl(Address(to, byte_count, Address::times_1, -4), rax);
         __ subptr(byte_count, 4);
+    } else {
+#ifdef ASSERT
+      Label L_ok;
+      __ testptr(byte_count, 4);
+      __ jccb(Assembler::zero, L_ok);
+        __ stop("Should never have this byte tail");
+      __ BIND(L_ok);
+#endif
     }
 
     __ BIND(L_small_bytes_2);
@@ -1809,6 +1841,14 @@ class StubGenerator: public StubCodeGenerator {
         __ movw(rax, Address(from, byte_count, Address::times_1, -2));
         __ movw(Address(to, byte_count, Address::times_1, -2), rax);
         __ subptr(byte_count, 2);
+    } else {
+#ifdef ASSERT
+      Label L_ok;
+      __ testptr(byte_count, 2);
+      __ jccb(Assembler::zero, L_ok);
+        __ stop("Should never have this byte tail");
+      __ BIND(L_ok);
+#endif
     }
 
     __ BIND(L_small_bytes_1);
@@ -1819,6 +1859,14 @@ class StubGenerator: public StubCodeGenerator {
         __ movb(rax, Address(from, byte_count, Address::times_1, -1));
         __ movb(Address(to, byte_count, Address::times_1, -1), rax);
         __ decrement(byte_count);
+    } else {
+#ifdef ASSERT
+      Label L_ok;
+      __ testptr(byte_count, 1);
+      __ jccb(Assembler::zero, L_ok);
+        __ stop("Should never have this byte tail");
+      __ BIND(L_ok);
+#endif
     }
 
     // Shortcut if byte count is zero. This optimizes tiny loops,

@@ -133,6 +133,7 @@
  * @run main/othervm -XX:-UseUnalignedLoadStores -XX:UseAVX=0 -XX:UseSSE=0 TestStressBooleanArrayCopy
  */
 
+import java.util.Arrays;
 import java.util.Random;
 import jdk.test.lib.Utils;
 
@@ -146,9 +147,11 @@ public class TestStressBooleanArrayCopy extends AbstractStressArrayCopy {
         System.arraycopy(orig, 0, test, 0, size);
 
         // Check the seed is correct
-        for (int c = 0; c < size; c++) {
-            if (test[c] != orig[c]) {
-                throwSeedError(size, c);
+        {
+            int m = Arrays.mismatch(test, 0, size,
+                                    orig, 0, size);
+            if (m != -1) {
+                throwSeedError(size, m);
             }
         }
 
@@ -156,21 +159,28 @@ public class TestStressBooleanArrayCopy extends AbstractStressArrayCopy {
         System.arraycopy(test, l, test, r, len);
 
         // Check the copy has proper contents
-        for (int c = 0; c < len; c++) {
-            if (test[r+c] != orig[l+c]) {
-                throwError(l, r, len, r+c);
+        {
+            int m = Arrays.mismatch(test, r, r+len,
+                                    orig, l, l+len);
+            if (m != -1) {
+                throwError(l, r, len, r+m);
             }
         }
 
+
         // Check anything else was not affected: head and tail
-        for (int c = 0; c < r; c++) {
-            if (test[c] != orig[c]) {
-                throwError(l, r, len, c);
+        {
+            int m = Arrays.mismatch(test, 0, r,
+                                    orig, 0, r);
+            if (m != -1) {
+                throwError(l, r, len, m);
             }
         }
-        for (int c = r + len; c < size; c++) {
-            if (test[c] != orig[c]) {
-                throwError(l, r, len, c);
+        {
+            int m = Arrays.mismatch(test, r + len, size,
+                                    orig, r + len, size);
+            if (m != -1) {
+                throwError(l, r, len, m);
             }
         }
     }

@@ -1201,7 +1201,8 @@ class StubGenerator: public StubCodeGenerator {
   // TODO: Argument descriptions.
   void copy_bytes_forward_large_aligned(Register from, Register to,
                                 Register qword_count, Register byte_count,
-                                Label& L_entry_large, Label& L_entry_small) {
+                                Label& L_entry_large, Label& L_entry_small,
+                                int unit_size) {
     Register tmp1 = rscratch1;
     Register tmp2 = rscratch2;
 
@@ -1212,12 +1213,19 @@ class StubGenerator: public StubCodeGenerator {
       __ stop("Large copy assumes unaligned load stores");
     }
 
-    Label L_ok;
+    Label L_dst_ok;
     __ lea(tmp1, Address(to, qword_count, Address::times_8));
     __ testptr(tmp1, copy_dest_alignment() - 1);
-    __ jccb(Assembler::zero, L_ok);
+    __ jccb(Assembler::zero, L_dst_ok);
       __ stop("Invariant: destination should be aligned");
-    __ BIND(L_ok);
+    __ BIND(L_dst_ok);
+
+    Label L_src_ok;
+    __ lea(tmp1, Address(from, qword_count, Address::times_8));
+    __ testptr(tmp1, unit_size - 1);
+    __ jccb(Assembler::zero, L_src_ok);
+      __ stop("Invariant: source should be aligned to unit size");
+    __ BIND(L_src_ok);
 #endif
 
     Label L_tail_128, L_tail_64, L_tail_32, L_tail_16, L_tail_end;
@@ -1354,7 +1362,8 @@ class StubGenerator: public StubCodeGenerator {
   // TODO: Argument descriptions.
   void copy_bytes_backward_large_aligned(Register from, Register to,
                                          Register qword_count, Register byte_count,
-                                         Label& L_entry_large, Label& L_entry_small) {
+                                         Label& L_entry_large, Label& L_entry_small,
+                                         int unit_size) {
     Register tmp1 = rscratch1;
     Register tmp2 = rscratch2;
 
@@ -1365,12 +1374,19 @@ class StubGenerator: public StubCodeGenerator {
       __ stop("Large copy assumes unaligned load stores");
     }
 
-    Label L_ok;
+    Label L_dst_ok;
     __ lea(tmp1, Address(to, byte_count));
     __ testptr(tmp1, copy_dest_alignment() - 1);
-    __ jccb(Assembler::zero, L_ok);
-    __ stop("Invariant: destination should be aligned");
-    __ BIND(L_ok);
+    __ jccb(Assembler::zero, L_dst_ok);
+      __ stop("Invariant: destination should be aligned");
+    __ BIND(L_dst_ok);
+
+    Label L_src_ok;
+    __ lea(tmp1, Address(from, byte_count));
+    __ testptr(tmp1, unit_size - 1);
+    __ jccb(Assembler::zero, L_src_ok);
+      __ stop("Invariant: source should be aligned to unit size");
+    __ BIND(L_src_ok);
 #endif
 
     Label L_tail_128, L_tail_64, L_tail_32, L_tail_16, L_tail_end;
@@ -1644,7 +1660,8 @@ class StubGenerator: public StubCodeGenerator {
   // TODO: Argument descriptions
   void copy_bytes_forward_large(Register from, Register to,
                                 Register qword_count, Register byte_count,
-                                Label& L_entry_large, Label& L_entry_small_qwords) {
+                                Label& L_entry_large, Label& L_entry_small_qwords,
+                                int unit_size) {
     Register tmp1 = rscratch1;
     Register tmp2 = rscratch2;
 
@@ -1750,7 +1767,8 @@ class StubGenerator: public StubCodeGenerator {
 
     copy_bytes_forward_large_aligned(end_from, end_to,
                              qword_count, byte_count,
-                             L_entry_large, L_entry_small_qwords);
+                             L_entry_large, L_entry_small_qwords,
+                             unit_size);
   }
 
   // Copy small chunks backward
@@ -1758,7 +1776,7 @@ class StubGenerator: public StubCodeGenerator {
   void copy_bytes_backward_small(Register from, Register to,
                                  Register qword_count, Register byte_count,
                                  Label& L_entry_small,
-                                 int unitsize) {
+                                 int unit_size) {
 
     assert_different_registers(from, to, qword_count, byte_count);
 
@@ -1775,7 +1793,7 @@ class StubGenerator: public StubCodeGenerator {
     // should have been set up already.
     __ BIND(L_entry_small);
 
-    if (unitsize <= 4) {
+    if (unit_size <= 4) {
       __ testptr(byte_count, 4);
       __ jccb(Assembler::zero, L_small_bytes_2);
         __ movl(rax, Address(from, byte_count, Address::times_1, -4));
@@ -1785,7 +1803,7 @@ class StubGenerator: public StubCodeGenerator {
 
     __ BIND(L_small_bytes_2);
 
-    if (unitsize <= 2) {
+    if (unit_size <= 2) {
       __ testptr(byte_count, 2);
       __ jccb(Assembler::zero, L_small_bytes_1);
         __ movw(rax, Address(from, byte_count, Address::times_1, -2));
@@ -1795,7 +1813,7 @@ class StubGenerator: public StubCodeGenerator {
 
     __ BIND(L_small_bytes_1);
 
-    if (unitsize <= 1) {
+    if (unit_size <= 1) {
       __ testptr(byte_count, 1);
       __ jccb(Assembler::zero, L_small_qwords_4);
         __ movb(rax, Address(from, byte_count, Address::times_1, -1));
@@ -1870,7 +1888,8 @@ class StubGenerator: public StubCodeGenerator {
   // TODO: Argument descriptions
   void copy_bytes_backward_large(Register from, Register to,
                                  Register qword_count, Register byte_count,
-                                 Label& L_entry_large, Label& L_entry_small) {
+                                 Label& L_entry_large, Label& L_entry_small,
+                                 int unit_size) {
     Register tmp1 = rscratch1;
     Register tmp2 = rscratch2;
 
@@ -1953,7 +1972,8 @@ class StubGenerator: public StubCodeGenerator {
 
     copy_bytes_backward_large_aligned(from, to,
                              qword_count, byte_count,
-                             L_entry_large, L_entry_small);
+                             L_entry_large, L_entry_small,
+                             unit_size);
   }
 
 #ifndef PRODUCT
@@ -2486,7 +2506,8 @@ class StubGenerator: public StubCodeGenerator {
 
       copy_bytes_forward_large(from, to,
                                qword_count, byte_count,
-                               L_entry_large, L_entry_small_qwords);
+                               L_entry_large, L_entry_small_qwords,
+                               1);
     }
     return start;
   }
@@ -2575,7 +2596,8 @@ class StubGenerator: public StubCodeGenerator {
       // Copy in multi-bytes chunks
       copy_bytes_backward_large(from, to,
                                 qword_count, byte_count,
-                                L_entry_large, L_entry_small);
+                                L_entry_large, L_entry_small,
+                                1);
     }
     restore_arg_regs();
     inc_counter_np(SharedRuntime::_jbyte_array_copy_ctr); // Update counter after rscratch1 is free
@@ -2677,7 +2699,8 @@ class StubGenerator: public StubCodeGenerator {
 
       copy_bytes_forward_large(from, to,
                                qword_count, byte_count,
-                              L_entry_large, L_entry_small_qwords);
+                              L_entry_large, L_entry_small_qwords,
+                              2);
     }
 
     return start;
@@ -2792,7 +2815,8 @@ class StubGenerator: public StubCodeGenerator {
 
       copy_bytes_backward_large(from, to,
                                 qword_count, byte_count,
-                                L_entry_large, L_entry_small);
+                                L_entry_large, L_entry_small,
+                                2);
     }
     restore_arg_regs();
     inc_counter_np(SharedRuntime::_jshort_array_copy_ctr); // Update counter after rscratch1 is free
@@ -2923,7 +2947,8 @@ class StubGenerator: public StubCodeGenerator {
 
       copy_bytes_forward_large(from, to,
                                qword_count, byte_count,
-                               L_entry_large, L_entry_small_qwords);
+                               L_entry_large, L_entry_small_qwords,
+                               4);
     }
 
     return start;
@@ -3041,7 +3066,8 @@ class StubGenerator: public StubCodeGenerator {
       // Copy in multi-bytes chunks
       copy_bytes_backward_large(from, to,
                                 qword_count, byte_count,
-                                L_entry_large, L_entry_small);
+                                L_entry_large, L_entry_small,
+                                4);
     }
 
   __ BIND(L_exit);
@@ -3167,7 +3193,8 @@ class StubGenerator: public StubCodeGenerator {
 
       copy_bytes_forward_large(from, to,
                                qword_count, byte_count,
-                               L_entry_large, L_entry_small_qwords);
+                               L_entry_large, L_entry_small_qwords,
+                               8);
     }
 
     __ BIND(L_exit);
@@ -3301,7 +3328,8 @@ class StubGenerator: public StubCodeGenerator {
       // Copy in multi-bytes chunks
       copy_bytes_backward_large(from, to,
                                 qword_count, byte_count,
-                                L_entry_large, L_entry_small);
+                                L_entry_large, L_entry_small,
+                                8);
     }
     __ BIND(L_exit);
     // Pop these for GC barriers

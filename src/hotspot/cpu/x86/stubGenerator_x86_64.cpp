@@ -2853,6 +2853,10 @@ class StubGenerator: public StubCodeGenerator {
     setup_arg_regs_using_thread(); // from => rdi, to => rsi, count => rdx
                                    // r9 is used to save r15_thread
 
+    // Save these for GC barriers
+    __ push(from);
+    __ push(to);
+
     // Adjust qword count for ints: /2
     Register qword_count = rcx;
     __ movptr(qword_count, count);
@@ -2896,6 +2900,16 @@ class StubGenerator: public StubCodeGenerator {
     }
 
     address ucme_exit_pc = __ pc();
+
+    // Pop these for GC barriers
+    __ pop(to);
+    __ pop(from);
+
+    if (is_oop) {
+      // TODO: WTF. What garbles our precious R11?
+      __ movptr(r11, to);
+    }
+
     bs->arraycopy_epilogue(_masm, decorators, type, from, to, count);
     restore_arg_regs_using_thread();
     inc_counter_np(SharedRuntime::_jint_array_copy_ctr); // Update counter after rscratch1 is free
@@ -2961,6 +2975,10 @@ class StubGenerator: public StubCodeGenerator {
     setup_arg_regs_using_thread(); // from => rdi, to => rsi, count => rdx
                                    // r9 is used to save r15_thread
 
+    // Save these for GC barriers
+    __ push(from);
+    __ push(to);
+
     // Adjust qword count for ints: /2
     Register qword_count = rcx;
     __ movptr(qword_count, count);
@@ -3008,6 +3026,8 @@ class StubGenerator: public StubCodeGenerator {
     if (is_oop) {
       __ jmp(L_exit);
     }
+    __ pop(to);
+    __ pop(from);
     restore_arg_regs_using_thread();
     inc_counter_np(SharedRuntime::_jint_array_copy_ctr); // Update counter after rscratch1 is free
     __ xorptr(rax, rax); // return 0
@@ -3025,6 +3045,9 @@ class StubGenerator: public StubCodeGenerator {
     }
 
   __ BIND(L_exit);
+    // Pop these for GC barriers
+    __ pop(to);
+    __ pop(from);
     bs->arraycopy_epilogue(_masm, decorators, type, from, to, count);
     restore_arg_regs_using_thread();
     inc_counter_np(SharedRuntime::_jint_array_copy_ctr); // Update counter after rscratch1 is free
@@ -3082,6 +3105,10 @@ class StubGenerator: public StubCodeGenerator {
                                      // r9 is used to save r15_thread
     // 'from', 'to' and 'qword_count' are now valid
 
+    // Save these for GC barriers
+    __ push(from);
+    __ push(to);
+
     // Adjust qword count for longs: the same.
     Register qword_count = rcx;
     __ movptr(qword_count, count);
@@ -3124,6 +3151,8 @@ class StubGenerator: public StubCodeGenerator {
     if (is_oop) {
       __ jmp(L_exit);
     } else {
+      __ pop(to);
+      __ pop(from);
       restore_arg_regs_using_thread();
       inc_counter_np(SharedRuntime::_jlong_array_copy_ctr); // Update counter after rscratch1 is free
       __ xorptr(rax, rax); // return 0
@@ -3142,10 +3171,16 @@ class StubGenerator: public StubCodeGenerator {
     }
 
     __ BIND(L_exit);
+
+    // Pop these for GC barriers
+    __ pop(to);
+    __ pop(from);
+
     if (is_oop) {
       // TODO: WTF. What garbles our precious R11?
       __ movptr(r11, count);
     }
+
     bs->arraycopy_epilogue(_masm, decorators, type, from, to, count);
     restore_arg_regs_using_thread();
     if (is_oop) {
@@ -3204,6 +3239,10 @@ class StubGenerator: public StubCodeGenerator {
                                    // r9 is used to save r15_thread
     // 'from', 'to' and 'qword_count' are now valid
 
+    // Save these for GC barriers
+    __ push(from);
+    __ push(to);
+
     // Adjust qword count for longs: the same
     Register qword_count = rcx;
     __ movptr(qword_count, count);
@@ -3246,6 +3285,8 @@ class StubGenerator: public StubCodeGenerator {
     if (is_oop) {
       __ jmp(L_exit);
     } else {
+      __ pop(to);
+      __ pop(from);
       restore_arg_regs_using_thread();
       inc_counter_np(SharedRuntime::_jlong_array_copy_ctr); // Update counter after rscratch1 is free
       __ xorptr(rax, rax); // return 0
@@ -3263,6 +3304,10 @@ class StubGenerator: public StubCodeGenerator {
                                 L_entry_large, L_entry_small);
     }
     __ BIND(L_exit);
+    // Pop these for GC barriers
+    __ pop(to);
+    __ pop(from);
+
     if (is_oop) {
       // TODO: WTF. What garbles our precious R11?
       __ movptr(r11, count);

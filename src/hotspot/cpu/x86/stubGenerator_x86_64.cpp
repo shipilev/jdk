@@ -1636,7 +1636,7 @@ class StubGenerator: public StubCodeGenerator {
       Label L_ok;
       __ testptr(byte_count, 4);
       __ jccb(Assembler::zero, L_ok);
-        __ stop("Should never have this byte tail");
+        __ stop("Atomicity problem: should never have 4-byte tail");
       __ BIND(L_ok);
 #endif
     }
@@ -1655,7 +1655,7 @@ class StubGenerator: public StubCodeGenerator {
       Label L_ok;
       __ testptr(byte_count, 2);
       __ jccb(Assembler::zero, L_ok);
-        __ stop("Should never have this byte tail");
+        __ stop("Atomicity problem: should never have 2-byte tail");
       __ BIND(L_ok);
 #endif
     }
@@ -1672,7 +1672,7 @@ class StubGenerator: public StubCodeGenerator {
       Label L_ok;
       __ testptr(byte_count, 1);
       __ jccb(Assembler::zero, L_ok);
-        __ stop("Should never have this byte tail");
+        __ stop("Atomicity problem: should never have 2-byte tail");
       __ BIND(L_ok);
 #endif
     }
@@ -1716,60 +1716,97 @@ class StubGenerator: public StubCodeGenerator {
     // them. Adjust byte count here. from/to would get adjusted during the pre-slide.
     __ subptr(byte_count, tmp1);
 
+    if (unit_size <= 1) {
       __ testptr(tmp1, 1);
       __ jccb(Assembler::zero, L_adjust_2byte);
         __ movb(rax, Address(from, 0));
         __ movb(Address(to, 0), rax);
         __ addptr(from, 1);
         __ addptr(to, 1);
+    } else {
+#ifdef ASSERT
+      Label L_ok;
+      __ testptr(byte_count, 1);
+      __ jccb(Assembler::zero, L_ok);
+        __ stop("Atomicity problem: should not have 1-byte pre-slide step");
+      __ BIND(L_ok);
+#endif
+    }
 
     __ BIND(L_adjust_2byte);
+
+    if (unit_size <= 2) {
       __ testptr(tmp1, 2);
       __ jccb(Assembler::zero, L_adjust_4byte);
         __ movw(rax, Address(from, 0));
         __ movw(Address(to, 0), rax);
         __ addptr(from, 2);
         __ addptr(to, 2);
+    } else {
+#ifdef ASSERT
+      Label L_ok;
+      __ testptr(byte_count, 2);
+      __ jccb(Assembler::zero, L_ok);
+        __ stop("Atomicity problem: should not have 2-byte pre-slide step");
+      __ BIND(L_ok);
+#endif
+    }
 
     __ BIND(L_adjust_4byte);
+
+    if (unit_size <= 4) {
       __ testptr(tmp1, 4);
       __ jccb(Assembler::zero, L_adjust_8byte);
         __ movl(rax, Address(from, 0));
         __ movl(Address(to, 0), rax);
         __ addptr(from, 4);
         __ addptr(to, 4);
+    } else {
+#ifdef ASSERT
+      Label L_ok;
+      __ testptr(byte_count, 4);
+      __ jccb(Assembler::zero, L_ok);
+        __ stop("Atomicity problem: should not have 4-byte pre-slide step");
+        __ BIND(L_ok);
+#endif
+    }
 
     __ BIND(L_adjust_8byte);
-      __ testptr(tmp1, 8);
-      __ jccb(Assembler::zero, L_adjust_16byte);
-        __ movq(rax, Address(from, 0));
-        __ movq(Address(to, 0), rax);
-        __ addptr(from, 8);
-        __ addptr(to, 8);
+
+    assert(unit_size <= 8, "Add more checks below");
+
+    __ testptr(tmp1, 8);
+    __ jccb(Assembler::zero, L_adjust_16byte);
+      __ movq(rax, Address(from, 0));
+      __ movq(Address(to, 0), rax);
+      __ addptr(from, 8);
+      __ addptr(to, 8);
 
     __ BIND(L_adjust_16byte);
-      if (UseAVX >= 1) {
-        __ testptr(tmp1, 16);
-        __ jccb(Assembler::zero, L_adjust_32byte);
-          __ movdqu(xmm0, Address(from, 0));
-          __ movdqu(Address(to, 0), xmm0);
-          __ addptr(from, 16);
-          __ addptr(to, 16);
-      } else {
-        assert(align < 32, "Expected alignment");
-      }
+
+    if (UseAVX >= 1) {
+      __ testptr(tmp1, 16);
+      __ jccb(Assembler::zero, L_adjust_32byte);
+        __ movdqu(xmm0, Address(from, 0));
+        __ movdqu(Address(to, 0), xmm0);
+        __ addptr(from, 16);
+        __ addptr(to, 16);
+    } else {
+      assert(align < 32, "Expected alignment");
+    }
 
     __ BIND(L_adjust_32byte);
-      if (UseAVX >= 3) {
-        __ testptr(tmp1, 32);
-        __ jccb(Assembler::zero, L_adjust_done);
-          __ vmovdqu(xmm0, Address(from, 0));
-          __ vmovdqu(Address(to, 0), xmm0);
-          __ addptr(from, 32);
-          __ addptr(to, 32);
-      } else {
-        assert(align < 64, "Expected alignment");
-      }
+
+    if (UseAVX >= 3) {
+      __ testptr(tmp1, 32);
+      __ jccb(Assembler::zero, L_adjust_done);
+        __ vmovdqu(xmm0, Address(from, 0));
+        __ vmovdqu(Address(to, 0), xmm0);
+        __ addptr(from, 32);
+        __ addptr(to, 32);
+    } else {
+      assert(align < 64, "Expected alignment");
+    }
 
     __ BIND(L_adjust_done);
 
@@ -1828,7 +1865,7 @@ class StubGenerator: public StubCodeGenerator {
       Label L_ok;
       __ testptr(byte_count, 4);
       __ jccb(Assembler::zero, L_ok);
-        __ stop("Should never have this byte tail");
+        __ stop("Atomicity problem: should never have 4-byte tail");
       __ BIND(L_ok);
 #endif
     }
@@ -1846,7 +1883,7 @@ class StubGenerator: public StubCodeGenerator {
       Label L_ok;
       __ testptr(byte_count, 2);
       __ jccb(Assembler::zero, L_ok);
-        __ stop("Should never have this byte tail");
+        __ stop("Atomicity problem: should never have 2-byte tail");
       __ BIND(L_ok);
 #endif
     }
@@ -1864,7 +1901,7 @@ class StubGenerator: public StubCodeGenerator {
       Label L_ok;
       __ testptr(byte_count, 1);
       __ jccb(Assembler::zero, L_ok);
-        __ stop("Should never have this byte tail");
+        __ stop("Atomicity problem: should never have 1-byte tail");
       __ BIND(L_ok);
 #endif
     }
@@ -1964,54 +2001,91 @@ class StubGenerator: public StubCodeGenerator {
     // tmp1 holds the number of excess bytes are found; pre-slide will consume
     // them.
 
+    if (unit_size <= 1) {
       __ testptr(tmp1, 1);
       __ jccb(Assembler::zero, L_adjust_2byte);
         __ movb(rax, Address(from, byte_count, Address::times_1, -1));
         __ movb(Address(to, byte_count, Address::times_1, -1), rax);
         __ decrement(byte_count);
+    } else {
+#ifdef ASSERT
+      Label L_ok;
+      __ testptr(byte_count, 1);
+      __ jccb(Assembler::zero, L_ok);
+        __ stop("Atomicity problem: should not have 1-byte pre-slide step");
+      __ BIND(L_ok);
+#endif
+    }
 
     __ BIND(L_adjust_2byte);
+
+    if (unit_size <= 2) {
       __ testptr(tmp1, 2);
       __ jccb(Assembler::zero, L_adjust_4byte);
         __ movw(rax, Address(from, byte_count, Address::times_1, -2));
         __ movw(Address(to, byte_count, Address::times_1, -2), rax);
         __ subptr(byte_count, 2);
+    } else {
+#ifdef ASSERT
+      Label L_ok;
+      __ testptr(byte_count, 2);
+      __ jccb(Assembler::zero, L_ok);
+        __ stop("Atomicity problem: should not have 2-byte pre-slide step");
+      __ BIND(L_ok);
+#endif
+    }
 
     __ BIND(L_adjust_4byte);
+
+    if (unit_size <= 4) {
       __ testptr(tmp1, 4);
       __ jccb(Assembler::zero, L_adjust_8byte);
         __ movl(rax, Address(from, byte_count, Address::times_1, -4));
         __ movl(Address(to, byte_count, Address::times_1, -4), rax);
         __ subptr(byte_count, 4);
+    } else {
+#ifdef ASSERT
+      Label L_ok;
+      __ testptr(byte_count, 4);
+      __ jccb(Assembler::zero, L_ok);
+        __ stop("Atomicity problem: should not have 4-byte pre-slide step");
+      __ BIND(L_ok);
+#endif
+    }
 
     __ BIND(L_adjust_8byte);
-      __ testptr(tmp1, 8);
-      __ jccb(Assembler::zero, L_adjust_16byte);
-        __ movq(rax, Address(from, byte_count, Address::times_1, -8));
-        __ movq(Address(to, byte_count, Address::times_1, -8), rax);
-        __ subptr(byte_count, 8);
+
+    assert(unit_size <= 8, "Add more checks below");
+
+    __ testptr(tmp1, 8);
+    __ jccb(Assembler::zero, L_adjust_16byte);
+      __ movq(rax, Address(from, byte_count, Address::times_1, -8));
+      __ movq(Address(to, byte_count, Address::times_1, -8), rax);
+      __ subptr(byte_count, 8);
 
     __ BIND(L_adjust_16byte);
-      if (UseAVX >= 1) {
-        __ testptr(tmp1, 16);
-        __ jccb(Assembler::zero, L_adjust_32byte);
-          __ movdqu(xmm0, Address(from, byte_count, Address::times_1, -16));
-          __ movdqu(Address(to, byte_count, Address::times_1, -16), xmm0);
-          __ subptr(byte_count, 16);
-      } else {
-        assert(align < 32, "Expected alignment");
-      }
+
+    if (UseAVX >= 1) {
+      __ testptr(tmp1, 16);
+      __ jccb(Assembler::zero, L_adjust_32byte);
+        __ movdqu(xmm0, Address(from, byte_count, Address::times_1, -16));
+        __ movdqu(Address(to, byte_count, Address::times_1, -16), xmm0);
+        __ subptr(byte_count, 16);
+    } else {
+      assert(align < 32, "Expected alignment");
+    }
 
     __ BIND(L_adjust_32byte);
-      if (UseAVX >= 3) {
-        __ testptr(tmp1, 32);
-        __ jccb(Assembler::zero, L_adjust_done);
-          __ vmovdqu(xmm0, Address(from, byte_count, Address::times_1, -32));
-          __ vmovdqu(Address(to, byte_count, Address::times_1, -32), xmm0);
-          __ subptr(byte_count, 32);
-      } else {
-        assert(align < 64, "Expected alignment");
-      }
+
+    if (UseAVX >= 3) {
+      __ testptr(tmp1, 32);
+      __ jccb(Assembler::zero, L_adjust_done);
+        __ vmovdqu(xmm0, Address(from, byte_count, Address::times_1, -32));
+        __ vmovdqu(Address(to, byte_count, Address::times_1, -32), xmm0);
+        __ subptr(byte_count, 32);
+    } else {
+      assert(align < 64, "Expected alignment");
+    }
 
     __ BIND(L_adjust_done);
 

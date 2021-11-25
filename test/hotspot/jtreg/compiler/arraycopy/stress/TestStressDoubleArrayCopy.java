@@ -163,7 +163,7 @@ public class TestStressDoubleArrayCopy extends AbstractStressArrayCopy {
             int m = Arrays.mismatch(test, r, r+len,
                                     orig, l, l+len);
             if (m != -1) {
-                throwError(l, r, len, r+m);
+                throwContentsError(l, r, len, r+m);
             }
         }
 
@@ -172,14 +172,14 @@ public class TestStressDoubleArrayCopy extends AbstractStressArrayCopy {
             int m = Arrays.mismatch(test, 0, r,
                                     orig, 0, r);
             if (m != -1) {
-                throwError(l, r, len, m);
+                throwHeadError(l, r, len, m);
             }
         }
         {
             int m = Arrays.mismatch(test, r + len, size,
                                     orig, r + len, size);
             if (m != -1) {
-                throwError(l, r, len, m);
+                throwTailError(l, r, len, m);
             }
         }
     }

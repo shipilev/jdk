@@ -35,8 +35,20 @@ public abstract class AbstractStressArrayCopy {
             len + " elements, at pos " + pos);
     }
 
-    public static void throwError(int l, int r, int len, int pos) {
-        throw new RuntimeException("Error after copy: " +
+    public static void throwContentsError(int l, int r, int len, int pos) {
+        throwError("in contents", l, r, len, pos);
+    }
+
+    public static void throwHeadError(int l, int r, int len, int pos) {
+        throwError("in head", l, r, len, pos);
+    }
+
+    public static void throwTailError(int l, int r, int len, int pos) {
+        throwError("in tail", l, r, len, pos);
+    }
+
+    private static void throwError(String phase, int l, int r, int len, int pos) {
+        throw new RuntimeException("Error " + phase + ": " +
             len + " elements, " +
             "[" + l + ", " + (l+len) + ") -> " +
             "[" + r + ", " + (r+len) + "), " +

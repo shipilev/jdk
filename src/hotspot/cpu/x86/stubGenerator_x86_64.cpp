@@ -2583,8 +2583,8 @@ class StubGenerator: public StubCodeGenerator {
       BLOCK_COMMENT("Entry:");
     }
 
-    setup_arg_regs(); // from => rdi, to => rsi, count => rdx
-                      // r9 and r10 may be used to save non-volatile registers
+    setup_arg_regs_using_thread(); // from => rdi, to => rsi, count => rdx
+                                   // r9 is used to save r15_thread
 
     // Adjust qword count for bytes: /8
     Register qword_count = rcx;
@@ -2616,7 +2616,7 @@ class StubGenerator: public StubCodeGenerator {
     }
 
     address ucme_exit_pc = __ pc();
-    restore_arg_regs();
+    restore_arg_regs_using_thread();
     inc_counter_np(SharedRuntime::_jbyte_array_copy_ctr); // Update counter after rscratch1 is free
     __ xorptr(rax, rax); // return 0
     __ vzeroupper();
@@ -2676,8 +2676,8 @@ class StubGenerator: public StubCodeGenerator {
     }
 
     array_overlap_test(nooverlap_target, Address::times_1);
-    setup_arg_regs(); // from => rdi, to => rsi, count => rdx
-                      // r9 and r10 may be used to save non-volatile registers
+    setup_arg_regs_using_thread(); // from => rdi, to => rsi, count => rdx
+                                   // r9 may be used to save non-volatile registers
 
     // Adjust qword count for bytes: /8
     Register qword_count = rcx;
@@ -2687,6 +2687,9 @@ class StubGenerator: public StubCodeGenerator {
     // Adjust byte count for bytes: the same
     Register byte_count = r8;
     __ movptr(byte_count, count);
+
+    // Final register definition checks
+    assert_different_registers(from, to, count, qword_count, byte_count, rscratch1, rscratch2, r9);
 
     Label L_entry_large, L_entry_small;
 
@@ -2704,7 +2707,7 @@ class StubGenerator: public StubCodeGenerator {
                                 L_entry_small,
                                 1);
     }
-    restore_arg_regs();
+    restore_arg_regs_using_thread();
     inc_counter_np(SharedRuntime::_jbyte_array_copy_ctr); // Update counter after rscratch1 is free
     __ xorptr(rax, rax); // return 0
     __ vzeroupper();
@@ -2721,7 +2724,7 @@ class StubGenerator: public StubCodeGenerator {
                                 L_entry_large, L_entry_small,
                                 1);
     }
-    restore_arg_regs();
+    restore_arg_regs_using_thread();
     inc_counter_np(SharedRuntime::_jbyte_array_copy_ctr); // Update counter after rscratch1 is free
     __ xorptr(rax, rax); // return 0
     __ vzeroupper();
@@ -2775,8 +2778,8 @@ class StubGenerator: public StubCodeGenerator {
       BLOCK_COMMENT("Entry:");
     }
 
-    setup_arg_regs(); // from => rdi, to => rsi, count => rdx
-                      // r9 and r10 may be used to save non-volatile registers
+    setup_arg_regs_using_thread(); // from => rdi, to => rsi, count => rdx
+                                   // r9 is used to save r15_thread
 
     // Adjust qword count for shorts: /4
     Register qword_count = rcx;
@@ -2809,7 +2812,7 @@ class StubGenerator: public StubCodeGenerator {
     }
 
     address ucme_exit_pc = __ pc();
-    restore_arg_regs();
+    restore_arg_regs_using_thread();
     inc_counter_np(SharedRuntime::_jshort_array_copy_ctr); // Update counter after rscratch1 is free
     __ xorptr(rax, rax); // return 0
     __ vzeroupper();
@@ -2891,10 +2894,8 @@ class StubGenerator: public StubCodeGenerator {
     }
 
     array_overlap_test(nooverlap_target, Address::times_2);
-    setup_arg_regs(); // from => rdi, to => rsi, count => rdx
-                      // r9 and r10 may be used to save non-volatile registers
-
-    Label L_entry_large, L_entry_small;
+    setup_arg_regs_using_thread(); // from => rdi, to => rsi, count => rdx
+                                   // r9 is used to save r15_thread
 
     // Adjust qword count for shorts: /4
     Register qword_count = rcx;
@@ -2908,6 +2909,8 @@ class StubGenerator: public StubCodeGenerator {
 
     // Final register definition checks
     assert_different_registers(from, to, count, qword_count, byte_count, rscratch1, rscratch2, r9);
+
+    Label L_entry_large, L_entry_small;
 
     // Dispatch to large loop, or small bytes, or fall-through to small loop.
     copy_bytes_dispatch(byte_count,
@@ -2923,7 +2926,7 @@ class StubGenerator: public StubCodeGenerator {
                                L_entry_small,
                                2);
     }
-    restore_arg_regs();
+    restore_arg_regs_using_thread();
     inc_counter_np(SharedRuntime::_jshort_array_copy_ctr); // Update counter after rscratch1 is free
     __ xorptr(rax, rax); // return 0
     __ vzeroupper();
@@ -2940,7 +2943,7 @@ class StubGenerator: public StubCodeGenerator {
                                 L_entry_large, L_entry_small,
                                 2);
     }
-    restore_arg_regs();
+    restore_arg_regs_using_thread();
     inc_counter_np(SharedRuntime::_jshort_array_copy_ctr); // Update counter after rscratch1 is free
     __ xorptr(rax, rax); // return 0
     __ vzeroupper();

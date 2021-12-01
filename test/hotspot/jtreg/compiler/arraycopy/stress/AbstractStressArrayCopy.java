@@ -26,8 +26,28 @@ import java.util.Random;
 import jdk.test.lib.Utils;
 
 public abstract class AbstractStressArrayCopy {
-    static final int MAX_SIZE = 1024*1024 + 1;
+    /**
+     * Max array size to test. This should be reasonably high to test
+     * massive vectorized copies, plus cases that cross the cache lines and
+     * (small) page boundaries. But it should also be reasonably low to
+     * keep the test costs down.
+     *
+     * A rough guideline:
+     *   - AVX-512: 64-byte copies over 32 registers copies roughly 2K per step.
+     *   - AArch64: small pages can be about 64K large
+     */
+    static final int MAX_SIZE = 128*1024 + 1;
+
+    /**
+     * Arrays up to this size would be tested exhaustively: with all combinations
+     * of source/destination starts and copy lengths. Exercise restraint when bumping
+     * this value, as the test costs are proportional to N^3 of this setting.
+     */
     static final int EXHAUSTIVE_SIZES = Integer.getInteger("exhaustiveSizes", 192);
+
+    /*
+     * Larger arrays would fuzzed with this many attempts.
+     */
     static final int FUZZ_COUNT = Integer.getInteger("fuzzCount", 300);
 
     public static void throwSeedError(int len, int pos) {

@@ -22,115 +22,16 @@
  */
 
 /**
- * @test id=avx3
+ * @test
  * @key stress randomness
  * @library /test/lib
- * @run main/othervm -XX:UseAVX=3 TestStressDoubleArrayCopy
- */
-
-/**
- * @test id=avx2
- * @key stress randomness
- * @library /test/lib
- * @run main/othervm -XX:UseAVX=2 TestStressDoubleArrayCopy
- */
-
-/**
- * @test id=avx1
- * @key stress randomness
- * @library /test/lib
- * @run main/othervm -XX:UseAVX=1 TestStressDoubleArrayCopy
- */
-
-/**
- * @test id=avx0
- * @key stress randomness
- * @library /test/lib
- * @run main/othervm -XX:UseAVX=0 TestStressDoubleArrayCopy
- */
-
-/**
- * @test id=avx0-sse3
- * @key stress randomness
- * @library /test/lib
- * @run main/othervm -XX:UseAVX=0 -XX:UseSSE=3 TestStressDoubleArrayCopy
- */
-
-/**
- * @test id=avx0-sse2
- * @key stress randomness
- * @library /test/lib
- * @run main/othervm -XX:UseAVX=0 -XX:UseSSE=2 TestStressDoubleArrayCopy
- */
-
-/**
- * @test id=avx0-sse1
- * @key stress randomness
- * @library /test/lib
- * @run main/othervm -XX:UseAVX=0 -XX:UseSSE=1 TestStressDoubleArrayCopy
- */
-
-/**
- * @test id=avx0-sse0
- * @key stress randomness
- * @library /test/lib
- * @run main/othervm -XX:UseAVX=0 -XX:UseSSE=0 TestStressDoubleArrayCopy
- */
-
-/**
- * @test id=avx3-no-unaligned
- * @key stress randomness
- * @library /test/lib
- * @run main/othervm -XX:-UseUnalignedLoadStores -XX:UseAVX=3 TestStressDoubleArrayCopy
- */
-
-/**
- * @test id=avx2-no-unaligned
- * @key stress randomness
- * @library /test/lib
- * @run main/othervm -XX:-UseUnalignedLoadStores -XX:UseAVX=2 TestStressDoubleArrayCopy
- */
-
-/**
- * @test id=avx1-no-unaligned
- * @key stress randomness
- * @library /test/lib
- * @run main/othervm -XX:-UseUnalignedLoadStores -XX:UseAVX=1 TestStressDoubleArrayCopy
- */
-
-/**
- * @test id=avx0-no-unaligned
- * @key stress randomness
- * @library /test/lib
- * @run main/othervm -XX:-UseUnalignedLoadStores -XX:UseAVX=0 TestStressDoubleArrayCopy
- */
-
-/**
- * @test id=avx0-sse3-no-unaligned
- * @key stress randomness
- * @library /test/lib
- * @run main/othervm -XX:-UseUnalignedLoadStores -XX:UseAVX=0 -XX:UseSSE=3 TestStressDoubleArrayCopy
- */
-
-/**
- * @test id=avx0-sse2-no-unaligned
- * @key stress randomness
- * @library /test/lib
- * @run main/othervm -XX:-UseUnalignedLoadStores -XX:UseAVX=0 -XX:UseSSE=2 TestStressDoubleArrayCopy
- */
-
-/**
- * @test id=avx0-sse1-no-unaligned
- * @key stress randomness
- * @library /test/lib
- * @run main/othervm -XX:-UseUnalignedLoadStores -XX:UseAVX=0 -XX:UseSSE=1 TestStressDoubleArrayCopy
- */
-
-/**
- * @test id=avx0-sse0-no-unaligned
- * @key stress randomness
- * @library /test/lib
- * @run main/othervm -XX:-UseUnalignedLoadStores -XX:UseAVX=0 -XX:UseSSE=0 TestStressDoubleArrayCopy
+ * @build TestStressDoubleArrayCopy
+ * @build jdk.test.whitebox.WhiteBox
+ * @run driver jdk.test.lib.helpers.ClassFileInstaller jdk.test.whitebox.WhiteBox
+ *
+ * @run main/othervm/timeout=960
+ *      -Xbootclasspath/a:. -XX:+UnlockDiagnosticVMOptions -XX:+WhiteBoxAPI
+ *      StressArrayCopyDriver TestStressDoubleArrayCopy
  */
 
 import java.util.Arrays;

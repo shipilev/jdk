@@ -1174,9 +1174,10 @@ class StubGenerator: public StubCodeGenerator {
       return 64;
     } else if (UseAVX >= 1) {
       return 32;
-    } else {
-      // TODO: Really? Should be 8 with -UnalignedStores?
+    } else if (UseUnalignedLoadStores) {
       return 16;
+    } else {
+      return 8;
     }
   }
 

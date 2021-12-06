@@ -21,27 +21,16 @@
  * questions.
  */
 
-/**
- * @test
- * @key stress randomness
- * @library /test/lib
- * @build TestStressLongArrayCopy
- * @build jdk.test.whitebox.WhiteBox
- * @run driver jdk.test.lib.helpers.ClassFileInstaller jdk.test.whitebox.WhiteBox
- *
- * @run main/othervm/timeout=960
- *      -Xbootclasspath/a:. -XX:+UnlockDiagnosticVMOptions -XX:+WhiteBoxAPI
- *      StressArrayCopyDriver TestStressLongArrayCopy
- */
+package compiler.arraycopy.stress;
 
 import java.util.Arrays;
 import java.util.Random;
 import jdk.test.lib.Utils;
 
-public class TestStressLongArrayCopy extends AbstractStressArrayCopy {
+public class StressDoubleArrayCopy extends AbstractStressArrayCopy {
 
-    private static final long[] orig = new long[MAX_SIZE];
-    private static final long[] test = new long[MAX_SIZE];
+    private static final double[] orig = new double[MAX_SIZE];
+    private static final double[] test = new double[MAX_SIZE];
 
     protected void testWith(int size, int l, int r, int len) {
         // Seed the test from the original
@@ -88,9 +77,9 @@ public class TestStressLongArrayCopy extends AbstractStressArrayCopy {
     public static void main(String... args) {
         Random rand = Utils.getRandomInstance();
         for (int c = 0; c < orig.length; c++) {
-            orig[c] = rand.nextLong();
+            orig[c] = rand.nextDouble();
         }
-        new TestStressLongArrayCopy().run(rand);
+        new StressDoubleArrayCopy().run(rand);
     }
 
 }

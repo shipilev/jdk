@@ -1188,12 +1188,12 @@ class StubGenerator: public StubCodeGenerator {
     // Larger array copies can accept a bit of hit due to complicated control
     // flow, but smaller ones have nothing to amortize these overheads.
     __ cmpptr(byte_count, 8);
-    __ jccb(Assembler::less, L_entry_small);
+    __ jcc(Assembler::less, L_entry_small);
 
-    // If greater than 128 bytes, then it makes sense to prepare and go to
+    // If greater than 256 bytes, then it makes sense to prepare and go to
     // the aligned copy.
     if (UseUnalignedLoadStores) {
-      __ cmpptr(byte_count, 128);
+      __ cmpptr(byte_count, 256);
       __ jcc(Assembler::greater, L_entry_large);
     }
   }
@@ -1563,8 +1563,40 @@ class StubGenerator: public StubCodeGenerator {
     // prolog above.
     __ BIND(L_entry_small_qwords);
 
-    Label L_small_qwords_4, L_small_qwords_2, L_small_qwords_1, L_small_bytes_2, L_small_bytes_1;
+    Label L_small_qwords_8, L_small_qwords_4, L_small_qwords_2, L_small_qwords_1, L_small_bytes_2, L_small_bytes_1;
     Label L_exit;
+
+    // Loop: copy every 8 qwords, while possible.
+
+    __ BIND(L_small_qwords_8);
+      __ align(OptoLoopAlignment);
+      __ cmpptr(qword_count, -8);
+      __ jccb(Assembler::greater, L_small_qwords_4);
+        if (UseUnalignedLoadStores) {
+          // Don't go AVX2 here, so that we don't have a penalty for AVX<->SSE transition
+          if (UseAVX >= 1) {
+            for (int i = 0; i < 2; i++) {
+              __ vmovdqu(as_XMMRegister(i), Address(end_from, qword_count, Address::times_8, i * 32));
+            }
+            for (int i = 0; i < 2; i++) {
+              __ vmovdqu(Address(end_to, qword_count, Address::times_8, i * 32), as_XMMRegister(i));
+            }
+          } else {
+            for (int i = 0; i < 4; i++) {
+              __ movdqu(as_XMMRegister(i), Address(end_from, qword_count, Address::times_8, i * 16));
+            }
+            for (int i = 0; i < 4; i++) {
+              __ movdqu(Address(end_to, qword_count, Address::times_8, i * 16), as_XMMRegister(i));
+            }
+          }
+        } else {
+          for (int i = 0; i < 8; i++) {
+            __ movq(rax, Address(end_from, qword_count, Address::times_8, i * 8));
+            __ movq(Address(end_to, qword_count, Address::times_8, i * 8), rax);
+          }
+        }
+        __ addptr(qword_count, 8);
+        __ jmpb(L_small_qwords_8);
 
     // Loop: copy every four qwords, while possible.
 
@@ -1846,7 +1878,7 @@ class StubGenerator: public StubCodeGenerator {
     __ movptr(qword_count, byte_count);
     __ shrptr(qword_count, 3);
 
-    Label L_small_qwords_4, L_small_qwords_2, L_small_qwords_1, L_small_bytes_2, L_small_bytes_1;
+    Label L_small_qwords_8, L_small_qwords_4, L_small_qwords_2, L_small_qwords_1, L_small_bytes_2, L_small_bytes_1;
     Label L_exit;
 
     // Enter here to copy individual bytes. There is no need to check for trailing bytes when we know that
@@ -1916,7 +1948,39 @@ class StubGenerator: public StubCodeGenerator {
     // byte_count is not used anymore.
     DEBUG_ONLY(byte_count = noreg;)
 
-    // Loop: copy every four qwords, while possible.
+    // Loop: copy every 8 qwords, while possible.
+
+    __ BIND(L_small_qwords_8);
+      __ align(OptoLoopAlignment);
+      __ cmpptr(qword_count, 8);
+      __ jccb(Assembler::less, L_small_qwords_4);
+        if (UseUnalignedLoadStores) {
+          // Don't go AVX2 here, so that we don't have a penalty for AVX<->SSE transition
+          if (UseAVX >= 1) {
+            for (int i = 0; i < 2; i++) {
+              __ vmovdqu(as_XMMRegister(i), Address(from, qword_count, Address::times_8, -i*32 -32));
+            }
+            for (int i = 0; i < 2; i++) {
+              __ vmovdqu(Address(to, qword_count, Address::times_8, -i*32 -32), as_XMMRegister(i));
+            }
+          } else {
+            for (int i = 0; i < 4; i++) {
+              __ movdqu(as_XMMRegister(i), Address(from, qword_count, Address::times_8, -i * 16 - 16));
+            }
+            for (int i = 0; i < 4; i++) {
+              __ movdqu(Address(to, qword_count, Address::times_8, -i * 16 - 16), as_XMMRegister(i));
+            }
+          }
+        } else {
+          for (int i = 0; i < 8; i++) {
+            __ movq(rax, Address(from, qword_count, Address::times_8, -i * 8 - 8));
+            __ movq(Address(to, qword_count, Address::times_8, -i * 8 - 8), rax);
+          }
+        }
+        __ subptr(qword_count, 8);
+        __ jmpb(L_small_qwords_8);
+
+    // Loop: copy every 4 qwords, while possible.
 
     __ BIND(L_small_qwords_4);
       __ align(OptoLoopAlignment);

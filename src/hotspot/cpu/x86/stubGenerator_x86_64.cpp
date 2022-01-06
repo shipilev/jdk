@@ -1229,29 +1229,20 @@ class StubGenerator: public StubCodeGenerator {
     __ BIND(L_src_ok);
 #endif
 
-    Label L_tail_128, L_tail_64, L_tail_32, L_tail_16, L_tail_end;
-
     // Bulk copy assumes some minimal amount of elements available.
-    // We cannot enter with less elements, lest we overflow. Therefore,
-    // try to enter at appropriate bulk tail for smaller arrays.
-    __ addptr(qword_count, 16);
-    __ jcc(Assembler::greater, L_tail_end);
+    // We cannot enter with less elements. Shortcut if too few elements
+    // are present.
 
-    __ addptr(qword_count, 16); // sub(16), add(32)
-    __ jcc(Assembler::greater, L_tail_16);
-
-    if (UseAVX >= 1) {
-      __ addptr(qword_count, 32); // sub(32), add(64)
-      __ jcc(Assembler::greater, L_tail_32);
-    }
+    Label L_tail_end;
 
     if (UseAVX >= 3) {
-      __ addptr(qword_count, 64); // sub(64), add(128)
-      __ jcc(Assembler::greater, L_tail_64);
-
-      __ addptr(qword_count, 128); // sub(128), add(256)
-      __ jcc(Assembler::greater, L_tail_128);
+      __ addptr(qword_count, 256);
+    } else if (UseAVX >= 1) {
+      __ addptr(qword_count, 64);
+    } else {
+      __ addptr(qword_count, 32);
     }
+    __ jcc(Assembler::greater, L_tail_end);
 
     // Massively parallel copy: moves lots of data on each iteration.
     //
@@ -1291,64 +1282,15 @@ class StubGenerator: public StubCodeGenerator {
     }
     __ jcc(Assembler::lessEqual, L_bulk_loop);
 
-    // Copy the tail that is not covered by small sized copy.
+    __ BIND(L_tail_end);
 
     if (UseAVX >= 3) {
-      __ BIND(L_tail_128);
-        __ subptr(qword_count, 128); // sub(256), add(128)
-        __ jcc(Assembler::greater, L_tail_64);
-          __ lea(tmp1, Address(from, qword_count, Address::times_8, -1024));
-          __ lea(tmp2, Address(to,   qword_count, Address::times_8, -1024));
-          for (int i = 0; i < 16; i++) __ evmovdquq(as_XMMRegister(i), Address(tmp1, i * 64), Assembler::AVX_512bit);
-          for (int i = 0; i < 16; i++) __ evmovdqaq(Address(tmp2, i * 64), as_XMMRegister(i), Assembler::AVX_512bit);
-          __ addptr(qword_count, 128);
-
-      __ BIND(L_tail_64);
-        __ subptr(qword_count, 64); // sub(128), add(64)
-        __ jcc(Assembler::greater, L_tail_32);
-          __ lea(tmp1, Address(from, qword_count, Address::times_8, -512));
-          __ lea(tmp2, Address(to,   qword_count, Address::times_8, -512));
-          for (int i = 0; i < 8; i++) __ evmovdquq(as_XMMRegister(i), Address(tmp1, i * 64), Assembler::AVX_512bit);
-          for (int i = 0; i < 8; i++) __ evmovdqaq(Address(tmp2, i * 64), as_XMMRegister(i), Assembler::AVX_512bit);
-          __ addptr(qword_count, 64);
+      __ subptr(qword_count, 256);
+    } else if (UseAVX >= 1) {
+      __ subptr(qword_count, 64);
+    } else {
+      __ subptr(qword_count, 32);
     }
-
-    if (UseAVX >= 1) {
-      __ BIND(L_tail_32);
-        __ subptr(qword_count, 32); // sub(64), add(32)
-        __ jcc(Assembler::greater, L_tail_16);
-          __ lea(tmp1, Address(from, qword_count, Address::times_8, -256));
-          __ lea(tmp2, Address(to,   qword_count, Address::times_8, -256));
-          if (UseAVX >= 3) {
-            for (int i = 0; i < 4; i++) __ evmovdquq(as_XMMRegister(i), Address(tmp1, i * 64), Assembler::AVX_512bit);
-            for (int i = 0; i < 4; i++) __ evmovdqaq(Address(tmp2, i * 64), as_XMMRegister(i), Assembler::AVX_512bit);
-          } else {
-            assert(UseAVX >= 1, "sanity");
-            for (int i = 0; i < 8; i++) __ vmovdqu(as_XMMRegister(i), Address(tmp1, i * 32));
-            for (int i = 0; i < 8; i++) __ vmovdqa(Address(tmp2, i * 32), as_XMMRegister(i));
-          }
-          __ addptr(qword_count, 32);
-    }
-
-    __ BIND(L_tail_16);
-      __ subptr(qword_count, 16); // sub(32), add(16)
-      __ jcc(Assembler::greater, L_tail_end);
-        __ lea(tmp1, Address(from, qword_count, Address::times_8, -128));
-        __ lea(tmp2, Address(to,   qword_count, Address::times_8, -128));
-        if (UseAVX >= 3) {
-          for (int i = 0; i < 2; i++) __ evmovdquq(as_XMMRegister(i), Address(tmp1, i * 64), Assembler::AVX_512bit);
-          for (int i = 0; i < 2; i++) __ evmovdqaq(Address(tmp2, i * 64), as_XMMRegister(i), Assembler::AVX_512bit);
-        } else if (UseAVX >= 1) {
-          for (int i = 0; i < 4; i++) __ vmovdqu(as_XMMRegister(i), Address(tmp1, i * 32));
-          for (int i = 0; i < 4; i++) __ vmovdqa(Address(tmp2, i * 32), as_XMMRegister(i));
-        } else {
-          for (int i = 0; i < 8; i++) __ movdqu(as_XMMRegister(i), Address(tmp1, i * 16));
-          for (int i = 0; i < 8; i++) __ movdqa(Address(tmp2, i * 16), as_XMMRegister(i));
-        }
-        __ addptr(qword_count, 16);
-
-    __ BIND(L_tail_end);
-      __ subptr(qword_count, 16);
 
     // Leaving the accelerated copies, clean registers up
     if (UseAVX >= 2) {
@@ -1390,31 +1332,23 @@ class StubGenerator: public StubCodeGenerator {
     __ BIND(L_src_ok);
 #endif
 
-    Label L_tail_128, L_tail_64, L_tail_32, L_tail_16, L_tail_end;
-
     // TODO: subptr/addptr weaving? cmpptr is more understandable here, though.
 
     // Bulk copy assumes some minimal amount of elements available.
-    // We cannot enter with less elements, lest we overflow. Therefore,
-    // try to enter at appropriate bulk tail for smaller arrays.
-    __ cmpptr(byte_count, 16*8);
-    __ jcc(Assembler::less, L_tail_end);
+    // We cannot enter with less elements. Shortcut if too few elements
+    // are present.
 
-    __ cmpptr(byte_count, 32*8);
-    __ jcc(Assembler::less, L_tail_16);
-
-    if (UseAVX >= 1) {
-      __ cmpptr(byte_count, 64*8);
-      __ jcc(Assembler::less, L_tail_32);
-    }
+    Label L_tail_end;
 
     if (UseAVX >= 3) {
-      __ cmpptr(byte_count, 128*8);
-      __ jcc(Assembler::less, L_tail_64);
-
       __ cmpptr(byte_count, 256*8);
-      __ jcc(Assembler::less, L_tail_128);
+    } else if (UseAVX >= 1) {
+      __ cmpptr(byte_count, 64*8);
+    } else {
+      __ cmpptr(byte_count, 32*8);
     }
+    __ jcc(Assembler::less, L_tail_end);
+
 
     // Massively parallel copy: moves lots of data on each iteration.
     //
@@ -1456,68 +1390,6 @@ class StubGenerator: public StubCodeGenerator {
       __ cmpptr(byte_count, 32*8);
     }
     __ jcc(Assembler::greaterEqual, L_bulk_loop);
-
-    // Copy the tail that is not covered by small sized copy.
-
-    if (UseAVX >= 3) {
-      __ BIND(L_tail_128);
-        __ cmpptr(byte_count, 128*8);
-        __ jcc(Assembler::less, L_tail_64);
-          __ lea(tmp1, Address(from, byte_count, Address::times_1, -64));
-          __ lea(tmp2, Address(to,   byte_count, Address::times_1, -64));
-          for (int i = 0; i < 16; i++) __ evmovdquq(as_XMMRegister(i), Address(tmp1, -i * 64), Assembler::AVX_512bit);
-          for (int i = 0; i < 16; i++) __ evmovdqaq(Address(tmp2, -i * 64), as_XMMRegister(i), Assembler::AVX_512bit);
-          __ subptr(byte_count, 128*8);
-
-      __ BIND(L_tail_64);
-        __ cmpptr(byte_count, 64*8);
-        __ jcc(Assembler::less, L_tail_32);
-          __ lea(tmp1, Address(from, byte_count, Address::times_1, -64));
-          __ lea(tmp2, Address(to,   byte_count, Address::times_1, -64));
-          for (int i = 0; i < 8; i++) __ evmovdquq(as_XMMRegister(i), Address(tmp1, -i * 64), Assembler::AVX_512bit);
-          for (int i = 0; i < 8; i++) __ evmovdqaq(Address(tmp2, -i * 64), as_XMMRegister(i), Assembler::AVX_512bit);
-          __ subptr(byte_count, 64*8);
-    }
-
-    if (UseAVX >= 1) {
-      __ BIND(L_tail_32);
-        __ cmpptr(byte_count, 32*8);
-        __ jcc(Assembler::less, L_tail_16);
-          if (UseAVX >= 3) {
-            __ lea(tmp1, Address(from, byte_count, Address::times_1, -64));
-            __ lea(tmp2, Address(to,   byte_count, Address::times_1, -64));
-            for (int i = 0; i < 4; i++) __ evmovdquq(as_XMMRegister(i), Address(tmp1, -i * 64), Assembler::AVX_512bit);
-            for (int i = 0; i < 4; i++) __ evmovdqaq(Address(tmp2, -i * 64), as_XMMRegister(i), Assembler::AVX_512bit);
-          } else {
-            assert(UseAVX >= 1, "sanity");
-            __ lea(tmp1, Address(from, byte_count, Address::times_1, -32));
-            __ lea(tmp2, Address(to,   byte_count, Address::times_1, -32));
-            for (int i = 0; i < 8; i++) __ vmovdqu(as_XMMRegister(i), Address(tmp1, -i * 32));
-            for (int i = 0; i < 8; i++) __ vmovdqa(Address(tmp2, -i * 32), as_XMMRegister(i));
-          }
-          __ subptr(byte_count, 32*8);
-    }
-
-    __ BIND(L_tail_16);
-      __ cmpptr(byte_count, 16*8);
-      __ jcc(Assembler::less, L_tail_end);
-        if (UseAVX >= 3) {
-          __ lea(tmp1, Address(from, byte_count, Address::times_1, -64));
-          __ lea(tmp2, Address(to,   byte_count, Address::times_1, -64));
-          for (int i = 0; i < 2; i++) __ evmovdquq(as_XMMRegister(i), Address(tmp1, -i * 64), Assembler::AVX_512bit);
-          for (int i = 0; i < 2; i++) __ evmovdqaq(Address(tmp2, -i * 64), as_XMMRegister(i), Assembler::AVX_512bit);
-        } else if (UseAVX >= 1) {
-          __ lea(tmp1, Address(from, byte_count, Address::times_1, -32));
-          __ lea(tmp2, Address(to,   byte_count, Address::times_1, -32));
-          for (int i = 0; i < 4; i++) __ vmovdqu(as_XMMRegister(i), Address(tmp1, -i * 32));
-          for (int i = 0; i < 4; i++) __ vmovdqa(Address(tmp2, -i * 32), as_XMMRegister(i));
-        } else {
-          __ lea(tmp1, Address(from, byte_count, Address::times_1, -16));
-          __ lea(tmp2, Address(to,   byte_count, Address::times_1, -16));
-          for (int i = 0; i < 8; i++) __ movdqu(as_XMMRegister(i), Address(tmp1, -i * 16));
-          for (int i = 0; i < 8; i++) __ movdqa(Address(tmp2, -i * 16), as_XMMRegister(i));
-        }
-        __ subptr(byte_count, 16*8);
 
     __ BIND(L_tail_end);
 

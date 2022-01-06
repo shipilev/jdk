@@ -1568,8 +1568,8 @@ class StubGenerator: public StubCodeGenerator {
 
     // Loop: copy every 8 qwords, while possible.
 
+    __ align(OptoLoopAlignment);
     __ BIND(L_small_qwords_8);
-      __ align(OptoLoopAlignment);
       __ cmpptr(qword_count, -8);
       __ jccb(Assembler::greater, L_small_qwords_4);
         if (UseUnalignedLoadStores) {
@@ -1600,8 +1600,8 @@ class StubGenerator: public StubCodeGenerator {
 
     // Loop: copy every four qwords, while possible.
 
+    __ align(OptoLoopAlignment);
     __ BIND(L_small_qwords_4);
-      __ align(OptoLoopAlignment);
       __ cmpptr(qword_count, -4);
       __ jccb(Assembler::greater, L_small_qwords_2);
         if (UseUnalignedLoadStores) {
@@ -1950,8 +1950,8 @@ class StubGenerator: public StubCodeGenerator {
 
     // Loop: copy every 8 qwords, while possible.
 
+    __ align(OptoLoopAlignment);
     __ BIND(L_small_qwords_8);
-      __ align(OptoLoopAlignment);
       __ cmpptr(qword_count, 8);
       __ jccb(Assembler::less, L_small_qwords_4);
         if (UseUnalignedLoadStores) {
@@ -1982,8 +1982,8 @@ class StubGenerator: public StubCodeGenerator {
 
     // Loop: copy every 4 qwords, while possible.
 
+    __ align(OptoLoopAlignment);
     __ BIND(L_small_qwords_4);
-      __ align(OptoLoopAlignment);
       __ cmpptr(qword_count, 4);
       __ jccb(Assembler::less, L_small_qwords_2);
         if (UseUnalignedLoadStores) {

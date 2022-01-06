@@ -1598,9 +1598,8 @@ class StubGenerator: public StubCodeGenerator {
         __ addptr(qword_count, 8);
         __ jmpb(L_small_qwords_8);
 
-    // Loop: copy every four qwords, while possible.
+    // Copy trailing 4 qwords, if present
 
-    __ align(OptoLoopAlignment);
     __ BIND(L_small_qwords_4);
       __ cmpptr(qword_count, -4);
       __ jccb(Assembler::greater, L_small_qwords_2);
@@ -1623,7 +1622,6 @@ class StubGenerator: public StubCodeGenerator {
           }
         }
         __ addptr(qword_count, 4);
-        __ jmpb(L_small_qwords_4);
 
     // Copy trailing two qwords, if present
 
@@ -1980,9 +1978,8 @@ class StubGenerator: public StubCodeGenerator {
         __ subptr(qword_count, 8);
         __ jmpb(L_small_qwords_8);
 
-    // Loop: copy every 4 qwords, while possible.
+    // Copy trailing 4 qwords, if present
 
-    __ align(OptoLoopAlignment);
     __ BIND(L_small_qwords_4);
       __ cmpptr(qword_count, 4);
       __ jccb(Assembler::less, L_small_qwords_2);
@@ -2005,7 +2002,6 @@ class StubGenerator: public StubCodeGenerator {
           }
         }
         __ subptr(qword_count, 4);
-        __ jmpb(L_small_qwords_4);
 
     // Copy trailing two qwords, if present
 

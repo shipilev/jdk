@@ -1526,8 +1526,7 @@ class StubGenerator: public StubCodeGenerator {
       __ vzeroupper();
     }
 
-    // Prepare qword count after byte_count modifications.
-    // TODO: Needed, or L_entry_small can handle it?
+    // Recompute qword count after byte count modifications.
     __ movptr(qword_count, byte_count);
     __ shrptr(qword_count, 3);
 
@@ -1543,10 +1542,6 @@ class StubGenerator: public StubCodeGenerator {
                                 int unit_size) {
 
     assert_different_registers(from, to, qword_count, byte_count);
-
-    // This requires preparing the qword_count and src/dst addresses:
-    __ movptr(qword_count, byte_count);
-    __ shrptr(qword_count, 3);
 
     // Re-purpose these registers for end_*, and protect old registers from accidental use.
     Register end_from = from;
@@ -1747,8 +1742,10 @@ class StubGenerator: public StubCodeGenerator {
     __ andptr(tmp1, align - 1);
 
     // tmp1 holds the number of excess bytes are found; pre-slide will consume
-    // them. Adjust byte count here. from/to would get adjusted during the pre-slide.
+    // them. Adjust byte/qword counts here. from/to would get adjusted during the pre-slide.
     __ subptr(byte_count, tmp1);
+    __ movptr(qword_count, byte_count);
+    __ shrptr(qword_count, 3);
 
     if (unit_size <= 1) {
       __ testptr(tmp1, 1);
@@ -1847,9 +1844,7 @@ class StubGenerator: public StubCodeGenerator {
     // Pre-slide done! At this point, destination is guaranteed to be aligned.
     // This allows us to do the bulk copies with aligned stores.
 
-    // Prepare qword count and src/dst addresses
-    __ movptr(qword_count, byte_count);
-    __ shrptr(qword_count, 3);
+    // Re-purpose these registers for end_*, and protect old registers from accidental use.
 
     Register end_from = from;
     Register end_to = to;
@@ -1874,10 +1869,6 @@ class StubGenerator: public StubCodeGenerator {
                                  int unit_size) {
 
     assert_different_registers(from, to, qword_count, byte_count);
-
-    // This requires preparing the qword_count and src/dst addresses:
-    __ movptr(qword_count, byte_count);
-    __ shrptr(qword_count, 3);
 
     Label L_small_qwords_8_enter, L_small_qwords_8, L_small_qwords_4, L_small_qwords_2, L_small_qwords_1, L_small_bytes_2, L_small_bytes_1;
     Label L_exit;

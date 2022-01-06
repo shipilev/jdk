@@ -1925,7 +1925,7 @@ class StubGenerator: public StubCodeGenerator {
 
     if (unit_size <= 1) {
       __ testptr(byte_count, 1);
-      __ jccb(Assembler::zero, L_small_qwords_4);
+      __ jccb(Assembler::zero, L_small_qwords_8);
         __ movb(rax, Address(from, byte_count, Address::times_1, -1));
         __ movb(Address(to, byte_count, Address::times_1, -1), rax);
         __ decrement(byte_count);

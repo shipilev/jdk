@@ -1292,11 +1292,6 @@ class StubGenerator: public StubCodeGenerator {
       __ subptr(qword_count, 32);
     }
 
-    // Leaving the accelerated copies, clean registers up
-    if (UseAVX >= 2) {
-      __ vzeroupper();
-    }
-
     // Call back to small loop to handle the rest
     __ jmp(L_entry_small);
   }
@@ -1393,11 +1388,6 @@ class StubGenerator: public StubCodeGenerator {
 
     __ BIND(L_tail_end);
 
-    // Leaving the accelerated copies, clean registers up
-    if (UseAVX >= 2) {
-      __ vzeroupper();
-    }
-
     // Recompute qword count after byte count modifications.
     __ movptr(qword_count, byte_count);
     __ shrptr(qword_count, 3);
@@ -1442,7 +1432,7 @@ class StubGenerator: public StubCodeGenerator {
       __ align(OptoLoopAlignment);
       __ BIND(L_small_qwords_8);
         if (UseUnalignedLoadStores) {
-          // Don't go AVX2 here, so that we don't have a penalty for AVX<->SSE transition
+          // Don't go AVX-512 here, so that we don't have a penalty for AVX<->SSE transition
           if (UseAVX >= 1) {
             for (int i = 0; i < 2; i++) {
               __ vmovdqu(as_XMMRegister(i), Address(end_from, qword_count, Address::times_8, i * 32 - 64));
@@ -1499,6 +1489,10 @@ class StubGenerator: public StubCodeGenerator {
       __ cmpptr(qword_count, -2);
       __ jccb(Assembler::greater, L_small_qwords_1);
         if (UseUnalignedLoadStores) {
+          if (UseAVX >= 1) {
+            // Transition: 256->128 bit copies, clean registers up to avoid transition penalty
+            __ vzeroupper();
+          }
           __ movdqu(xmm0, Address(end_from, qword_count, Address::times_8));
           __ movdqu(Address(end_to, qword_count, Address::times_8), xmm0);
         } else {
@@ -1823,7 +1817,7 @@ class StubGenerator: public StubCodeGenerator {
       __ align(OptoLoopAlignment);
       __ BIND(L_small_qwords_8);
         if (UseUnalignedLoadStores) {
-          // Don't go AVX2 here, so that we don't have a penalty for AVX<->SSE transition
+          // Don't go AVX-512 here, so that we don't have a penalty for AVX<->SSE transition
           if (UseAVX >= 1) {
             for (int i = 0; i < 2; i++) {
               __ vmovdqu(as_XMMRegister(i), Address(from, qword_count, Address::times_8, -i*32 -32 +64));
@@ -1880,6 +1874,10 @@ class StubGenerator: public StubCodeGenerator {
       __ cmpptr(qword_count, 2);
       __ jccb(Assembler::less, L_small_qwords_1);
         if (UseUnalignedLoadStores) {
+          if (UseAVX >= 1) {
+            // Transition: 256->128 bit copies, clean registers up to avoid transition penalty
+            __ vzeroupper();
+          }
           __ movdqu(xmm0, Address(from, qword_count, Address::times_8, -16));
           __ movdqu(Address(to, qword_count, Address::times_8, -16), xmm0);
         } else {

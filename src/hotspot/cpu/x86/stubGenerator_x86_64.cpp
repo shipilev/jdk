@@ -1172,7 +1172,7 @@ class StubGenerator: public StubCodeGenerator {
   int copy_dest_alignment() {
     if (UseAVX >= 3) {
       return 64;
-    } else if (UseAVX >= 1) {
+    } else if (UseAVX >= 2) {
       return 32;
     } else if (UseUnalignedLoadStores) {
       return 16;
@@ -1237,7 +1237,7 @@ class StubGenerator: public StubCodeGenerator {
 
     if (UseAVX >= 3) {
       __ addptr(qword_count, 256);
-    } else if (UseAVX >= 1) {
+    } else if (UseAVX >= 2) {
       __ addptr(qword_count, 64);
     } else {
       __ addptr(qword_count, 32);
@@ -1267,7 +1267,7 @@ class StubGenerator: public StubCodeGenerator {
       for (int i = 16; i < 32; i++) __ evmovdquq(as_XMMRegister(i), Address(tmp1, i * 64), Assembler::AVX_512bit);
       for (int i = 16; i < 32; i++) __ evmovdqaq(Address(tmp2, i * 64), as_XMMRegister(i), Assembler::AVX_512bit);
       __ addptr(qword_count, 256);
-    } else if (UseAVX >= 1) {
+    } else if (UseAVX >= 2) {
       __ lea(tmp1, Address(from, qword_count, Address::times_8, -512));
       __ lea(tmp2, Address(to,   qword_count, Address::times_8, -512));
       for (int i = 0; i < 16; i++)  __ vmovdqu(as_XMMRegister(i), Address(tmp1, i * 32));
@@ -1286,7 +1286,7 @@ class StubGenerator: public StubCodeGenerator {
 
     if (UseAVX >= 3) {
       __ subptr(qword_count, 256);
-    } else if (UseAVX >= 1) {
+    } else if (UseAVX >= 2) {
       __ subptr(qword_count, 64);
     } else {
       __ subptr(qword_count, 32);
@@ -1337,7 +1337,7 @@ class StubGenerator: public StubCodeGenerator {
 
     if (UseAVX >= 3) {
       __ cmpptr(byte_count, 256*8);
-    } else if (UseAVX >= 1) {
+    } else if (UseAVX >= 2) {
       __ cmpptr(byte_count, 64*8);
     } else {
       __ cmpptr(byte_count, 32*8);
@@ -1369,7 +1369,7 @@ class StubGenerator: public StubCodeGenerator {
       for (int i = 16; i < 32; i++) __ evmovdqaq(Address(tmp2, -i * 64), as_XMMRegister(i), Assembler::AVX_512bit);
       __ subptr(byte_count, 256*8);
       __ cmpptr(byte_count, 256*8);
-    } else if (UseAVX >= 1) {
+    } else if (UseAVX >= 2) {
       __ lea(tmp1, Address(from, byte_count, Address::times_1, -32));
       __ lea(tmp2, Address(to,   byte_count, Address::times_1, -32));
       for (int i = 0; i < 16; i++)  __ vmovdqu(as_XMMRegister(i), Address(tmp1, -i * 32));
@@ -1433,7 +1433,7 @@ class StubGenerator: public StubCodeGenerator {
       __ BIND(L_small_qwords_8);
         if (UseUnalignedLoadStores) {
           // Don't go AVX-512 here, so that we don't have a penalty for AVX<->SSE transition
-          if (UseAVX >= 1) {
+          if (UseAVX >= 2) {
             for (int i = 0; i < 2; i++) {
               __ vmovdqu(as_XMMRegister(i), Address(end_from, qword_count, Address::times_8, i * 32 - 64));
             }
@@ -1464,7 +1464,7 @@ class StubGenerator: public StubCodeGenerator {
       __ cmpptr(qword_count, -4);
       __ jccb(Assembler::greater, L_small_qwords_2);
         if (UseUnalignedLoadStores) {
-          if (UseAVX >= 1) {
+          if (UseAVX >= 2) {
             __ vmovdqu(xmm0, Address(end_from, qword_count, Address::times_8));
             __ vmovdqu(Address(end_to, qword_count, Address::times_8), xmm0);
           } else {
@@ -1489,7 +1489,7 @@ class StubGenerator: public StubCodeGenerator {
       __ cmpptr(qword_count, -2);
       __ jccb(Assembler::greater, L_small_qwords_1);
         if (UseUnalignedLoadStores) {
-          if (UseAVX >= 1) {
+          if (UseAVX >= 2) {
             // Transition: 256->128 bit copies, clean registers up to avoid transition penalty
             __ vzeroupper();
           }
@@ -1681,7 +1681,7 @@ class StubGenerator: public StubCodeGenerator {
 
     __ BIND(L_adjust_16byte);
 
-    if (UseAVX >= 1) {
+    if (UseAVX >= 2) {
       __ testptr(tmp1, 16);
       __ jccb(Assembler::zero, L_adjust_32byte);
         __ movdqu(xmm0, Address(from, 0));
@@ -1818,7 +1818,7 @@ class StubGenerator: public StubCodeGenerator {
       __ BIND(L_small_qwords_8);
         if (UseUnalignedLoadStores) {
           // Don't go AVX-512 here, so that we don't have a penalty for AVX<->SSE transition
-          if (UseAVX >= 1) {
+          if (UseAVX >= 2) {
             for (int i = 0; i < 2; i++) {
               __ vmovdqu(as_XMMRegister(i), Address(from, qword_count, Address::times_8, -i*32 -32 +64));
             }
@@ -1849,7 +1849,7 @@ class StubGenerator: public StubCodeGenerator {
       __ cmpptr(qword_count, 4);
       __ jccb(Assembler::less, L_small_qwords_2);
         if (UseUnalignedLoadStores) {
-          if (UseAVX >= 1) {
+          if (UseAVX >= 2) {
             __ vmovdqu(xmm0, Address(from, qword_count, Address::times_8, -32));
             __ vmovdqu(Address(to, qword_count, Address::times_8, -32), xmm0);
           } else {
@@ -1874,7 +1874,7 @@ class StubGenerator: public StubCodeGenerator {
       __ cmpptr(qword_count, 2);
       __ jccb(Assembler::less, L_small_qwords_1);
         if (UseUnalignedLoadStores) {
-          if (UseAVX >= 1) {
+          if (UseAVX >= 2) {
             // Transition: 256->128 bit copies, clean registers up to avoid transition penalty
             __ vzeroupper();
           }
@@ -1995,7 +1995,7 @@ class StubGenerator: public StubCodeGenerator {
 
     __ BIND(L_adjust_16byte);
 
-    if (UseAVX >= 1) {
+    if (UseAVX >= 2) {
       __ testptr(tmp1, 16);
       __ jccb(Assembler::zero, L_adjust_32byte);
         __ movdqu(xmm0, Address(from, byte_count, Address::times_1, -16));

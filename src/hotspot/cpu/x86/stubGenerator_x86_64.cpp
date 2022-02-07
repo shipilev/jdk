@@ -1227,16 +1227,13 @@ class StubGenerator: public StubCodeGenerator {
     __ jccb(Assembler::zero, L_src_ok);
       __ stop("Invariant: source should be aligned to unit size");
     __ BIND(L_src_ok);
+
+    Label L_count_ok;
+    __ cmpptr(qword_count, -32);
+    __ jcc(Assembler::lessEqual, L_count_ok);
+      __ stop("Invariant: not enough elements");
+    __ BIND(L_count_ok);
 #endif
-
-    // Bulk copy assumes some minimal amount of elements available.
-    // We cannot enter with less elements. Shortcut if too few elements
-    // are present.
-
-    Label L_tail_end;
-
-    __ addptr(qword_count, 32);
-    __ jcc(Assembler::greater, L_tail_end);
 
     // Massively parallel copy: move 256 bytes on each iteration.
     // Only a few systems can achieve moving this much in one cycle.
@@ -1251,6 +1248,7 @@ class StubGenerator: public StubCodeGenerator {
     // stalling when doing all the stores at once. It seems that storing 16 registers
     // at once is good enough for both modern Intel and AMD.
     //
+    __ addptr(qword_count, 32);
     Label L_bulk_loop;
     __ align(OptoLoopAlignment);
     __ BIND(L_bulk_loop);
@@ -1268,9 +1266,6 @@ class StubGenerator: public StubCodeGenerator {
     }
     __ addptr(qword_count, 32);
     __ jcc(Assembler::lessEqual, L_bulk_loop);
-
-    __ BIND(L_tail_end);
-
     __ subptr(qword_count, 32);
 
     // Call back to small loop to handle the rest
@@ -1306,18 +1301,15 @@ class StubGenerator: public StubCodeGenerator {
     __ jccb(Assembler::zero, L_src_ok);
       __ stop("Invariant: source should be aligned to unit size");
     __ BIND(L_src_ok);
+
+    Label L_count_ok;
+    __ cmpptr(byte_count, 256);
+    __ jcc(Assembler::greaterEqual, L_count_ok);
+      __ stop("Invariant: not enough elements");
+    __ BIND(L_count_ok);
 #endif
 
     // TODO: subptr/addptr weaving? cmpptr is more understandable here, though.
-
-    // Bulk copy assumes some minimal amount of elements available.
-    // We cannot enter with less elements. Shortcut if too few elements
-    // are present.
-
-    Label L_tail_end;
-
-    __ cmpptr(byte_count, 256);
-    __ jcc(Assembler::less, L_tail_end);
 
     // Massively parallel copy: move 256 bytes on each iteration.
     // Only a few systems can achieve moving this much in one cycle.
@@ -1354,8 +1346,6 @@ class StubGenerator: public StubCodeGenerator {
     __ subptr(byte_count, 256);
     __ cmpptr(byte_count, 256);
     __ jcc(Assembler::greaterEqual, L_bulk_loop);
-
-    __ BIND(L_tail_end);
 
     // Recompute qword count after byte count modifications.
     __ movptr(qword_count, byte_count);

@@ -1190,10 +1190,10 @@ class StubGenerator: public StubCodeGenerator {
     __ cmpptr(byte_count, 8);
     __ jcc(Assembler::less, L_entry_small);
 
-    // If greater than 256 bytes, then it makes sense to prepare and go to
+    // If greater than 512 bytes, then it makes sense to prepare and go to
     // the aligned copy.
     if (UseUnalignedLoadStores) {
-      __ cmpptr(byte_count, 256);
+      __ cmpptr(byte_count, 512);
       __ jcc(Assembler::greater, L_entry_large);
     }
   }
@@ -1235,16 +1235,11 @@ class StubGenerator: public StubCodeGenerator {
 
     Label L_tail_end;
 
-    if (UseAVX >= 3) {
-      __ addptr(qword_count, 256);
-    } else if (UseAVX >= 2) {
-      __ addptr(qword_count, 64);
-    } else {
-      __ addptr(qword_count, 32);
-    }
+    __ addptr(qword_count, 32);
     __ jcc(Assembler::greater, L_tail_end);
 
-    // Massively parallel copy: moves lots of data on each iteration.
+    // Massively parallel copy: move 256 bytes on each iteration.
+    // Only a few systems can achieve moving this much in one cycle.
     //
     // Note: when choosing how exactly to do this, consider two effects:
     //
@@ -1259,38 +1254,24 @@ class StubGenerator: public StubCodeGenerator {
     Label L_bulk_loop;
     __ align(OptoLoopAlignment);
     __ BIND(L_bulk_loop);
+    __ lea(tmp1, Address(from, qword_count, Address::times_8, -256));
+    __ lea(tmp2, Address(to,   qword_count, Address::times_8, -256));
     if (UseAVX >= 3) {
-      __ lea(tmp1, Address(from, qword_count, Address::times_8, -2048));
-      __ lea(tmp2, Address(to,   qword_count, Address::times_8, -2048));
-      for (int i = 0;  i < 16; i++) __ evmovdquq(as_XMMRegister(i), Address(tmp1, i * 64), Assembler::AVX_512bit);
-      for (int i = 0;  i < 16; i++) __ evmovdqaq(Address(tmp2, i * 64), as_XMMRegister(i), Assembler::AVX_512bit);
-      for (int i = 16; i < 32; i++) __ evmovdquq(as_XMMRegister(i), Address(tmp1, i * 64), Assembler::AVX_512bit);
-      for (int i = 16; i < 32; i++) __ evmovdqaq(Address(tmp2, i * 64), as_XMMRegister(i), Assembler::AVX_512bit);
-      __ addptr(qword_count, 256);
+      for (int i = 0; i < 4; i++)  __ evmovdquq(as_XMMRegister(i), Address(tmp1, i * 64), Assembler::AVX_512bit);
+      for (int i = 0; i < 4; i++)  __ evmovdqaq(Address(tmp2, i * 64), as_XMMRegister(i), Assembler::AVX_512bit);
     } else if (UseAVX >= 2) {
-      __ lea(tmp1, Address(from, qword_count, Address::times_8, -512));
-      __ lea(tmp2, Address(to,   qword_count, Address::times_8, -512));
-      for (int i = 0; i < 16; i++)  __ vmovdqu(as_XMMRegister(i), Address(tmp1, i * 32));
-      for (int i = 0; i < 16; i++)  __ vmovdqa(Address(tmp2, i * 32), as_XMMRegister(i));
-      __ addptr(qword_count, 64);
+      for (int i = 0; i < 8; i++) __ vmovdqu(as_XMMRegister(i), Address(tmp1, i * 32));
+      for (int i = 0; i < 8; i++) __ vmovdqa(Address(tmp2, i * 32), as_XMMRegister(i));
     } else {
-      __ lea(tmp1, Address(from, qword_count, Address::times_8, -256));
-      __ lea(tmp2, Address(to,   qword_count, Address::times_8, -256));
-      for (int i = 0; i < 16; i++)  __ movdqu(as_XMMRegister(i), Address(tmp1, i * 16));
-      for (int i = 0; i < 16; i++)  __ movdqa(Address(tmp2, i * 16), as_XMMRegister(i));
-      __ addptr(qword_count, 32);
+      for (int i = 0; i < 16; i++) __ movdqu(as_XMMRegister(i), Address(tmp1, i * 16));
+      for (int i = 0; i < 16; i++) __ movdqa(Address(tmp2, i * 16), as_XMMRegister(i));
     }
+    __ addptr(qword_count, 32);
     __ jcc(Assembler::lessEqual, L_bulk_loop);
 
     __ BIND(L_tail_end);
 
-    if (UseAVX >= 3) {
-      __ subptr(qword_count, 256);
-    } else if (UseAVX >= 2) {
-      __ subptr(qword_count, 64);
-    } else {
-      __ subptr(qword_count, 32);
-    }
+    __ subptr(qword_count, 32);
 
     // Call back to small loop to handle the rest
     __ jmp(L_entry_small);
@@ -1335,17 +1316,11 @@ class StubGenerator: public StubCodeGenerator {
 
     Label L_tail_end;
 
-    if (UseAVX >= 3) {
-      __ cmpptr(byte_count, 256*8);
-    } else if (UseAVX >= 2) {
-      __ cmpptr(byte_count, 64*8);
-    } else {
-      __ cmpptr(byte_count, 32*8);
-    }
+    __ cmpptr(byte_count, 256);
     __ jcc(Assembler::less, L_tail_end);
 
-
-    // Massively parallel copy: moves lots of data on each iteration.
+    // Massively parallel copy: move 256 bytes on each iteration.
+    // Only a few systems can achieve moving this much in one cycle.
     //
     // Note: when choosing how exactly to do this, consider two effects:
     //
@@ -1363,27 +1338,21 @@ class StubGenerator: public StubCodeGenerator {
     if (UseAVX >= 3) {
       __ lea(tmp1, Address(from, byte_count, Address::times_1, -64));
       __ lea(tmp2, Address(to,   byte_count, Address::times_1, -64));
-      for (int i = 0;  i < 16; i++) __ evmovdquq(as_XMMRegister(i), Address(tmp1, -i * 64), Assembler::AVX_512bit);
-      for (int i = 0;  i < 16; i++) __ evmovdqaq(Address(tmp2, -i * 64), as_XMMRegister(i), Assembler::AVX_512bit);
-      for (int i = 16; i < 32; i++) __ evmovdquq(as_XMMRegister(i), Address(tmp1, -i * 64), Assembler::AVX_512bit);
-      for (int i = 16; i < 32; i++) __ evmovdqaq(Address(tmp2, -i * 64), as_XMMRegister(i), Assembler::AVX_512bit);
-      __ subptr(byte_count, 256*8);
-      __ cmpptr(byte_count, 256*8);
+      for (int i = 0; i < 4; i++)  __ evmovdquq(as_XMMRegister(i), Address(tmp1, -i * 64), Assembler::AVX_512bit);
+      for (int i = 0; i < 4; i++)  __ evmovdqaq(Address(tmp2, -i * 64), as_XMMRegister(i), Assembler::AVX_512bit);
     } else if (UseAVX >= 2) {
       __ lea(tmp1, Address(from, byte_count, Address::times_1, -32));
       __ lea(tmp2, Address(to,   byte_count, Address::times_1, -32));
-      for (int i = 0; i < 16; i++)  __ vmovdqu(as_XMMRegister(i), Address(tmp1, -i * 32));
-      for (int i = 0; i < 16; i++)  __ vmovdqa(Address(tmp2, -i * 32), as_XMMRegister(i));
-      __ subptr(byte_count, 64*8);
-      __ cmpptr(byte_count, 64*8);
+      for (int i = 0; i < 8; i++)  __ vmovdqu(as_XMMRegister(i), Address(tmp1, -i * 32));
+      for (int i = 0; i < 8; i++)  __ vmovdqa(Address(tmp2, -i * 32), as_XMMRegister(i));
     } else {
       __ lea(tmp1, Address(from, byte_count, Address::times_1, -16));
       __ lea(tmp2, Address(to,   byte_count, Address::times_1, -16));
-      for (int i = 0; i < 16; i++) __ movdqu(as_XMMRegister(i), Address(tmp1, -i*16));
-      for (int i = 0; i < 16; i++) __ movdqa(Address(tmp2,-i*16), as_XMMRegister(i));
-      __ subptr(byte_count, 32*8);
-      __ cmpptr(byte_count, 32*8);
+      for (int i = 0; i < 16; i++) __ movdqu(as_XMMRegister(i), Address(tmp1, -i * 16));
+      for (int i = 0; i < 16; i++) __ movdqa(Address(tmp2,-i * 16), as_XMMRegister(i));
     }
+    __ subptr(byte_count, 256);
+    __ cmpptr(byte_count, 256);
     __ jcc(Assembler::greaterEqual, L_bulk_loop);
 
     __ BIND(L_tail_end);

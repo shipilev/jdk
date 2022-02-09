@@ -1198,163 +1198,6 @@ class StubGenerator: public StubCodeGenerator {
     }
   }
 
-  // Copies aligned destination forward.
-  // TODO: Argument descriptions.
-  void copy_bytes_forward_large_aligned(Register from, Register to,
-                                Register qword_count, Register byte_count,
-                                Label& L_entry_large, Label& L_entry_small,
-                                int unit_size) {
-    Register tmp1 = rscratch1;
-    Register tmp2 = rscratch2;
-
-    assert_different_registers(from, to, qword_count, byte_count, tmp1, tmp2);
-
-#ifdef ASSERT
-    if (!UseUnalignedLoadStores) {
-      __ stop("Large copy assumes unaligned load stores");
-    }
-
-    Label L_dst_ok;
-    __ lea(tmp1, Address(to, qword_count, Address::times_8));
-    __ testptr(tmp1, copy_dest_alignment() - 1);
-    __ jccb(Assembler::zero, L_dst_ok);
-      __ stop("Invariant: destination should be aligned");
-    __ BIND(L_dst_ok);
-
-    Label L_src_ok;
-    __ lea(tmp1, Address(from, qword_count, Address::times_8));
-    __ testptr(tmp1, unit_size - 1);
-    __ jccb(Assembler::zero, L_src_ok);
-      __ stop("Invariant: source should be aligned to unit size");
-    __ BIND(L_src_ok);
-
-    Label L_count_ok;
-    __ cmpptr(qword_count, -32);
-    __ jcc(Assembler::lessEqual, L_count_ok);
-      __ stop("Invariant: not enough elements");
-    __ BIND(L_count_ok);
-#endif
-
-    // Massively parallel copy: move 256 bytes on each iteration.
-    // Only a few systems can achieve moving this much in one cycle.
-    //
-    // Note: when choosing how exactly to do this, consider two effects:
-    //
-    // 1) On Intel, interleaving loads with stores sets up for 4K aliasing:
-    // loads conflict with stores and stall. On AMD, at least on newer Zen arches,
-    // this effect is barely pronounced.
-    //
-    // 2) Putting all the loads before all the stores sets up for store buffer
-    // stalling when doing all the stores at once. It seems that storing 16 registers
-    // at once is good enough for both modern Intel and AMD.
-    //
-    __ addptr(qword_count, 32);
-    Label L_bulk_loop;
-    __ align(OptoLoopAlignment);
-    __ BIND(L_bulk_loop);
-    __ lea(tmp1, Address(from, qword_count, Address::times_8, -256));
-    __ lea(tmp2, Address(to,   qword_count, Address::times_8, -256));
-    if (UseAVX >= 3) {
-      for (int i = 0; i < 4; i++)  __ evmovdquq(as_XMMRegister(i), Address(tmp1, i * 64), Assembler::AVX_512bit);
-      for (int i = 0; i < 4; i++)  __ evmovdqaq(Address(tmp2, i * 64), as_XMMRegister(i), Assembler::AVX_512bit);
-    } else if (UseAVX >= 2) {
-      for (int i = 0; i < 8; i++) __ vmovdqu(as_XMMRegister(i), Address(tmp1, i * 32));
-      for (int i = 0; i < 8; i++) __ vmovdqa(Address(tmp2, i * 32), as_XMMRegister(i));
-    } else {
-      for (int i = 0; i < 16; i++) __ movdqu(as_XMMRegister(i), Address(tmp1, i * 16));
-      for (int i = 0; i < 16; i++) __ movdqa(Address(tmp2, i * 16), as_XMMRegister(i));
-    }
-    __ addptr(qword_count, 32);
-    __ jcc(Assembler::lessEqual, L_bulk_loop);
-    __ subptr(qword_count, 32);
-
-    // Call back to small loop to handle the rest
-    __ jmp(L_entry_small);
-  }
-
-  // Copies aligned destination backward.
-  // TODO: Argument descriptions.
-  void copy_bytes_backward_large_aligned(Register from, Register to,
-                                         Register qword_count, Register byte_count,
-                                         Label& L_entry_large, Label& L_entry_small,
-                                         int unit_size) {
-    Register tmp1 = rscratch1;
-    Register tmp2 = rscratch2;
-
-    assert_different_registers(from, to, byte_count, tmp1, tmp2);
-
-#ifdef ASSERT
-    if (!UseUnalignedLoadStores) {
-      __ stop("Large copy assumes unaligned load stores");
-    }
-
-    Label L_dst_ok;
-    __ lea(tmp1, Address(to, byte_count));
-    __ testptr(tmp1, copy_dest_alignment() - 1);
-    __ jccb(Assembler::zero, L_dst_ok);
-      __ stop("Invariant: destination should be aligned");
-    __ BIND(L_dst_ok);
-
-    Label L_src_ok;
-    __ lea(tmp1, Address(from, byte_count));
-    __ testptr(tmp1, unit_size - 1);
-    __ jccb(Assembler::zero, L_src_ok);
-      __ stop("Invariant: source should be aligned to unit size");
-    __ BIND(L_src_ok);
-
-    Label L_count_ok;
-    __ cmpptr(byte_count, 256);
-    __ jcc(Assembler::greaterEqual, L_count_ok);
-      __ stop("Invariant: not enough elements");
-    __ BIND(L_count_ok);
-#endif
-
-    // Massively parallel copy: move 256 bytes on each iteration.
-    // Only a few systems can achieve moving this much in one cycle.
-    //
-    // Note: when choosing how exactly to do this, consider two effects:
-    //
-    // 1) On Intel, interleaving loads with stores sets up for 4K aliasing:
-    // loads conflict with stores and stall. On AMD, at least on newer Zen arches,
-    // this effect is barely pronounced.
-    //
-    // 2) Putting all the loads before all the stores sets up for store buffer
-    // stalling when doing all the stores at once. It seems that storing 16 registers
-    // at once is good enough for both modern Intel and AMD.
-    //
-    __ subptr(byte_count, 256);
-
-    Label L_bulk_loop;
-    __ align(OptoLoopAlignment);
-    __ BIND(L_bulk_loop);
-    if (UseAVX >= 3) {
-      __ lea(tmp1, Address(from, byte_count, Address::times_1, -64 + 256));
-      __ lea(tmp2, Address(to,   byte_count, Address::times_1, -64 + 256));
-      for (int i = 0; i < 4; i++)  __ evmovdquq(as_XMMRegister(i), Address(tmp1, -i * 64), Assembler::AVX_512bit);
-      for (int i = 0; i < 4; i++)  __ evmovdqaq(Address(tmp2, -i * 64), as_XMMRegister(i), Assembler::AVX_512bit);
-    } else if (UseAVX >= 2) {
-      __ lea(tmp1, Address(from, byte_count, Address::times_1, -32 + 256));
-      __ lea(tmp2, Address(to,   byte_count, Address::times_1, -32 + 256));
-      for (int i = 0; i < 8; i++)  __ vmovdqu(as_XMMRegister(i), Address(tmp1, -i * 32));
-      for (int i = 0; i < 8; i++)  __ vmovdqa(Address(tmp2, -i * 32), as_XMMRegister(i));
-    } else {
-      __ lea(tmp1, Address(from, byte_count, Address::times_1, -16 + 256));
-      __ lea(tmp2, Address(to,   byte_count, Address::times_1, -16 + 256));
-      for (int i = 0; i < 16; i++) __ movdqu(as_XMMRegister(i), Address(tmp1, -i * 16));
-      for (int i = 0; i < 16; i++) __ movdqa(Address(tmp2,-i * 16), as_XMMRegister(i));
-    }
-    __ subptr(byte_count, 256);
-    __ jcc(Assembler::greaterEqual, L_bulk_loop);
-    __ addptr(byte_count, 256);
-
-    // Recompute qword count after byte count modifications.
-    __ movptr(qword_count, byte_count);
-    __ shrptr(qword_count, 3);
-
-    // Call back to small loop to handle the rest
-    __ jmp(L_entry_small);
-  }
-
   // Copy small chunks forward
   // TODO: Argument descriptions
   void copy_bytes_forward_small(Register from, Register to,
@@ -1678,10 +1521,67 @@ class StubGenerator: public StubCodeGenerator {
 
     __ negptr(qword_count);
 
-    copy_bytes_forward_large_aligned(end_from, end_to,
-                             qword_count, byte_count,
-                             L_entry_large, L_entry_small_qwords,
-                             unit_size);
+#ifdef ASSERT
+    if (!UseUnalignedLoadStores) {
+      __ stop("Large copy assumes unaligned load stores");
+    }
+
+    Label L_dst_ok;
+    __ lea(tmp1, Address(end_to, qword_count, Address::times_8));
+    __ testptr(tmp1, copy_dest_alignment() - 1);
+    __ jccb(Assembler::zero, L_dst_ok);
+      __ stop("Invariant: destination should be aligned");
+    __ BIND(L_dst_ok);
+
+    Label L_src_ok;
+    __ lea(tmp1, Address(end_from, qword_count, Address::times_8));
+    __ testptr(tmp1, unit_size - 1);
+    __ jccb(Assembler::zero, L_src_ok);
+      __ stop("Invariant: source should be aligned to unit size");
+    __ BIND(L_src_ok);
+
+    Label L_count_ok;
+    __ cmpptr(qword_count, -32);
+    __ jcc(Assembler::lessEqual, L_count_ok);
+      __ stop("Invariant: not enough elements");
+    __ BIND(L_count_ok);
+#endif
+
+    // Massively parallel copy: move 256 bytes on each iteration.
+    // Only a few systems can achieve moving this much in one cycle.
+    //
+    // Note: when choosing how exactly to do this, consider two effects:
+    //
+    // 1) On Intel, interleaving loads with stores sets up for 4K aliasing:
+    // loads conflict with stores and stall. On AMD, at least on newer Zen arches,
+    // this effect is barely pronounced.
+    //
+    // 2) Putting all the loads before all the stores sets up for store buffer
+    // stalling when doing all the stores at once. It seems that storing 16 registers
+    // at once is good enough for both modern Intel and AMD.
+    //
+    __ addptr(qword_count, 32);
+    Label L_bulk_loop;
+    __ align(OptoLoopAlignment);
+    __ BIND(L_bulk_loop);
+    __ lea(tmp1, Address(end_from, qword_count, Address::times_8, -256));
+    __ lea(tmp2, Address(end_to,   qword_count, Address::times_8, -256));
+    if (UseAVX >= 3) {
+      for (int i = 0; i < 4; i++)  __ evmovdquq(as_XMMRegister(i), Address(tmp1, i * 64), Assembler::AVX_512bit);
+      for (int i = 0; i < 4; i++)  __ evmovdqaq(Address(tmp2, i * 64), as_XMMRegister(i), Assembler::AVX_512bit);
+    } else if (UseAVX >= 2) {
+      for (int i = 0; i < 8; i++) __ vmovdqu(as_XMMRegister(i), Address(tmp1, i * 32));
+      for (int i = 0; i < 8; i++) __ vmovdqa(Address(tmp2, i * 32), as_XMMRegister(i));
+    } else {
+      for (int i = 0; i < 16; i++) __ movdqu(as_XMMRegister(i), Address(tmp1, i * 16));
+      for (int i = 0; i < 16; i++) __ movdqa(Address(tmp2, i * 16), as_XMMRegister(i));
+    }
+    __ addptr(qword_count, 32);
+    __ jcc(Assembler::lessEqual, L_bulk_loop);
+    __ subptr(qword_count, 32);
+
+    // Call back to small loop to handle the rest
+    __ jmp(L_entry_small_qwords);
   }
 
   // Copy small chunks backward
@@ -1979,10 +1879,76 @@ class StubGenerator: public StubCodeGenerator {
     // Pre-slide done! At this point, destination is guaranteed to be aligned.
     // This allows us to do the bulk copies with aligned stores.
 
-    copy_bytes_backward_large_aligned(from, to,
-                             qword_count, byte_count,
-                             L_entry_large, L_entry_small,
-                             unit_size);
+#ifdef ASSERT
+    if (!UseUnalignedLoadStores) {
+      __ stop("Large copy assumes unaligned load stores");
+    }
+
+    Label L_dst_ok;
+    __ lea(tmp1, Address(to, byte_count));
+    __ testptr(tmp1, copy_dest_alignment() - 1);
+    __ jccb(Assembler::zero, L_dst_ok);
+      __ stop("Invariant: destination should be aligned");
+    __ BIND(L_dst_ok);
+
+    Label L_src_ok;
+    __ lea(tmp1, Address(from, byte_count));
+    __ testptr(tmp1, unit_size - 1);
+    __ jccb(Assembler::zero, L_src_ok);
+      __ stop("Invariant: source should be aligned to unit size");
+    __ BIND(L_src_ok);
+
+    Label L_count_ok;
+    __ cmpptr(byte_count, 256);
+    __ jcc(Assembler::greaterEqual, L_count_ok);
+      __ stop("Invariant: not enough elements");
+    __ BIND(L_count_ok);
+#endif
+
+    // Massively parallel copy: move 256 bytes on each iteration.
+    // Only a few systems can achieve moving this much in one cycle.
+    //
+    // Note: when choosing how exactly to do this, consider two effects:
+    //
+    // 1) On Intel, interleaving loads with stores sets up for 4K aliasing:
+    // loads conflict with stores and stall. On AMD, at least on newer Zen arches,
+    // this effect is barely pronounced.
+    //
+    // 2) Putting all the loads before all the stores sets up for store buffer
+    // stalling when doing all the stores at once. It seems that storing 16 registers
+    // at once is good enough for both modern Intel and AMD.
+    //
+    __ subptr(byte_count, 256);
+
+    Label L_bulk_loop;
+    __ align(OptoLoopAlignment);
+    __ BIND(L_bulk_loop);
+    if (UseAVX >= 3) {
+      __ lea(tmp1, Address(from, byte_count, Address::times_1, -64 + 256));
+      __ lea(tmp2, Address(to,   byte_count, Address::times_1, -64 + 256));
+      for (int i = 0; i < 4; i++)  __ evmovdquq(as_XMMRegister(i), Address(tmp1, -i * 64), Assembler::AVX_512bit);
+      for (int i = 0; i < 4; i++)  __ evmovdqaq(Address(tmp2, -i * 64), as_XMMRegister(i), Assembler::AVX_512bit);
+    } else if (UseAVX >= 2) {
+      __ lea(tmp1, Address(from, byte_count, Address::times_1, -32 + 256));
+      __ lea(tmp2, Address(to,   byte_count, Address::times_1, -32 + 256));
+      for (int i = 0; i < 8; i++)  __ vmovdqu(as_XMMRegister(i), Address(tmp1, -i * 32));
+      for (int i = 0; i < 8; i++)  __ vmovdqa(Address(tmp2, -i * 32), as_XMMRegister(i));
+    } else {
+      __ lea(tmp1, Address(from, byte_count, Address::times_1, -16 + 256));
+      __ lea(tmp2, Address(to,   byte_count, Address::times_1, -16 + 256));
+      for (int i = 0; i < 16; i++) __ movdqu(as_XMMRegister(i), Address(tmp1, -i * 16));
+      for (int i = 0; i < 16; i++) __ movdqa(Address(tmp2,-i * 16), as_XMMRegister(i));
+    }
+    __ subptr(byte_count, 256);
+    __ jcc(Assembler::greaterEqual, L_bulk_loop);
+    __ addptr(byte_count, 256);
+
+    // Recompute qword count after byte count modifications.
+    __ movptr(qword_count, byte_count);
+    __ shrptr(qword_count, 3);
+
+    // Call back to small loop to handle the rest
+    __ jmp(L_entry_small);
   }
 
 #ifndef PRODUCT

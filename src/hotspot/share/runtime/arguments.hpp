@@ -28,6 +28,7 @@
 #include "logging/logLevel.hpp"
 #include "logging/logTag.hpp"
 #include "memory/allStatic.hpp"
+#include "memory/allocation.hpp"
 #include "runtime/globals.hpp"
 #include "runtime/java.hpp"
 #include "runtime/os.hpp"
@@ -66,7 +67,8 @@ class PathString : public CHeapObj<mtArguments> {
  public:
   char* value() const { return _value; }
 
-  bool set_value(const char *value);
+  // return false iff OOM && alloc_failmode == AllocFailStrategy::RETURN_NULL
+  bool set_value(const char *value, AllocFailType alloc_failmode = AllocFailStrategy::EXIT_OOM);
   void append_value(const char *value);
 
   PathString(const char* value);
@@ -98,7 +100,6 @@ class SystemProperty : public PathString {
   SystemProperty* _next;
   bool            _internal;
   bool            _writeable;
-  bool writeable() { return _writeable; }
 
  public:
   // Accessors
@@ -107,8 +108,9 @@ class SystemProperty : public PathString {
   bool internal() const               { return _internal; }
   SystemProperty* next() const        { return _next; }
   void set_next(SystemProperty* next) { _next = next; }
+  bool writeable() const              { return _writeable; }
 
-  bool is_readable() const {
+  bool readable() const {
     return !_internal || (strcmp(_key, "jdk.boot.class.path.append") == 0 &&
                           value() != NULL);
   }
@@ -120,11 +122,10 @@ class SystemProperty : public PathString {
   // via -Xbootclasspath/a or JVMTI OnLoad phase call to AddToBootstrapClassLoaderSearch.
   // In those cases for jdk.boot.class.path.append, the base class
   // set_value and append_value methods are called directly.
-  bool set_writeable_value(const char *value) {
+  void set_writeable_value(const char *value) {
     if (writeable()) {
-      return set_value(value);
+      set_value(value);
     }
-    return false;
   }
   void append_writeable_value(const char *value) {
     if (writeable()) {
@@ -237,6 +238,7 @@ class Arguments : AllStatic {
   friend class JvmtiExport;
   friend class CodeCacheExtensions;
   friend class ArgumentsTest;
+  friend class LargeOptionsTest;
  public:
   // Operation modi
   enum Mode {
@@ -470,12 +472,12 @@ class Arguments : AllStatic {
   static char*  SharedArchivePath;
   static char*  SharedDynamicArchivePath;
   static size_t _default_SharedBaseAddress; // The default value specified in globals.hpp
-  static int num_archives(const char* archive_path) NOT_CDS_RETURN_(0);
   static void extract_shared_archive_paths(const char* archive_path,
                                          char** base_archive_path,
                                          char** top_archive_path) NOT_CDS_RETURN;
 
  public:
+  static int num_archives(const char* archive_path) NOT_CDS_RETURN_(0);
   // Parses the arguments, first phase
   static jint parse(const JavaVMInitArgs* args);
   // Parse a string for a unsigned integer.  Returns true if value

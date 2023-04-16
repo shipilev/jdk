@@ -3283,9 +3283,57 @@ void LIRGenerator::increment_event_counter_impl(CodeEmitInfo* info,
   }
   LIR_Address* counter = new LIR_Address(counter_holder, offset, T_INT);
   LIR_Opr result = new_register(T_INT);
-  __ load(counter, result);
-  __ add(result, step, result);
-  __ store(result, counter);
+  if (UseNewCode2 && CounterBatching > 0) {
+    LIR_Opr thrd = getThreadPointer();
+    LIR_Address* counter_batch_addr =
+            new LIR_Address(thrd,
+                            in_bytes(JavaThread::counter_batch_offset()),
+                            T_INT);
+
+    LIR_Opr counter_batch_reg = new_register(T_INT);
+
+    __ load(counter_batch_addr, counter_batch_reg);
+    __ sub(counter_batch_reg, LIR_OprFact::intConst(1), counter_batch_reg);
+
+    LabelObj* L_same_batch = new LabelObj();
+    __ cmp(LIR_Condition::lir_cond_lessEqual, counter_batch_reg, LIR_OprFact::intConst(0));
+    __ branch(LIR_Condition::lir_cond_lessEqual, L_same_batch->label());
+
+    __ move(LIR_OprFact::intConst(CounterBatching), counter_batch_reg);
+    __ store(counter_batch_reg, counter_batch_addr);
+
+    __ move(step, result);
+    __ mul(counter_batch_reg, result, counter_batch_reg);
+
+    // TODO: make this atomic.
+    __ load(counter, result);
+    __ add(result, counter_batch_reg, result);
+
+    int freq = frequency << InvocationCounter::count_shift;
+    if (freq == 0) {
+      // Do nothing?
+    } else {
+      // Saturate the counter for freq, otherwise notification below would not work.
+      LabelObj* L_skip_saturate = new LabelObj();
+      LIR_Opr bound = load_immediate(freq + 1, T_INT);
+      __ cmp(lir_cond_greaterEqual, result, bound);
+      __ branch(lir_cond_greaterEqual, L_skip_saturate->label());
+      __ move(bound, result);
+      __ branch_destination(L_skip_saturate->label());
+    }
+
+    __ store(result, counter);
+
+    __ branch_destination(L_same_batch->label());
+
+    // Need to reload counter, because the code below needs it.
+    __ load(counter, result);
+
+  } else {
+    __ load(counter, result);
+    __ add(result, step, result);
+    __ store(result, counter);
+  }
   if (notify && (!backedge || UseOnStackReplacement)) {
     LIR_Opr meth = LIR_OprFact::metadataConst(method->constant_encoding());
     // The bci for info can point to cmp for if's we want the if bci

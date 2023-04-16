@@ -244,21 +244,62 @@ void LIRGenerator::increment_counter(address counter, BasicType type, int step) 
 
 
 void LIRGenerator::increment_counter(LIR_Address* addr, int step) {
-  LIR_Opr imm;
-  switch(addr->type()) {
-  case T_INT:
-    imm = LIR_OprFact::intConst(step);
-    break;
-  case T_LONG:
-    imm = LIR_OprFact::longConst(step);
-    break;
-  default:
-    ShouldNotReachHere();
+  if (UseNewCode && CounterBatching > 0) {
+    LIR_Opr thrd = getThreadPointer();
+    LIR_Address* counter_batch_addr =
+            new LIR_Address(thrd,
+                            in_bytes(JavaThread::counter_batch_offset()),
+                            T_INT);
+
+    LIR_Opr counter_reg = new_register(T_INT);
+
+    __ load(counter_batch_addr, counter_reg);
+    __ sub(counter_reg, LIR_OprFact::intConst(1), counter_reg);
+
+    LIR_Opr imm;
+    switch(addr->type()) {
+      case T_INT:
+        imm = LIR_OprFact::intConst(step * CounterBatching);
+        break;
+      case T_LONG:
+        imm = LIR_OprFact::longConst(step * CounterBatching);
+        break;
+      default:
+        ShouldNotReachHere();
+    }
+
+    LabelObj* L_same_batch = new LabelObj();
+    __ cmp(LIR_Condition::lir_cond_lessEqual, counter_reg, LIR_OprFact::intConst(0));
+    __ branch(LIR_Condition::lir_cond_lessEqual, L_same_batch->label());
+
+    // TODO: make this atomic.
+    LIR_Opr reg = new_register(addr->type());
+    __ load(addr, reg);
+    __ add(reg, imm, reg);
+    __ store(reg, addr);
+
+    __ move(LIR_OprFact::intConst(CounterBatching), counter_reg);
+    __ store(counter_reg, counter_batch_addr);
+
+    __ branch_destination(L_same_batch->label());
+  } else {
+    LIR_Opr imm;
+    switch(addr->type()) {
+      case T_INT:
+        imm = LIR_OprFact::intConst(step);
+        break;
+      case T_LONG:
+        imm = LIR_OprFact::longConst(step);
+        break;
+      default:
+        ShouldNotReachHere();
+    }
+
+    LIR_Opr reg = new_register(addr->type());
+    __ load(addr, reg);
+    __ add(reg, imm, reg);
+    __ store(reg, addr);
   }
-  LIR_Opr reg = new_register(addr->type());
-  __ load(addr, reg);
-  __ add(reg, imm, reg);
-  __ store(reg, addr);
 }
 
 void LIRGenerator::cmp_mem_int(LIR_Condition condition, LIR_Opr base, int disp, int c, CodeEmitInfo* info) {

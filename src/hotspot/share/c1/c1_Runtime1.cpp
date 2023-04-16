@@ -483,6 +483,8 @@ static nmethod* counter_overflow_helper(JavaThread* current, int branch_bci, Met
 }
 
 JRT_BLOCK_ENTRY(address, Runtime1::counter_overflow(JavaThread* current, int bci, Method* method))
+  assert(current->counter_batch() == 0, "Should be zero at overflow: " UINT32_FORMAT, current->counter_batch());
+
   nmethod* osr_nm;
   JRT_BLOCK
     osr_nm = counter_overflow_helper(current, bci, method);

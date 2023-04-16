@@ -1992,6 +1992,10 @@ const int ObjectAlignmentInBytes = 8;
           "more eagerly at the cost of higher overhead. A value of 0 "      \
           "(default) disables native heap trimming.")                       \
           range(0, UINT_MAX)                                                \
+                                                                            \
+  product(uint, CounterBatching, 0, EXPERIMENTAL,                           \
+          "Batch profiling counters updates. Use 0 (default) to disable.")  \
+          range(0, UINT_MAX)                                                \
 
 // end of RUNTIME_FLAGS
 

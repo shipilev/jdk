@@ -142,6 +142,9 @@ class JavaThread: public Thread {
   oop           _vm_result;    // oop result is GC-preserved
   Metadata*     _vm_result_2;  // non-oop result
 
+  // Counter batching
+  uint32_t       _counter_batch;
+
   // See ReduceInitialCardMarks: this holds the precise space interval of
   // the most recent slow path allocation for which compiled code has
   // elided card-marks for performance along the fast-path.
@@ -192,6 +195,8 @@ class JavaThread: public Thread {
 
   void push_jni_handle_block();
   void pop_jni_handle_block();
+
+  uint32_t counter_batch() { return _counter_batch; }
 
  private:
   MonitorChunk* _monitor_chunks;              // Contains the off stack monitors
@@ -739,6 +744,8 @@ private:
 
   // Misc. accessors/mutators
   static ByteSize scopedValueCache_offset()       { return byte_offset_of(JavaThread, _scopedValueCache); }
+  static ByteSize counter_batch_offset()          { return byte_offset_of(JavaThread, _counter_batch); }
+
 
   // For assembly stub generation
   static ByteSize threadObj_offset()             { return byte_offset_of(JavaThread, _threadObj); }

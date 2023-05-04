@@ -3222,6 +3222,10 @@ void os::large_page_init() {
     _page_sizes.add(_large_page_size);
   }
 
+  if (UseLargePages && AbortVMOnFailedLargePagesAllocation && (_large_page_size == 0)) {
+    vm_exit_during_initialization("Aborting, large pages are requested, but not configured");
+  }
+
   UseLargePages = _large_page_size != 0;
 }
 

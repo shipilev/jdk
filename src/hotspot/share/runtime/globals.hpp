@@ -190,6 +190,9 @@ const int ObjectAlignmentInBytes = 8;
   product_pd(bool, UseLargePagesIndividualAllocation,                       \
           "Allocate large pages individually for better affinity")          \
                                                                             \
+  product(bool, AbortVMOnFailedLargePagesAllocation, true,                  \
+          "Abort VM on large pages allocation failure")                     \
+                                                                            \
   develop(bool, LargePagesIndividualAllocationInjectError, false,           \
           "Fail large pages individual allocation")                         \
                                                                             \

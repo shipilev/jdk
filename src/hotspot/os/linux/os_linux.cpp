@@ -3640,6 +3640,9 @@ size_t os::Linux::default_large_page_size() {
 void warn_no_large_pages_configured() {
   if (!FLAG_IS_DEFAULT(UseLargePages)) {
     log_warning(pagesize)("UseLargePages disabled, no large pages configured and available on the system.");
+    if (AbortOnFailedLargePagesAllocation) {
+      vm_exit_during_initialization("Aborting, large pages are requested, but not configured");
+    }
   }
 }
 

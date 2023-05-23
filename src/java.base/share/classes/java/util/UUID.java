@@ -105,16 +105,17 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
      */
     private static final class RandomUUID {
         static final VarHandle VH_BUF;
+        static final ArrayBlockingQueue<Buffer> FREE_BUFS;
+
         static {
             try {
                 VH_BUF = MethodHandles.lookup().findStaticVarHandle(RandomUUID.class, "BUF", Buffer.class);
+                int freeBufsCount = Runtime.getRuntime().availableProcessors();
+                FREE_BUFS = new ArrayBlockingQueue<>(freeBufsCount);
             } catch (Exception e) {
                 throw new InternalError(e);
             }
         }
-
-        static final int FREE_BUF_COUNT = Runtime.getRuntime().availableProcessors();
-        static final ArrayBlockingQueue<Buffer> FREE_BUFS = new ArrayBlockingQueue<>(FREE_BUF_COUNT);
 
         static Buffer BUF = new Buffer();
 
@@ -141,17 +142,18 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
         }
 
         static final class RandomPool {
-            static final String PRNG_NAME = System.getProperty("java.util.uuid.randomPRNG", "NativePRNG");
-            static final int RANDOMS_COUNT = Runtime.getRuntime().availableProcessors();
-            static final ArrayBlockingQueue<SecureRandom> FREE_RANDOMS = new ArrayBlockingQueue<>(RANDOMS_COUNT);
-
+            static final ArrayBlockingQueue<SecureRandom> FREE_RANDOMS;
             static final SecureRandom GLOBAL_RANDOM;
 
             static {
                 try {
-                    GLOBAL_RANDOM = SecureRandom.getInstance(PRNG_NAME);
-                    for (int c = 0; c < RANDOMS_COUNT; c++) {
-                        FREE_RANDOMS.put(SecureRandom.getInstance(PRNG_NAME));
+                    String prngName = System.getProperty("java.util.uuid.randomPRNG", "NativePRNG");
+                    int randomsCount = Runtime.getRuntime().availableProcessors();
+
+                    GLOBAL_RANDOM = SecureRandom.getInstance(prngName);
+                    FREE_RANDOMS = new ArrayBlockingQueue<>(randomsCount);
+                    for (int c = 0; c < randomsCount; c++) {
+                        FREE_RANDOMS.put(SecureRandom.getInstance(prngName));
                     }
                 } catch (Exception e) {
                     throw new RuntimeException(e);

@@ -140,6 +140,38 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
             }
         }
 
+        static final class RandomPool {
+            static final int RANDOMS_COUNT = Runtime.getRuntime().availableProcessors();
+            static final ArrayBlockingQueue<SecureRandom> FREE_RANDOMS = new ArrayBlockingQueue<>(RANDOMS_COUNT);
+
+            static final SecureRandom GLOBAL_RANDOM;
+
+            static {
+                try {
+                    GLOBAL_RANDOM = SecureRandom.getInstance("SHA1PRNG");
+                    for (int c = 0; c < RANDOMS_COUNT; c++) {
+                        FREE_RANDOMS.put(SecureRandom.getInstance("SHA1PRNG"));
+                    }
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            }
+
+            static SecureRandom get() {
+                 SecureRandom r = FREE_RANDOMS.poll();
+                 if (r != null) {
+                    return r;
+                 }
+                 return GLOBAL_RANDOM;
+            }
+
+            static void release(SecureRandom r) {
+                if (r != GLOBAL_RANDOM) {
+                    FREE_RANDOMS.offer(r);
+                }
+            }
+        }
+
         static final class Buffer {
             static final SecureRandom RANDOM = new SecureRandom();
             static final int UUID_CHUNK = 16;
@@ -162,7 +194,9 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
                 // Seed the buffer, and initialize all UUIDs at once
                 // to avoid false sharing between different threads.
                 byte[] b = new byte[BUF_SIZE];
-                RANDOM.nextBytes(b);
+                SecureRandom r = RandomPool.get();
+                r.nextBytes(b);
+                RandomPool.release(r);
                 for (int c = 0; c < BUF_SIZE; c += UUID_CHUNK) {
                     b[c + 6] &= 0x0f;  /* clear version        */
                     b[c + 6] |= 0x40;  /* set to version 4     */

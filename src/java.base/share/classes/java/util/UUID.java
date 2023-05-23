@@ -25,9 +25,9 @@
 
 package java.util;
 
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.security.*;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.ThreadLocalRandom;
 
 import jdk.internal.access.JavaLangAccess;
 import jdk.internal.access.SharedSecrets;
@@ -126,24 +126,36 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
         static final class Buffer {
             static final SecureRandom RANDOM = new SecureRandom();
             static final int UUID_CHUNK = 16;
-            static final int UUID_COUNT = 1024;
+            static final int UUID_COUNT = 4*1024;
             static final int BUF_SIZE = UUID_CHUNK * UUID_COUNT;
 
-            final byte[] buf = new byte[BUF_SIZE];
-            final AtomicInteger pos = new AtomicInteger();
+            static final VarHandle VH_POS;
+            static {
+                try {
+                    MethodHandles.Lookup l = MethodHandles.lookup();
+                    VH_POS = l.findVarHandle(Buffer.class, "pos", int.class);
+                } catch (Exception e) {
+                    throw new InternalError(e);
+                }
+            }
+
+            final byte[] buf;
+            int pos;
 
             boolean recreated;
 
             public Buffer() {
                 // Seed the buffer, and initialize all UUIDs at once
                 // to avoid false sharing between different threads.
-                RANDOM.nextBytes(buf);
+                byte[] b = new byte[BUF_SIZE];
+                RANDOM.nextBytes(b);
                 for (int c = 0; c < BUF_SIZE; c += UUID_CHUNK) {
-                    buf[c + 6] &= 0x0f;  /* clear version        */
-                    buf[c + 6] |= 0x40;  /* set to version 4     */
-                    buf[c + 8] &= 0x3f;  /* clear variant        */
-                    buf[c + 8] |= (byte) 0x80;  /* set to IETF variant  */
+                    b[c + 6] &= 0x0f;  /* clear version        */
+                    b[c + 6] |= 0x40;  /* set to version 4     */
+                    b[c + 8] &= 0x3f;  /* clear variant        */
+                    b[c + 8] |= (byte) 0x80;  /* set to IETF variant  */
                 }
+                buf = b;
             }
 
             public boolean claimRecreate() {
@@ -156,10 +168,10 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
             }
 
             public UUID next() {
-                if (pos.get() >= BUF_SIZE) {
+                if ((int)VH_POS.get(this) >= BUF_SIZE) {
                     return null;
                 }
-                int p = pos.getAndAdd(UUID_CHUNK);
+                int p = (int)VH_POS.getAndAdd(this, UUID_CHUNK);
                 if (p < BUF_SIZE) {
                     return new UUID(buf, p);
                 } else {

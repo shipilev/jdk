@@ -27,6 +27,7 @@ package java.util;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.security.*;
 
 import jdk.internal.access.JavaLangAccess;
@@ -103,22 +104,39 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
      * based UUIDs. In a holder class to defer initialization until needed.
      */
     private static final class RandomUUID {
+        static final VarHandle VH_BUF;
+        static {
+            try {
+                MethodHandles.Lookup l = MethodHandles.lookup();
+                VH_BUF = l.findStaticVarHandle(RandomUUID.class, "BUF", Buffer.class);
+            } catch (Exception e) {
+                throw new InternalError(e);
+            }
+        }
+
+        static final int FREE_BUF_COUNT = 16;
+        static final ArrayBlockingQueue<Buffer> FREE_BUFS = new ArrayBlockingQueue<>(FREE_BUF_COUNT);
+
         static Buffer BUF = new Buffer();
 
         public static UUID next() {
             while (true) {
-                Buffer current = BUF;
+                Buffer current = (Buffer)VH_BUF.get();
                 UUID uuid = current.next();
                 if (uuid != null) {
                     return uuid;
                 }
 
-                // The buffer is depleted. SecureRandom is a precious resource,
-                // allow only one thread to go and recreate the new buffer.
-                synchronized (RandomUUID.class) {
-                    if (current.claimRecreate()) {
-                        BUF = new Buffer();
-                    }
+                // The buffer is depleted. See if there are buffers in the free pool.
+                Buffer nb = FREE_BUFS.poll();
+                if (nb == null) {
+                    nb = new Buffer();
+                }
+
+                // Try to install a new buffer. Use it on success, stash it in the
+                // free pool to avoid losing the heavy-weight buffer preparation.
+                if (!VH_BUF.compareAndSet(current, nb)) {
+                    FREE_BUFS.offer(nb);
                 }
             }
         }
@@ -126,7 +144,7 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
         static final class Buffer {
             static final SecureRandom RANDOM = new SecureRandom();
             static final int UUID_CHUNK = 16;
-            static final int UUID_COUNT = 4*1024;
+            static final int UUID_COUNT = 1*1024;
             static final int BUF_SIZE = UUID_CHUNK * UUID_COUNT;
 
             static final VarHandle VH_POS;

@@ -107,14 +107,13 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
         static final VarHandle VH_BUF;
         static {
             try {
-                MethodHandles.Lookup l = MethodHandles.lookup();
-                VH_BUF = l.findStaticVarHandle(RandomUUID.class, "BUF", Buffer.class);
+                VH_BUF = MethodHandles.lookup().findStaticVarHandle(RandomUUID.class, "BUF", Buffer.class);
             } catch (Exception e) {
                 throw new InternalError(e);
             }
         }
 
-        static final int FREE_BUF_COUNT = 16;
+        static final int FREE_BUF_COUNT = Runtime.getRuntime().availableProcessors();
         static final ArrayBlockingQueue<Buffer> FREE_BUFS = new ArrayBlockingQueue<>(FREE_BUF_COUNT);
 
         static Buffer BUF = new Buffer();
@@ -150,8 +149,7 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
             static final VarHandle VH_POS;
             static {
                 try {
-                    MethodHandles.Lookup l = MethodHandles.lookup();
-                    VH_POS = l.findVarHandle(Buffer.class, "pos", int.class);
+                    VH_POS = MethodHandles.lookup().findVarHandle(Buffer.class, "pos", int.class);
                 } catch (Exception e) {
                     throw new InternalError(e);
                 }
@@ -159,8 +157,6 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
 
             final byte[] buf;
             int pos;
-
-            boolean recreated;
 
             public Buffer() {
                 // Seed the buffer, and initialize all UUIDs at once
@@ -174,15 +170,6 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
                     b[c + 8] |= (byte) 0x80;  /* set to IETF variant  */
                 }
                 buf = b;
-            }
-
-            public boolean claimRecreate() {
-                if (recreated) {
-                    return false;
-                } else {
-                    recreated = true;
-                    return true;
-                }
             }
 
             public UUID next() {

@@ -132,8 +132,8 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
                     nb = new Buffer();
                 }
 
-                // Try to install a new buffer. Use it on success, stash it in the
-                // free pool to avoid losing the heavy-weight buffer preparation.
+                // Try to install a new buffer. Use it on success. On failure, stash it
+                // in the free pool to avoid losing the heavy-weight buffer preparation.
                 if (!VH_BUF.compareAndSet(current, nb)) {
                     FREE_BUFS.offer(nb);
                 }
@@ -143,7 +143,7 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
         static final class Buffer {
             static final SecureRandom RANDOM = new SecureRandom();
             static final int UUID_CHUNK = 16;
-            static final int UUID_COUNT = 1*1024;
+            static final int UUID_COUNT = 1024;
             static final int BUF_SIZE = UUID_CHUNK * UUID_COUNT;
 
             static final VarHandle VH_POS;

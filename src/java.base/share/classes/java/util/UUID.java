@@ -141,6 +141,7 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
         }
 
         static final class RandomPool {
+            static final String PRNG_NAME = System.getProperty("java.util.uuid.randomPRNG", "NativePRNG");
             static final int RANDOMS_COUNT = Runtime.getRuntime().availableProcessors();
             static final ArrayBlockingQueue<SecureRandom> FREE_RANDOMS = new ArrayBlockingQueue<>(RANDOMS_COUNT);
 
@@ -148,9 +149,9 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
 
             static {
                 try {
-                    GLOBAL_RANDOM = SecureRandom.getInstance("SHA1PRNG");
+                    GLOBAL_RANDOM = SecureRandom.getInstance(PRNG_NAME);
                     for (int c = 0; c < RANDOMS_COUNT; c++) {
-                        FREE_RANDOMS.put(SecureRandom.getInstance("SHA1PRNG"));
+                        FREE_RANDOMS.put(SecureRandom.getInstance(PRNG_NAME));
                     }
                 } catch (Exception e) {
                     throw new RuntimeException(e);

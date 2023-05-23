@@ -26,6 +26,8 @@
 package java.util;
 
 import java.security.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.ThreadLocalRandom;
 
 import jdk.internal.access.JavaLangAccess;
 import jdk.internal.access.SharedSecrets;
@@ -100,11 +102,90 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
      * The random number generator used by this class to create random
      * based UUIDs. In a holder class to defer initialization until needed.
      */
-    private static class Holder {
-        static final SecureRandom numberGenerator = new SecureRandom();
+    private static final class RandomUUID {
+        static Buffer BUF = new Buffer();
+
+        public static UUID next() {
+            while (true) {
+                Buffer current = BUF;
+                UUID uuid = current.next();
+                if (uuid != null) {
+                    return uuid;
+                }
+
+                // The buffer is depleted. SecureRandom is a precious resource,
+                // allow only one thread to go and recreate the new buffer.
+                synchronized (RandomUUID.class) {
+                    if (current.claimRecreate()) {
+                        BUF = new Buffer();
+                    }
+                }
+            }
+        }
+
+        static final class Buffer {
+            static final SecureRandom RANDOM = new SecureRandom();
+            static final int UUID_CHUNK = 16;
+            static final int UUID_COUNT = 1024;
+            static final int BUF_SIZE = UUID_CHUNK * UUID_COUNT;
+
+            final byte[] buf = new byte[BUF_SIZE];
+            final AtomicInteger pos = new AtomicInteger();
+
+            boolean recreated;
+
+            public Buffer() {
+                // Seed the buffer, and initialize all UUIDs at once
+                // to avoid false sharing between different threads.
+                RANDOM.nextBytes(buf);
+                for (int c = 0; c < BUF_SIZE; c += UUID_CHUNK) {
+                    buf[c + 6] &= 0x0f;  /* clear version        */
+                    buf[c + 6] |= 0x40;  /* set to version 4     */
+                    buf[c + 8] &= 0x3f;  /* clear variant        */
+                    buf[c + 8] |= (byte) 0x80;  /* set to IETF variant  */
+                }
+            }
+
+            public boolean claimRecreate() {
+                if (recreated) {
+                    return false;
+                } else {
+                    recreated = true;
+                    return true;
+                }
+            }
+
+            public UUID next() {
+                if (pos.get() >= BUF_SIZE) {
+                    return null;
+                }
+                int p = pos.getAndAdd(UUID_CHUNK);
+                if (p < BUF_SIZE) {
+                    return new UUID(buf, p);
+                } else {
+                    return null;
+                }
+            }
+        }
     }
 
     // Constructors and Factories
+
+    /*
+     * Private constructor which uses a byte array to construct the new random UUID.
+     */
+    private UUID(byte[] buf, int start) {
+        long msb = 0;
+        long lsb = 0;
+        for (int i = start; i < start + 8; i++) {
+            msb = (msb << 8) | (buf[i] & 0xff);
+        }
+        for (int i = start + 8; i < start + 16; i++) {
+            lsb = (lsb << 8) | (buf[i] & 0xff);
+        }
+        this.mostSigBits = msb;
+        this.leastSigBits = lsb;
+    }
 
     /*
      * Private constructor which uses a byte array to construct the new UUID.
@@ -147,15 +228,7 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
      * @return  A randomly generated {@code UUID}
      */
     public static UUID randomUUID() {
-        SecureRandom ng = Holder.numberGenerator;
-
-        byte[] randomBytes = new byte[16];
-        ng.nextBytes(randomBytes);
-        randomBytes[6]  &= 0x0f;  /* clear version        */
-        randomBytes[6]  |= 0x40;  /* set to version 4     */
-        randomBytes[8]  &= 0x3f;  /* clear variant        */
-        randomBytes[8]  |= (byte) 0x80;  /* set to IETF variant  */
-        return new UUID(randomBytes);
+        return RandomUUID.next();
     }
 
     /**

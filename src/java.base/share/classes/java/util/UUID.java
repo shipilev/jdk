@@ -104,7 +104,7 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
      * based UUIDs. In a holder class to defer initialization until needed.
      * <p>
      * The implementation buffers the reads to avoid bashing SecureRandom with
-     * small requests. It also maintains a pool of SecureRandoms to alleviate
+     * small requests. It also maintains a SecureRandom per buffer to alleviate
      * scalability bottlenecks when reading from a single (synchronized) SecureRandom.
      */
     private static final class RandomUUID {
@@ -114,10 +114,15 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
         static final int BUF_COUNT;
         static final Buffer[] BUFS;
 
+        public static int nextPowerOfTwo(int x) {
+            x = -1 >>> Integer.numberOfLeadingZeros(x - 1);
+            return x + 1;
+        }
+
         static {
             try {
                 PRNG_NAME = System.getProperty("java.util.UUID.prngName", null);
-                BUF_COUNT = Runtime.getRuntime().availableProcessors();
+                BUF_COUNT = nextPowerOfTwo(Runtime.getRuntime().availableProcessors());
                 BUFS = new Buffer[BUF_COUNT];
             } catch (Exception e) {
                 throw new InternalError(e);
@@ -137,8 +142,13 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
         }
 
         public static UUID next() {
-            //int idx = java.util.concurrent.ThreadLocalRandom.current().nextInt(BUF_COUNT);
-            int idx = (int)(Thread.currentThread().threadId() % BUF_COUNT); // FIXME: Thread distribution is IMPORTANT.
+            // We want to hit the same buffer from the same thread, to avoid instantiating
+            // too many buffers, when only a few threads ever call for UUIDs, to make sure
+            // the buffers stay hot in the local caches, and that coherence traffic is minimised.
+            // Without recording the buffer index in the thread itself, the good option is to use
+            // the thread ID scrambled with Murmur hash to gain better bit entropy.
+            long h = jdk.internal.util.random.RandomSupport.mixMurmur64(Thread.currentThread().threadId());
+            int idx = (int)(h & (BUF_COUNT - 1));
             Buffer current = BUFS[idx];
             if (current == null) {
                 current = new Buffer(newRandom());
@@ -148,12 +158,12 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
         }
 
         // Buffer random reads. This allows batching the SecureRandom provider requests.
-        // Current implementation targets the 8K buffer size, which balances the initialization
+        // Current implementation targets the 4K buffer size, which balances the initialization
         // costs, memory footprint and cache pressure.
         @jdk.internal.vm.annotation.Contended
         static final class Buffer {
             static final int UUID_CHUNK = 16;
-            static final int UUID_COUNT = 512;
+            static final int UUID_COUNT = 256;
             static final int BUF_SIZE = UUID_CHUNK * UUID_COUNT;
 
             static final VarHandle VH_POS;

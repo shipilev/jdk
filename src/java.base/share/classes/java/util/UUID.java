@@ -204,7 +204,7 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
                 // Try to install a new buffer. Use it on success. On failure, try to stash
                 // it in the free pool to avoid losing the heavy-weight buffer preparation,
                 // unless there are already enough buffers.
-                if (!VH_BUF.compareAndSet(current, nb)) {
+                if (VH_BUF.get() != current || !VH_BUF.compareAndSet(current, nb)) {
                     if ((int)VH_FREE_BUF_COUNT.get() < MAX_FREE_BUF_COUNT) {
                         VH_FREE_BUF_COUNT.getAndAdd(+1);
                         FREE_BUFS.addFirst(nb);
@@ -215,7 +215,7 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
 
         static final class Buffer {
             static final int UUID_CHUNK = 16;
-            static final int UUID_COUNT = 256;
+            static final int UUID_COUNT = 512;
             static final int BUF_SIZE = UUID_CHUNK * UUID_COUNT;
 
             static final VarHandle VH_POS;

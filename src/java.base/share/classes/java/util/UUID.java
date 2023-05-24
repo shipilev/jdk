@@ -270,21 +270,6 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
         this.leastSigBits = lsb;
     }
 
-    /*
-     * Private constructor which uses a byte array to construct the new UUID.
-     */
-    private UUID(byte[] data) {
-        long msb = 0;
-        long lsb = 0;
-        assert data.length == 16 : "data must be 16 bytes in length";
-        for (int i=0; i<8; i++)
-            msb = (msb << 8) | (data[i] & 0xff);
-        for (int i=8; i<16; i++)
-            lsb = (lsb << 8) | (data[i] & 0xff);
-        this.mostSigBits = msb;
-        this.leastSigBits = lsb;
-    }
-
     /**
      * Constructs a new {@code UUID} using the specified data.  {@code
      * mostSigBits} is used for the most significant 64 bits of the {@code
@@ -335,7 +320,7 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
         md5Bytes[6]  |= 0x30;  /* set to version 3     */
         md5Bytes[8]  &= 0x3f;  /* clear variant        */
         md5Bytes[8]  |= (byte) 0x80;  /* set to IETF variant  */
-        return new UUID(md5Bytes);
+        return new UUID(md5Bytes, 0);
     }
 
     private static final byte[] NIBBLES;

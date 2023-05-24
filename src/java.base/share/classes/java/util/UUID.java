@@ -108,49 +108,19 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
      * scalability bottlenecks when reading from a single (synchronized) SecureRandom.
      */
     private static final class RandomUUID {
-        static final VarHandle VH_BUFS, VH_FREE_BUF_COUNT, VH_FREE_RANDOM_COUNT;
-
-        // Ready to use buffers. Deque to use the recently allocated buffers first.
-        static final ConcurrentLinkedDeque<Buffer> FREE_BUFS;
-        static final int MAX_FREE_BUF_COUNT;
-        static int freeBufCount;
-
-        // Ready to use Randoms. Deque to use the recently used randoms first.
-        static final ConcurrentLinkedDeque<SecureRandom> FREE_RANDOMS;
-        static final int MAX_FREE_RANDOM_COUNT;
-        static int freeRandomCount;
-
-        // Global random instance as fallback
-        static final SecureRandom GLOBAL_RANDOM;
-
         // PRNG provider to use
         static final String PRNG_NAME;
 
-        // Current buffer to use
         static final int BUF_COUNT;
-        static Buffer[] bufs;
+        static final Buffer[] BUFS;
+        static final SecureRandom[] RANDOMS;
 
         static {
             try {
                 PRNG_NAME = System.getProperty("java.util.uuid.randomPRNG", "NativePRNG");
-
-                final int cpuCount = Runtime.getRuntime().availableProcessors();
-
-                MethodHandles.Lookup l = MethodHandles.lookup();
-                VH_FREE_BUF_COUNT = l.findStaticVarHandle(RandomUUID.class, "freeBufCount", int.class);
-                MAX_FREE_BUF_COUNT = cpuCount;
-                FREE_BUFS = new ConcurrentLinkedDeque<>();
-
-                VH_FREE_RANDOM_COUNT = l.findStaticVarHandle(RandomUUID.class, "freeRandomCount", int.class);
-                MAX_FREE_RANDOM_COUNT = cpuCount;
-
-                VH_BUFS = MethodHandles.arrayElementVarHandle(Buffer[].class);
-
-                GLOBAL_RANDOM = newRandom();
-                FREE_RANDOMS = new ConcurrentLinkedDeque<>();
-
-                BUF_COUNT = cpuCount;
-                bufs = new Buffer[BUF_COUNT];
+                BUF_COUNT = Runtime.getRuntime().availableProcessors();
+                BUFS = new Buffer[BUF_COUNT];
+                RANDOMS = new SecureRandom[BUF_COUNT];
             } catch (Exception e) {
                 throw new InternalError(e);
             }
@@ -165,33 +135,10 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
             }
         }
 
-        static SecureRandom acquireRandom() {
-            // Optimistically assume there is a free random available
-            SecureRandom r = FREE_RANDOMS.pollFirst();
-            if (r != null) {
-                return r;
-            }
-
-            // Create a new random on-demand if below the occupancy
-            if ((int)VH_FREE_RANDOM_COUNT.get() < MAX_FREE_RANDOM_COUNT) {
-                VH_FREE_RANDOM_COUNT.getAndAdd(+1);
-                return newRandom();
-            }
-
-            // Fall back to global random otherwise
-            return GLOBAL_RANDOM;
-        }
-
-        static void releaseRandom(SecureRandom r) {
-            if (r != GLOBAL_RANDOM) {
-                FREE_RANDOMS.addFirst(r);
-            }
-        }
-
         public static UUID next() {
             while (true) {
                 int bufIdx = java.util.concurrent.ThreadLocalRandom.current().nextInt(BUF_COUNT);
-                Buffer current = bufs[bufIdx];
+                Buffer current = BUFS[bufIdx];
                 if (current != null) {
                     UUID uuid = current.next();
                     if (uuid != null) {
@@ -199,31 +146,15 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
                     }
                 }
 
-                // The buffer is depleted. See if there are buffers in the free pool.
-                Buffer nb = null;
-                if ((int)VH_FREE_BUF_COUNT.get() > 0) {
-                    nb = FREE_BUFS.pollFirst();
-                    if (nb != null) {
-                        VH_FREE_BUF_COUNT.getAndAdd(-1);
-                    }
+                // The buffer is depleted. Recreate and install it.
+                // It is OK if we lose a buffer on contention.
+                SecureRandom r = RANDOMS[bufIdx];
+                if (r == null) {
+                    r = newRandom();
+                    RANDOMS[bufIdx] = r;
                 }
 
-                // No free buffers, create a new one.
-                if (nb == null) {
-                    SecureRandom r = acquireRandom();
-                    nb = new Buffer(r);
-                    releaseRandom(r);
-                }
-
-                // Try to install a new buffer. Use it on success. On failure, try to stash
-                // it in the free pool to avoid losing the heavy-weight buffer preparation,
-                // unless there are already enough buffers.
-                if (VH_BUFS.get(bufs, bufIdx) != current || !VH_BUFS.compareAndSet(bufs, bufIdx, current, nb)) {
-                    if ((int)VH_FREE_BUF_COUNT.get() < MAX_FREE_BUF_COUNT) {
-                        VH_FREE_BUF_COUNT.getAndAdd(+1);
-                        FREE_BUFS.addFirst(nb);
-                    }
-                }
+                BUFS[bufIdx] = new Buffer(r);
             }
         }
 

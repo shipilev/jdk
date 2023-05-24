@@ -268,20 +268,16 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
 
     // Constructors and Factories
 
+    static final VarHandle BYTES_AS_LONG =
+        MethodHandles.byteArrayViewVarHandle(long[].class,
+        java.nio.ByteOrder.BIG_ENDIAN).withInvokeExactBehavior();
+
     /*
      * Private constructor which uses a byte array to construct the new UUID.
      */
     private UUID(byte[] data, int start) {
-        long msb = 0;
-        long lsb = 0;
-        for (int i = start; i < start + 8; i++) {
-            msb = (msb << 8) | (data[i] & 0xff);
-        }
-        for (int i = start + 8; i < start + 16; i++) {
-            lsb = (lsb << 8) | (data[i] & 0xff);
-        }
-        this.mostSigBits = msb;
-        this.leastSigBits = lsb;
+        this.mostSigBits =  (long)BYTES_AS_LONG.get(data, start);
+        this.leastSigBits = (long)BYTES_AS_LONG.get(data, start + 8);
     }
 
     /**

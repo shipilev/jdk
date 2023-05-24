@@ -159,20 +159,23 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
         }
 
         static SecureRandom acquireRandom() {
-             SecureRandom r = FREE_RANDOMS.pollFirst();
-             if (r != null) {
-                 return r;
-             } else {
-                 if ((int)VH_FREE_RANDOM_COUNT.get() < MAX_FREE_RANDOM_COUNT) {
-                     VH_FREE_RANDOM_COUNT.getAndAdd(+1);
-                     return newRandom();
-                 }
-             }
-             return GLOBAL_RANDOM;
+            if ((int)VH_FREE_RANDOM_COUNT.get() > 0) {
+                SecureRandom r = FREE_RANDOMS.pollFirst();
+                if (r != null) {
+                    return r;
+                }
+            }
+
+            if ((int)VH_FREE_RANDOM_COUNT.get() < MAX_FREE_RANDOM_COUNT) {
+                return newRandom();
+            }
+
+            return GLOBAL_RANDOM;
         }
 
         static void releaseRandom(SecureRandom r) {
             if (r != GLOBAL_RANDOM) {
+                VH_FREE_RANDOM_COUNT.getAndAdd(+1);
                 FREE_RANDOMS.addFirst(r);
             }
         }

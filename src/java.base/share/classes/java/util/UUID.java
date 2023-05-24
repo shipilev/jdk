@@ -164,19 +164,20 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
                 }
             }
 
-            final SecureRandom r;
-            final StampedLock sl = new StampedLock();
+            final SecureRandom random;
+            final StampedLock lock;
             final byte[] buf;
             int pos;
 
-            public Buffer(SecureRandom r) {
-                this.r = r;
+            public Buffer(SecureRandom random) {
+                this.random = random;
+                this.lock = new StampedLock();
                 this.buf = new byte[BUF_SIZE];
                 this.pos = BUF_SIZE; // force re-creation
             }
 
             public UUID next() {
-                long stamp = sl.tryOptimisticRead();
+                long stamp = lock.tryOptimisticRead();
                 try {
                     UUID uuid = null;
 
@@ -185,21 +186,22 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
                     int p = (int)VH_POS.getAndAdd(this, UUID_CHUNK);
                     if (p < BUF_SIZE) {
                         uuid = new UUID(buf, p);
+                        if (lock.validate(stamp)) {
+                            // Success: UUID is valid, and there were no buffer changes.
+                            return uuid;
+                        }
                     }
 
-                    // Success: UUID is valid, and there were no buffer changes meanwhile.
-                    if (uuid != null && sl.validate(stamp)) {
-                        return uuid;
-                    }
-
-                    // Pessimistic path: the buffer was depleted.
-                    stamp = sl.tryConvertToWriteLock(stamp);
+                    // Pessimistic path: the buffer was depleted, and replenishment
+                    // is either needed, or already happened. Take the exclusive lock.
+                    stamp = lock.tryConvertToWriteLock(stamp);
                     if (stamp == 0L) {
-                        stamp = sl.writeLock();
+                        stamp = lock.writeLock();
                     }
 
+                    // See if some other thread had already replenished. Pull the UUID
+                    // from there then.
                     if ((int)VH_POS.get(this) > 0) {
-                        // Some other thread had replenished, try to pull again under write lock.
                         int wp = (int)VH_POS.getAndAdd(this, UUID_CHUNK);
                         if (wp < BUF_SIZE) {
                             return new UUID(buf, wp);
@@ -208,7 +210,7 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
 
                     // Seed the buffer, and initialize all UUIDs at once
                     // to avoid false sharing between different threads.
-                    r.nextBytes(buf);
+                    random.nextBytes(buf);
                     for (int c = 0; c < BUF_SIZE; c += UUID_CHUNK) {
                         buf[c + 6] &= 0x0f;  /* clear version        */
                         buf[c + 6] |= 0x40;  /* set to version 4     */
@@ -216,14 +218,15 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
                         buf[c + 8] |= (byte) 0x80;  /* set to IETF variant  */
                     }
 
-                    // Take the UUID from here
+                    // Take the UUID from new buffer. We are still under write lock,
+                    // so we know we are the only user here.
                     uuid = new UUID(buf, 0);
                     VH_POS.set(this, UUID_CHUNK);
 
                     return uuid;
                 } finally {
                     if (StampedLock.isWriteLockStamp(stamp)) {
-                        sl.unlockWrite(stamp);
+                        lock.unlockWrite(stamp);
                     }
                 }
             }

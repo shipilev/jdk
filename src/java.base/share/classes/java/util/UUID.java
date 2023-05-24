@@ -108,7 +108,7 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
      * scalability bottlenecks when reading from a single (synchronized) SecureRandom.
      */
     private static final class RandomUUID {
-        static final VarHandle VH_BUF, VH_FREE_BUF_COUNT, VH_FREE_RANDOM_COUNT;
+        static final VarHandle VH_BUFS, VH_FREE_BUF_COUNT, VH_FREE_RANDOM_COUNT;
 
         // Ready to use buffers. Deque to use the recently allocated buffers first.
         static final ConcurrentLinkedDeque<Buffer> FREE_BUFS;
@@ -127,7 +127,8 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
         static final String PRNG_NAME;
 
         // Current buffer to use
-        static Buffer buf;
+        static final int BUF_COUNT;
+        static Buffer[] bufs;
 
         static {
             try {
@@ -136,7 +137,6 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
                 final int cpuCount = Runtime.getRuntime().availableProcessors();
 
                 MethodHandles.Lookup l = MethodHandles.lookup();
-                VH_BUF = l.findStaticVarHandle(RandomUUID.class, "buf", Buffer.class);
                 VH_FREE_BUF_COUNT = l.findStaticVarHandle(RandomUUID.class, "freeBufCount", int.class);
                 MAX_FREE_BUF_COUNT = cpuCount;
                 FREE_BUFS = new ConcurrentLinkedDeque<>();
@@ -144,10 +144,13 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
                 VH_FREE_RANDOM_COUNT = l.findStaticVarHandle(RandomUUID.class, "freeRandomCount", int.class);
                 MAX_FREE_RANDOM_COUNT = cpuCount;
 
+                VH_BUFS = MethodHandles.arrayElementVarHandle(Buffer[].class);
+
                 GLOBAL_RANDOM = newRandom();
                 FREE_RANDOMS = new ConcurrentLinkedDeque<>();
 
-                buf = new Buffer(GLOBAL_RANDOM);
+                BUF_COUNT = cpuCount*16;
+                bufs = new Buffer[BUF_COUNT];
             } catch (Exception e) {
                 throw new InternalError(e);
             }
@@ -187,10 +190,13 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
 
         public static UUID next() {
             while (true) {
-                Buffer current = (Buffer)VH_BUF.get();
-                UUID uuid = current.next();
-                if (uuid != null) {
-                    return uuid;
+                int bufIdx = java.util.concurrent.ThreadLocalRandom.current().nextInt(BUF_COUNT);
+                Buffer current = bufs[bufIdx];
+                if (current != null) {
+                    UUID uuid = current.next();
+                    if (uuid != null) {
+                        return uuid;
+                    }
                 }
 
                 // The buffer is depleted. See if there are buffers in the free pool.
@@ -212,7 +218,7 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
                 // Try to install a new buffer. Use it on success. On failure, try to stash
                 // it in the free pool to avoid losing the heavy-weight buffer preparation,
                 // unless there are already enough buffers.
-                if (VH_BUF.get() != current || !VH_BUF.compareAndSet(current, nb)) {
+                if (VH_BUFS.get(bufs, bufIdx) != current || !VH_BUFS.compareAndSet(bufs, bufIdx, current, nb)) {
                     if ((int)VH_FREE_BUF_COUNT.get() < MAX_FREE_BUF_COUNT) {
                         VH_FREE_BUF_COUNT.getAndAdd(+1);
                         FREE_BUFS.addFirst(nb);
@@ -224,6 +230,7 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
         // Buffer random reads. This allows batching the SecureRandom provider requests.
         // Current implementation targets the 8K buffer size, which balances the initialization
         // costs, memory footprint and cached throughput.
+        @jdk.internal.vm.annotation.Contended
         static final class Buffer {
             static final int UUID_CHUNK = 16;
             static final int UUID_COUNT = 512;

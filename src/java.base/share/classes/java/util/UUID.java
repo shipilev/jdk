@@ -116,7 +116,7 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
 
         static {
             try {
-                PRNG_NAME = System.getProperty("java.util.uuid.randomPRNG", null);
+                PRNG_NAME = System.getProperty("java.util.UUID.prngName", null);
                 BUF_COUNT = Runtime.getRuntime().availableProcessors();
                 BUFS = new Buffer[BUF_COUNT];
             } catch (Exception e) {
@@ -125,15 +125,14 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
         }
 
         static SecureRandom newRandom() {
-            try {
-                if (PRNG_NAME != null) {
+            if (PRNG_NAME == null) {
+                return new SecureRandom();
+            } else {
+                try {
                     return SecureRandom.getInstance(PRNG_NAME);
-                } else {
-                    return new SecureRandom();
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
                 }
-            } catch (Exception e) {
-                // <clinit> should have thrown it.
-                throw new RuntimeException(e);
             }
         }
 

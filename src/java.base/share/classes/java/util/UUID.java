@@ -30,6 +30,8 @@ import java.lang.invoke.VarHandle;
 import java.util.concurrent.locks.StampedLock;
 import java.security.*;
 
+import jdk.internal.util.random.RandomSupport;
+
 import jdk.internal.access.JavaLangAccess;
 import jdk.internal.access.SharedSecrets;
 
@@ -111,7 +113,7 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
         // PRNG provider to use
         static final String PRNG_NAME;
 
-        static final int BUF_COUNT;
+        static final int BUFS_COUNT;
         static final Buffer[] BUFS;
 
         public static int nextPowerOfTwo(int x) {
@@ -122,8 +124,8 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
         static {
             try {
                 PRNG_NAME = System.getProperty("java.util.UUID.prngName", null);
-                BUF_COUNT = nextPowerOfTwo(Runtime.getRuntime().availableProcessors());
-                BUFS = new Buffer[BUF_COUNT];
+                BUFS_COUNT = nextPowerOfTwo(Runtime.getRuntime().availableProcessors());
+                BUFS = new Buffer[BUFS_COUNT];
             } catch (Exception e) {
                 throw new InternalError(e);
             }
@@ -143,12 +145,12 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
 
         public static UUID next() {
             // We want to hit the same buffer from the same thread, to avoid instantiating
-            // too many buffers, when only a few threads ever call for UUIDs, to make sure
-            // the buffers stay hot in the local caches, and that coherence traffic is minimised.
+            // too many buffers when only a few threads ever call for UUIDs, to make sure
+            // the buffers stay hot in the local caches, and to minimize the coherence traffic.
             // Without recording the buffer index in the thread itself, the good option is to use
-            // the thread ID scrambled with Murmur hash to gain better bit entropy.
-            long h = jdk.internal.util.random.RandomSupport.mixMurmur64(Thread.currentThread().threadId());
-            int idx = (int)(h & (BUF_COUNT - 1));
+            // the thread ID scrambled with Murmur hash, which results in good bit entropy.
+            long h = RandomSupport.mixMurmur64(Thread.currentThread().threadId());
+            int idx = (int)(h & (BUFS_COUNT - 1));
             Buffer current = BUFS[idx];
             if (current == null) {
                 current = new Buffer(newRandom());

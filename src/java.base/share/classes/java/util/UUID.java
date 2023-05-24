@@ -139,7 +139,8 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
 
         public static UUID next() {
             while (true) {
-                int idx = java.util.concurrent.ThreadLocalRandom.current().nextInt(BUF_COUNT);
+                //int idx = java.util.concurrent.ThreadLocalRandom.current().nextInt(BUF_COUNT);
+                int idx = (int)(Thread.currentThread().threadId() % BUF_COUNT); // FIXME: Thread distribution is IMPORTANT.
                 int bufIdx = idx * BUFS_MULT;
                 Buffer current = BUFS[bufIdx];
                 if (current != null) {

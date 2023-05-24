@@ -113,13 +113,15 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
 
         static final int BUF_COUNT;
         static final Buffer[] BUFS;
+        static final int BUFS_MULT;
         static final SecureRandom[] RANDOMS;
 
         static {
             try {
                 PRNG_NAME = System.getProperty("java.util.uuid.randomPRNG", "NativePRNG");
                 BUF_COUNT = Runtime.getRuntime().availableProcessors();
-                BUFS = new Buffer[BUF_COUNT];
+                BUFS_MULT = 16; // 4 bytes * 16 = 64 bytes
+                BUFS = new Buffer[BUF_COUNT*BUFS_MULT];
                 RANDOMS = new SecureRandom[BUF_COUNT];
             } catch (Exception e) {
                 throw new InternalError(e);
@@ -137,7 +139,8 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
 
         public static UUID next() {
             while (true) {
-                int bufIdx = java.util.concurrent.ThreadLocalRandom.current().nextInt(BUF_COUNT);
+                int idx = java.util.concurrent.ThreadLocalRandom.current().nextInt(BUF_COUNT);
+                int bufIdx = idx * BUFS_MULT;
                 Buffer current = BUFS[bufIdx];
                 if (current != null) {
                     UUID uuid = current.next();
@@ -148,10 +151,10 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
 
                 // The buffer is depleted. Recreate and install it.
                 // It is OK if we lose a buffer on contention.
-                SecureRandom r = RANDOMS[bufIdx];
+                SecureRandom r = RANDOMS[idx];
                 if (r == null) {
                     r = newRandom();
-                    RANDOMS[bufIdx] = r;
+                    RANDOMS[idx] = r;
                 }
 
                 BUFS[bufIdx] = new Buffer(r);

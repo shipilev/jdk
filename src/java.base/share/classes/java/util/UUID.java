@@ -104,26 +104,76 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
      * based UUIDs. In a holder class to defer initialization until needed.
      */
     private static final class RandomUUID {
-        static final VarHandle VH_BUF, VH_FREE_BUF_COUNT;
+        static final VarHandle VH_BUF, VH_FREE_BUF_COUNT, VH_FREE_RANDOM_COUNT;
 
         // Ready to use buffers. Deque to use the recently allocated buffers first.
         static final ConcurrentLinkedDeque<Buffer> FREE_BUFS;
         static final int MAX_FREE_BUF_COUNT;
-        static int FREE_BUF_COUNT;
+        static int freeBufCount;
+
+        // Ready to use Randoms. Deque to use the recently used randoms first.
+        static final ConcurrentLinkedDeque<SecureRandom> FREE_RANDOMS;
+        static final int MAX_FREE_RANDOM_COUNT;
+        static int freeRandomCount;
+
+        // Global random instance as fallback
+        static final SecureRandom GLOBAL_RANDOM;
+
+        // PRNG provider to use
+        static final String PRNG_NAME;
 
         // Current buffer to use
-        static Buffer BUF;
+        static Buffer buf;
 
         static {
             try {
+                PRNG_NAME = System.getProperty("java.util.uuid.randomPRNG", "NativePRNG");
+
+                final int cpuCount = Runtime.getRuntime().availableProcessors();
+
                 MethodHandles.Lookup l = MethodHandles.lookup();
-                VH_BUF = l.findStaticVarHandle(RandomUUID.class, "BUF", Buffer.class);
-                VH_FREE_BUF_COUNT = l.findStaticVarHandle(RandomUUID.class, "FREE_BUF_COUNT", int.class);
-                MAX_FREE_BUF_COUNT = Runtime.getRuntime().availableProcessors();
+                VH_BUF = l.findStaticVarHandle(RandomUUID.class, "buf", Buffer.class);
+                VH_FREE_BUF_COUNT = l.findStaticVarHandle(RandomUUID.class, "freeBufCount", int.class);
+                MAX_FREE_BUF_COUNT = cpuCount;
                 FREE_BUFS = new ConcurrentLinkedDeque<>();
-                BUF = new Buffer();
+
+                VH_FREE_RANDOM_COUNT = l.findStaticVarHandle(RandomUUID.class, "freeRandomCount", int.class);
+                MAX_FREE_RANDOM_COUNT = cpuCount;
+
+                GLOBAL_RANDOM = newRandom();
+                FREE_RANDOMS = new ConcurrentLinkedDeque<>();
+
+                buf = new Buffer(GLOBAL_RANDOM);
             } catch (Exception e) {
                 throw new InternalError(e);
+            }
+        }
+
+        static SecureRandom newRandom() {
+            try {
+                return SecureRandom.getInstance(PRNG_NAME);
+            } catch (Exception e) {
+                // <clinit> should have thrown it.
+                throw new RuntimeException(e);
+            }
+        }
+
+        static SecureRandom acquireRandom() {
+             SecureRandom r = FREE_RANDOMS.pollFirst();
+             if (r != null) {
+                 return r;
+             } else {
+                 if ((int)VH_FREE_RANDOM_COUNT.get() < MAX_FREE_RANDOM_COUNT) {
+                     VH_FREE_RANDOM_COUNT.getAndAdd(+1);
+                     return newRandom();
+                 }
+             }
+             return GLOBAL_RANDOM;
+        }
+
+        static void releaseRandom(SecureRandom r) {
+            if (r != GLOBAL_RANDOM) {
+                FREE_RANDOMS.addFirst(r);
             }
         }
 
@@ -138,14 +188,16 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
                 // The buffer is depleted. See if there are buffers in the free pool.
                 Buffer nb = FREE_BUFS.pollFirst();
                 if (nb == null) {
-                    nb = new Buffer();
+                    SecureRandom r = acquireRandom();
+                    nb = new Buffer(r);
+                    releaseRandom(r);
                 } else {
                     VH_FREE_BUF_COUNT.getAndAdd(-1);
                 }
 
-                // Try to install a new buffer. Use it on success. On failure, stash it
-                // in the free pool to avoid losing the heavy-weight buffer preparation.
-                // Avoid stashing lots of buffers to conserve memory.
+                // Try to install a new buffer. Use it on success. On failure, try to stash
+                // it in the free pool to avoid losing the heavy-weight buffer preparation,
+                // unless there are already enough buffers.
                 if (!VH_BUF.compareAndSet(current, nb)) {
                     if ((int)VH_FREE_BUF_COUNT.get() < MAX_FREE_BUF_COUNT) {
                         VH_FREE_BUF_COUNT.getAndAdd(+1);
@@ -155,63 +207,9 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
             }
         }
 
-        static final class RandomPool {
-            static final String PRNG_NAME;
-
-            // Ready to use Randoms. Deque to use the recently used randoms first.
-            static final ConcurrentLinkedDeque<SecureRandom> FREE_RANDOMS;
-            static final int MAX_FREE_RANDOM_COUNT;
-            static final VarHandle VH_FREE_RANDOM_COUNT;
-            static int freeRandomCount;
-
-            static final SecureRandom GLOBAL_RANDOM;
-
-            static SecureRandom newRandom() {
-                try {
-                    return SecureRandom.getInstance(PRNG_NAME);
-                } catch (Exception e) {
-                    // <clinit> should have thrown it.
-                    throw new RuntimeException(e);
-                }
-            }
-
-            static {
-                try {
-                    VH_FREE_RANDOM_COUNT = MethodHandles.lookup().findStaticVarHandle(RandomPool.class, "freeRandomCount", int.class);
-                    MAX_FREE_RANDOM_COUNT = Runtime.getRuntime().availableProcessors();
-
-                    PRNG_NAME = System.getProperty("java.util.uuid.randomPRNG", "NativePRNG");
-
-                    GLOBAL_RANDOM = newRandom();
-                    FREE_RANDOMS = new ConcurrentLinkedDeque<>();
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-            }
-
-            static SecureRandom acquire() {
-                 SecureRandom r = FREE_RANDOMS.pollFirst();
-                 if (r != null) {
-                    return r;
-                 } else {
-                    if ((int)VH_FREE_RANDOM_COUNT.get() < MAX_FREE_RANDOM_COUNT) {
-                        VH_FREE_RANDOM_COUNT.getAndAdd(+1);
-                        return newRandom();
-                    }
-                 }
-                 return GLOBAL_RANDOM;
-            }
-
-            static void release(SecureRandom r) {
-                if (r != GLOBAL_RANDOM) {
-                    FREE_RANDOMS.addFirst(r);
-                }
-            }
-        }
-
         static final class Buffer {
             static final int UUID_CHUNK = 16;
-            static final int UUID_COUNT = 1024;
+            static final int UUID_COUNT = 256;
             static final int BUF_SIZE = UUID_CHUNK * UUID_COUNT;
 
             static final VarHandle VH_POS;
@@ -226,13 +224,11 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
             final byte[] buf;
             int pos;
 
-            public Buffer() {
+            public Buffer(SecureRandom r) {
                 // Seed the buffer, and initialize all UUIDs at once
                 // to avoid false sharing between different threads.
                 byte[] b = new byte[BUF_SIZE];
-                SecureRandom r = RandomPool.acquire();
                 r.nextBytes(b);
-                RandomPool.release(r);
                 for (int c = 0; c < BUF_SIZE; c += UUID_CHUNK) {
                     b[c + 6] &= 0x0f;  /* clear version        */
                     b[c + 6] |= 0x40;  /* set to version 4     */

@@ -116,7 +116,7 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
 
         static {
             try {
-                PRNG_NAME = System.getProperty("java.util.uuid.randomPRNG", "NativePRNG");
+                PRNG_NAME = System.getProperty("java.util.uuid.randomPRNG", null);
                 BUF_COUNT = Runtime.getRuntime().availableProcessors();
                 BUFS = new Buffer[BUF_COUNT];
             } catch (Exception e) {
@@ -126,7 +126,11 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
 
         static SecureRandom newRandom() {
             try {
-                return SecureRandom.getInstance(PRNG_NAME);
+                if (PRNG_NAME != null) {
+                    return SecureRandom.getInstance(PRNG_NAME);
+                } else {
+                    return new SecureRandom();
+                }
             } catch (Exception e) {
                 // <clinit> should have thrown it.
                 throw new RuntimeException(e);
@@ -135,12 +139,12 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
 
         public static UUID next() {
             while (true) {
-                //int idx = java.util.concurrent.ThreadLocalRandom.current().nextInt(BUF_COUNT);
-                int bufIdx = (int)(Thread.currentThread().threadId() % BUF_COUNT); // FIXME: Thread distribution is IMPORTANT.
-                Buffer current = BUFS[bufIdx];
+                int idx = java.util.concurrent.ThreadLocalRandom.current().nextInt(BUF_COUNT);
+                //int idx = (int)(Thread.currentThread().threadId() % BUF_COUNT); // FIXME: Thread distribution is IMPORTANT.
+                Buffer current = BUFS[idx];
                 if (current == null) {
                    current = new Buffer(newRandom());
-                   BUFS[bufIdx] = current;
+                   BUFS[idx] = current;
                 }
                 return current.next();
             }

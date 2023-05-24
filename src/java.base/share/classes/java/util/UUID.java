@@ -27,7 +27,7 @@ package java.util;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
-import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.locks.StampedLock;
 import java.security.*;
 
 import jdk.internal.access.JavaLangAccess;
@@ -113,16 +113,12 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
 
         static final int BUF_COUNT;
         static final Buffer[] BUFS;
-        static final int BUFS_MULT;
-        static final SecureRandom[] RANDOMS;
 
         static {
             try {
                 PRNG_NAME = System.getProperty("java.util.uuid.randomPRNG", "NativePRNG");
                 BUF_COUNT = Runtime.getRuntime().availableProcessors();
-                BUFS_MULT = 16; // 4 bytes * 16 = 64 bytes
-                BUFS = new Buffer[BUF_COUNT*BUFS_MULT];
-                RANDOMS = new SecureRandom[BUF_COUNT];
+                BUFS = new Buffer[BUF_COUNT];
             } catch (Exception e) {
                 throw new InternalError(e);
             }
@@ -140,25 +136,13 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
         public static UUID next() {
             while (true) {
                 //int idx = java.util.concurrent.ThreadLocalRandom.current().nextInt(BUF_COUNT);
-                int idx = (int)(Thread.currentThread().threadId() % BUF_COUNT); // FIXME: Thread distribution is IMPORTANT.
-                int bufIdx = idx * BUFS_MULT;
+                int bufIdx = (int)(Thread.currentThread().threadId() % BUF_COUNT); // FIXME: Thread distribution is IMPORTANT.
                 Buffer current = BUFS[bufIdx];
-                if (current != null) {
-                    UUID uuid = current.next();
-                    if (uuid != null) {
-                        return uuid;
-                    }
+                if (current == null) {
+                   current = new Buffer(newRandom());
+                   BUFS[bufIdx] = current;
                 }
-
-                // The buffer is depleted. Recreate and install it.
-                // It is OK if we lose a buffer on contention.
-                SecureRandom r = RANDOMS[idx];
-                if (r == null) {
-                    r = newRandom();
-                    RANDOMS[idx] = r;
-                }
-
-                BUFS[bufIdx] = new Buffer(r);
+                return current.next();
             }
         }
 
@@ -180,29 +164,67 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
                 }
             }
 
+            final SecureRandom r;
+            final StampedLock sl = new StampedLock();
             final byte[] buf;
             int pos;
 
             public Buffer(SecureRandom r) {
-                // Seed the buffer, and initialize all UUIDs at once
-                // to avoid false sharing between different threads.
-                byte[] b = new byte[BUF_SIZE];
-                r.nextBytes(b);
-                for (int c = 0; c < BUF_SIZE; c += UUID_CHUNK) {
-                    b[c + 6] &= 0x0f;  /* clear version        */
-                    b[c + 6] |= 0x40;  /* set to version 4     */
-                    b[c + 8] &= 0x3f;  /* clear variant        */
-                    b[c + 8] |= (byte) 0x80;  /* set to IETF variant  */
-                }
-                buf = b;
+                this.r = r;
+                this.buf = new byte[BUF_SIZE];
+                this.pos = BUF_SIZE; // force re-creation
             }
 
             public UUID next() {
-                int p = (int)VH_POS.getAndAdd(this, UUID_CHUNK);
-                if (p < BUF_SIZE) {
-                    return new UUID(buf, p);
-                } else {
-                    return null;
+                long stamp = sl.tryOptimisticRead();
+                try {
+                    UUID uuid = null;
+
+                    // Optimistic path: try to pull the UUID from the current buffer
+                    // at current position, under optimistic lock.
+                    int p = (int)VH_POS.getAndAdd(this, UUID_CHUNK);
+                    if (p < BUF_SIZE) {
+                        uuid = new UUID(buf, p);
+                    }
+
+                    // Success: UUID is valid, and there were no buffer changes meanwhile.
+                    if (uuid != null && sl.validate(stamp)) {
+                        return uuid;
+                    }
+
+                    // Pessimistic path: the buffer was depleted.
+                    stamp = sl.tryConvertToWriteLock(stamp);
+                    if (stamp == 0L) {
+                        stamp = sl.writeLock();
+                    }
+
+                    if ((int)VH_POS.get(this) > 0) {
+                        // Some other thread had replenished, try to pull again under write lock.
+                        int wp = (int)VH_POS.getAndAdd(this, UUID_CHUNK);
+                        if (wp < BUF_SIZE) {
+                            return new UUID(buf, wp);
+                        }
+                    }
+
+                    // Seed the buffer, and initialize all UUIDs at once
+                    // to avoid false sharing between different threads.
+                    r.nextBytes(buf);
+                    for (int c = 0; c < BUF_SIZE; c += UUID_CHUNK) {
+                        buf[c + 6] &= 0x0f;  /* clear version        */
+                        buf[c + 6] |= 0x40;  /* set to version 4     */
+                        buf[c + 8] &= 0x3f;  /* clear variant        */
+                        buf[c + 8] |= (byte) 0x80;  /* set to IETF variant  */
+                    }
+
+                    // Take the UUID from here
+                    uuid = new UUID(buf, 0);
+                    VH_POS.set(this, UUID_CHUNK);
+
+                    return uuid;
+                } finally {
+                    if (StampedLock.isWriteLockStamp(stamp)) {
+                        sl.unlockWrite(stamp);
+                    }
                 }
             }
         }

@@ -149,7 +149,7 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
                 GLOBAL_RANDOM = newRandom();
                 FREE_RANDOMS = new ConcurrentLinkedDeque<>();
 
-                BUF_COUNT = cpuCount*16;
+                BUF_COUNT = cpuCount;
                 bufs = new Buffer[BUF_COUNT];
             } catch (Exception e) {
                 throw new InternalError(e);

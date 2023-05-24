@@ -186,13 +186,19 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
                 }
 
                 // The buffer is depleted. See if there are buffers in the free pool.
-                Buffer nb = FREE_BUFS.pollFirst();
+                Buffer nb = null;
+                if ((int)VH_FREE_BUF_COUNT.get() > 0) {
+                    nb = FREE_BUFS.pollFirst();
+                    if (nb != null) {
+                        VH_FREE_BUF_COUNT.getAndAdd(-1);
+                    }
+                }
+
+                // No free buffers, create a new one.
                 if (nb == null) {
                     SecureRandom r = acquireRandom();
                     nb = new Buffer(r);
                     releaseRandom(r);
-                } else {
-                    VH_FREE_BUF_COUNT.getAndAdd(-1);
                 }
 
                 // Try to install a new buffer. Use it on success. On failure, try to stash
@@ -239,9 +245,6 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
             }
 
             public UUID next() {
-                if ((int)VH_POS.get(this) >= BUF_SIZE) {
-                    return null;
-                }
                 int p = (int)VH_POS.getAndAdd(this, UUID_CHUNK);
                 if (p < BUF_SIZE) {
                     return new UUID(buf, p);

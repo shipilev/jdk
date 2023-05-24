@@ -102,6 +102,10 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
     /*
      * The random number generator used by this class to create random
      * based UUIDs. In a holder class to defer initialization until needed.
+     * <p>
+     * The implementation buffers the reads to avoid bashing SecureRandom with
+     * small requests. It also maintains a pool of SecureRandoms to alleviate
+     * scalability bottlenecks when reading from a single (synchronized) SecureRandom.
      */
     private static final class RandomUUID {
         static final VarHandle VH_BUF, VH_FREE_BUF_COUNT, VH_FREE_RANDOM_COUNT;
@@ -159,23 +163,24 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
         }
 
         static SecureRandom acquireRandom() {
-            if ((int)VH_FREE_RANDOM_COUNT.get() > 0) {
-                SecureRandom r = FREE_RANDOMS.pollFirst();
-                if (r != null) {
-                    return r;
-                }
+            // Optimistically assume there is a free random available
+            SecureRandom r = FREE_RANDOMS.pollFirst();
+            if (r != null) {
+                return r;
             }
 
+            // Create a new random on-demand if below the occupancy
             if ((int)VH_FREE_RANDOM_COUNT.get() < MAX_FREE_RANDOM_COUNT) {
+                VH_FREE_RANDOM_COUNT.getAndAdd(+1);
                 return newRandom();
             }
 
+            // Fall back to global random otherwise
             return GLOBAL_RANDOM;
         }
 
         static void releaseRandom(SecureRandom r) {
             if (r != GLOBAL_RANDOM) {
-                VH_FREE_RANDOM_COUNT.getAndAdd(+1);
                 FREE_RANDOMS.addFirst(r);
             }
         }
@@ -216,6 +221,9 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
             }
         }
 
+        // Buffer random reads. This allows batching the SecureRandom provider requests.
+        // Current implementation targets the 8K buffer size, which balances the initialization
+        // costs, memory footprint and cached throughput.
         static final class Buffer {
             static final int UUID_CHUNK = 16;
             static final int UUID_COUNT = 512;
@@ -261,16 +269,16 @@ public final class UUID implements java.io.Serializable, Comparable<UUID> {
     // Constructors and Factories
 
     /*
-     * Private constructor which uses a byte array to construct the new random UUID.
+     * Private constructor which uses a byte array to construct the new UUID.
      */
-    private UUID(byte[] buf, int start) {
+    private UUID(byte[] data, int start) {
         long msb = 0;
         long lsb = 0;
         for (int i = start; i < start + 8; i++) {
-            msb = (msb << 8) | (buf[i] & 0xff);
+            msb = (msb << 8) | (data[i] & 0xff);
         }
         for (int i = start + 8; i < start + 16; i++) {
-            lsb = (lsb << 8) | (buf[i] & 0xff);
+            lsb = (lsb << 8) | (data[i] & 0xff);
         }
         this.mostSigBits = msb;
         this.leastSigBits = lsb;

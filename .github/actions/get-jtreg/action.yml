@@ -56,6 +56,9 @@ runs:
 
     - name: 'Build JTReg'
       run: |
+        # Avoid broken path conversions in MSYS2
+        export MSYS2_ARG_CONV_EXCL='*'
+
         # Build JTReg and move files to the proper locations
         bash make/build.sh --jdk "$JAVA_HOME_11_X64"
         mkdir ../installed

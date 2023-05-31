@@ -57,7 +57,11 @@ runs:
     - name: 'Build JTReg'
       run: |
         # Avoid broken path conversions in MSYS2
-        export MSYS2_ARG_CONV_EXCL='C:/hostedtoolcache'
+        # export MSYS2_ARG_CONV_EXCL='C:/hostedtoolcache'
+
+	# Tests Java runs
+	$JAVA_HOME_11_X64/bin/java -version
+	$JAVA_HOME_11_X64/bin/javac -version
 
         # Build JTReg and move files to the proper locations
         bash make/build.sh --jdk "$JAVA_HOME_11_X64"

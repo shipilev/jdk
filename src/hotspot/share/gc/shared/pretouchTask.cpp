@@ -81,9 +81,11 @@ void PretouchTask::pretouch(const char* task_name, char* start_address, char* en
     return;
   }
 
-  size_t num_chunks = ((total_bytes - 1) / chunk_size) + 1;
+  size_t num_chunks = 1;
   uint num_workers = 1;
+
   if (pretouch_workers != nullptr) {
+    num_chunks = ((total_bytes - 1) / chunk_size) + 1;
     num_workers = MIN2<uint>(num_chunks, pretouch_workers->max_workers());
   }
 

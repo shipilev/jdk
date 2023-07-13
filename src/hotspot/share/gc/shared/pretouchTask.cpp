@@ -74,9 +74,7 @@ void PretouchTask::pretouch(const char* task_name, char* start_address, char* en
   page_size = UseTransparentHugePages ? (size_t)os::vm_page_size() : page_size;
 #endif
 
-  PretouchTask task(task_name, start_address, end_address, page_size, chunk_size);
   size_t total_bytes = pointer_delta(end_address, start_address, sizeof(char));
-
   if (total_bytes == 0) {
     return;
   }
@@ -91,13 +89,15 @@ void PretouchTask::pretouch(const char* task_name, char* start_address, char* en
 
   if (num_workers > 1) {
     assert(pretouch_workers != nullptr, "Implied");
-    log_debug(gc, heap)("Running %s with %u workers for " SIZE_FORMAT " work units pre-touching " PROPERFMT "",
-                        task.name(), num_workers, num_chunks, PROPERFMTARGS(total_bytes));
 
+    log_debug(gc, heap)("Running %s with %u workers for " SIZE_FORMAT " work units pre-touching " PROPERFMT "",
+                        task_name, num_workers, num_chunks, PROPERFMTARGS(total_bytes));
+
+    PretouchTask task(task_name, start_address, end_address, page_size, chunk_size);
     pretouch_workers->run_task(&task, num_workers);
   } else {
     log_debug(gc, heap)("Running %s pre-touching " PROPERFMT "",
-                        task.name(), PROPERFMTARGS(total_bytes));
-    task.work(0);
+                        task_name, PROPERFMTARGS(total_bytes));
+    os::pretouch_memory(start_address, end_address, page_size);
   }
 }

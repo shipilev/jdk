@@ -340,6 +340,8 @@ int ZeroInterpreter::native_entry(Method* method, intptr_t UNUSED, TRAPS) {
         break;
       }
       case LM_MONITOR: {
+        markWord disp = lockee->mark().set_unlocked();
+        monitor->lock()->set_displaced_header(disp);
         CALL_VM_NOCHECK(InterpreterRuntime::monitorenter(thread, monitor));
         if (HAS_PENDING_EXCEPTION)
           goto unwind_and_return;

@@ -629,13 +629,15 @@ void BytecodeInterpreter::run(interpreterState istate) {
             break;
           }
           case LM_MONITOR: {
+            markWord displaced = rcvr->mark().set_unlocked();
+            mon->lock()->set_displaced_header(displaced);
             CALL_VM(InterpreterRuntime::monitorenter(THREAD, mon), handle_exception);
             break;
           }
           case LM_LEGACY: {
-            bool inc_monitor_count = true;
             markWord displaced = rcvr->mark().set_unlocked();
             mon->lock()->set_displaced_header(displaced);
+            bool inc_monitor_count = true;
             if (rcvr->cas_set_mark(markWord::from_pointer(mon), displaced) != displaced) {
               // Is it simple recursive case?
               if (THREAD->is_lock_owned((address) displaced.clear_lock_bits().to_pointer())) {
@@ -1685,13 +1687,15 @@ run:
               break;
             }
             case LM_MONITOR: {
+              markWord displaced = lockee->mark().set_unlocked();
+              entry->lock()->set_displaced_header(displaced);
               CALL_VM(InterpreterRuntime::monitorenter(THREAD, entry), handle_exception);
               break;
             }
             case LM_LEGACY: {
-              bool inc_monitor_count = true;
               markWord displaced = lockee->mark().set_unlocked();
               entry->lock()->set_displaced_header(displaced);
+              bool inc_monitor_count = true;
               if (lockee->cas_set_mark(markWord::from_pointer(entry), displaced) != displaced) {
                 // Is it simple recursive case?
                 if (THREAD->is_lock_owned((address) displaced.clear_lock_bits().to_pointer())) {

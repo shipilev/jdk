@@ -35,7 +35,7 @@ on:
       platforms:
         description: 'Platform(s) to execute on (comma separated, e.g. "linux-x64, macos, aarch64")'
         required: true
-        default: 'linux-x64, linux-x86, linux-x64-variants, linux-cross-compile, macos-x64, macos-aarch64, windows-x64, windows-aarch64, docs'
+        default: 'linux-x64, linux-cross-compile'
       configure-arguments:
         description: 'Additional configure arguments'
         required: false
@@ -346,20 +346,7 @@ jobs:
     if: always()
     needs:
       - build-linux-x64
-      - build-linux-x86
-      - build-linux-x64-hs-nopch
-      - build-linux-x64-hs-zero
-      - build-linux-x64-hs-minimal
-      - build-linux-x64-hs-optimized
       - build-linux-cross-compile
-      - build-macos-x64
-      - build-macos-aarch64
-      - build-windows-x64
-      - build-windows-aarch64
-      - test-linux-x64
-      - test-linux-x86
-      - test-macos-x64
-      - test-windows-x64
 
     steps:
         # Hack to get hold of the api environment variables that are only defined for actions

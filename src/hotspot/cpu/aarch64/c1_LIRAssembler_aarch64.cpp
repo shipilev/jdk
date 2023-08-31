@@ -1391,10 +1391,23 @@ void LIR_Assembler::emit_typecheck_helper(LIR_OpTypeCheck *op, Label* success, L
     COMMENT("LIR_Assembler::emit_typecheck_helper, type profile path 1");
     Register mdo  = klass_RInfo, recv = k_RInfo;
     __ bind(profile_cast_success);
+
+    Label L_same_batch;
+
+    if (CounterBatching > 0) {
+      __ ldr(rscratch1, Address(rthread, JavaThread::counter_batch_offset()));
+      __ sub(rscratch1, rscratch1, 1);
+      __ str(rscratch1, Address(rthread, JavaThread::counter_batch_offset()));
+
+      __ cmp(rscratch1, (unsigned char)0);
+      __ br(Assembler::GT, L_same_batch);
+    }
+
     __ mov_metadata(mdo, md->constant_encoding());
     __ load_klass(recv, obj);
     Label update_done;
     type_profile_helper(mdo, md, data, recv, success);
+    __ bind(L_same_batch);
     __ b(*success);
 
     __ bind(profile_cast_failure);
@@ -1484,10 +1497,23 @@ void LIR_Assembler::emit_opTypeCheck(LIR_OpTypeCheck* op) {
       COMMENT("LIR_Assembler::emit_opTypeCheck, type profile path 2");
       Register mdo  = klass_RInfo, recv = k_RInfo;
       __ bind(profile_cast_success);
+
+      Label L_same_batch;
+
+      if (CounterBatching > 0) {
+        __ ldr(rscratch1, Address(rthread, JavaThread::counter_batch_offset()));
+        __ sub(rscratch1, rscratch1, 1);
+        __ str(rscratch1, Address(rthread, JavaThread::counter_batch_offset()));
+
+        __ cmp(rscratch1, (unsigned char)0);
+        __ br(Assembler::GT, L_same_batch);
+      }
+
       __ mov_metadata(mdo, md->constant_encoding());
       __ load_klass(recv, value);
       Label update_done;
       type_profile_helper(mdo, md, data, recv, &done);
+      __ bind(L_same_batch);
       __ b(done);
 
       __ bind(profile_cast_failure);

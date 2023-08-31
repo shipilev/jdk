@@ -1401,6 +1401,8 @@ void LIR_Assembler::emit_typecheck_helper(LIR_OpTypeCheck *op, Label* success, L
 
       __ cmp(rscratch1, (unsigned char)0);
       __ br(Assembler::GT, L_same_batch);
+      __ mov_immediate32(rscratch1, checked_cast<uint32_t>(CounterBatching));
+      __ str(rscratch1, Address(rthread, JavaThread::counter_batch_offset()));
     }
 
     __ mov_metadata(mdo, md->constant_encoding());
@@ -1507,6 +1509,8 @@ void LIR_Assembler::emit_opTypeCheck(LIR_OpTypeCheck* op) {
 
         __ cmp(rscratch1, (unsigned char)0);
         __ br(Assembler::GT, L_same_batch);
+        __ mov_immediate32(rscratch1, checked_cast<uint32_t>(CounterBatching));
+        __ str(rscratch1, Address(rthread, JavaThread::counter_batch_offset()));
       }
 
       __ mov_metadata(mdo, md->constant_encoding());
@@ -2645,6 +2649,8 @@ void LIR_Assembler::emit_profile_call(LIR_OpProfileCall* op) {
 
     __ cmp(rscratch1, (unsigned char)0);
     __ br(Assembler::GT, L_same_batch);
+    __ mov_immediate32(rscratch1, checked_cast<uint32_t>(CounterBatching));
+    __ str(rscratch1, Address(rthread, JavaThread::counter_batch_offset()));
   }
 
   // Update counter for all call types
@@ -2757,6 +2763,8 @@ void LIR_Assembler::emit_profile_type(LIR_OpProfileType* op) {
 
     __ cmp(rscratch1, checked_cast<unsigned char>(0));
     __ br(Assembler::GT, L_same_batch);
+    __ mov_immediate32(rscratch1, checked_cast<uint32_t>(CounterBatching));
+    __ str(rscratch1, Address(rthread, JavaThread::counter_batch_offset()));
   }
 
   COMMENT("emit_profile_type {");

@@ -256,30 +256,31 @@ void LIRGenerator::increment_counter(LIR_Address* addr, int step) {
     __ load(counter_batch_addr, counter_reg);
     __ add(counter_reg, LIR_OprFact::intConst(1), counter_reg);
 
+    // TODO: Add batching
     LIR_Opr imm;
     switch(addr->type()) {
       case T_INT:
-        imm = LIR_OprFact::intConst(step * CounterBatching);
+        imm = LIR_OprFact::intConst(step);
         break;
       case T_LONG:
-        imm = LIR_OprFact::longConst(step * CounterBatching);
+        imm = LIR_OprFact::longConst(step);
         break;
       default:
         ShouldNotReachHere();
     }
 
     LabelObj* L_same_batch = new LabelObj();
-    __ cmp(LIR_Condition::lir_cond_greaterEqual, counter_reg, LIR_OprFact::intConst(CounterBatching));
-    __ branch(LIR_Condition::lir_cond_greaterEqual, L_same_batch->label());
+    __ cmp(LIR_Condition::lir_cond_lessEqual, counter_reg, LIR_OprFact::intConst(CounterBatching));
+    __ branch(LIR_Condition::lir_cond_lessEqual, L_same_batch->label());
+
+    __ move(LIR_OprFact::intConst(0), counter_reg);
+    __ store(counter_reg, counter_batch_addr);
 
     // TODO: make this atomic.
     LIR_Opr reg = new_register(addr->type());
     __ load(addr, reg);
     __ add(reg, imm, reg);
     __ store(reg, addr);
-
-    __ move(LIR_OprFact::intConst(0), counter_reg);
-    __ store(counter_reg, counter_batch_addr);
 
     __ branch_destination(L_same_batch->label());
   } else {

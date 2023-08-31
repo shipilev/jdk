@@ -1009,6 +1009,18 @@ void InterpreterMacroAssembler::increment_mdp_data_at(Register mdp_in,
 
   assert_different_registers(rscratch2, rscratch1, mdp_in, reg);
 
+  Label L_same_batch;
+  if (CounterBatching > 0) {
+    ldr(rscratch1, Address(rthread, JavaThread::counter_batch_offset()));
+    sub(rscratch1, rscratch1, 1);
+    str(rscratch1, Address(rthread, JavaThread::counter_batch_offset()));
+
+    cmp(rscratch1, checked_cast<unsigned char>(0));
+    br(Assembler::GT, L_same_batch);
+    movw(rscratch1, checked_cast<uint32_t>(CounterBatching));
+    str(rscratch1, Address(rthread, JavaThread::counter_batch_offset()));
+  }
+
   Address addr1(mdp_in, constant);
   Address addr2(rscratch2, reg, Address::lsl(0));
   Address &addr = addr1;
@@ -1048,6 +1060,8 @@ void InterpreterMacroAssembler::increment_mdp_data_at(Register mdp_in,
     str(rscratch1, addr);
     bind(L);
   }
+
+  bind(L_same_batch);
 }
 
 void InterpreterMacroAssembler::set_mdp_flag_at(Register mdp_in,
@@ -1605,6 +1619,19 @@ void InterpreterMacroAssembler::increment_mask_and_jump(Address counter_addr,
                                                         Register scratch, Register scratch2,
                                                         bool preloaded, Condition cond,
                                                         Label* where) {
+
+  Label L_same_batch;
+  if (CounterBatching > 0) {
+    ldr(scratch, Address(rthread, JavaThread::counter_batch_offset()));
+    sub(scratch, scratch, 1);
+    str(scratch, Address(rthread, JavaThread::counter_batch_offset()));
+
+    cmp(scratch, checked_cast<unsigned char>(0));
+    br(Assembler::GT, L_same_batch);
+    movw(scratch, checked_cast<uint32_t>(CounterBatching));
+    str(scratch, Address(rthread, JavaThread::counter_batch_offset()));
+  }
+
   if (!preloaded) {
     ldrw(scratch, counter_addr);
   }
@@ -1613,6 +1640,7 @@ void InterpreterMacroAssembler::increment_mask_and_jump(Address counter_addr,
   ldrw(scratch2, mask);
   ands(scratch, scratch, scratch2);
   br(cond, *where);
+  bind(L_same_batch);
 }
 
 void InterpreterMacroAssembler::call_VM_leaf_base(address entry_point,

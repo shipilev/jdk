@@ -321,6 +321,7 @@ void LIR_Assembler::clinit_barrier(ciMethod* method) {
 
   Label L_skip_barrier;
 
+  COMMENT("LIR_Assembler::clinit_barrier");
   __ mov_metadata(rscratch2, method->holder()->constant_encoding());
   __ clinit_barrier(rscratch2, rscratch1, &L_skip_barrier /*L_fast_path*/);
   __ far_jump(RuntimeAddress(SharedRuntime::get_handle_wrong_method_stub()));
@@ -1315,6 +1316,7 @@ void LIR_Assembler::emit_typecheck_helper(LIR_OpTypeCheck *op, Label* success, L
   assert_different_registers(obj, k_RInfo, klass_RInfo);
 
     if (should_profile) {
+      COMMENT("LIR_Assembler::emit_typecheck_helper, null seen path");
       Label not_null;
       __ cbnz(obj, not_null);
       // Object is null; update MDO and exit
@@ -1386,6 +1388,7 @@ void LIR_Assembler::emit_typecheck_helper(LIR_OpTypeCheck *op, Label* success, L
     }
   }
   if (should_profile) {
+    COMMENT("LIR_Assembler::emit_typecheck_helper, type profile path 1");
     Register mdo  = klass_RInfo, recv = k_RInfo;
     __ bind(profile_cast_success);
     __ mov_metadata(mdo, md->constant_encoding());
@@ -1395,6 +1398,7 @@ void LIR_Assembler::emit_typecheck_helper(LIR_OpTypeCheck *op, Label* success, L
     __ b(*success);
 
     __ bind(profile_cast_failure);
+    COMMENT("LIR_Assembler::emit_typecheck_helper, type profile path 2");
     __ mov_metadata(mdo, md->constant_encoding());
     Address counter_addr
       = __ form_address(rscratch2, mdo,
@@ -1441,6 +1445,7 @@ void LIR_Assembler::emit_opTypeCheck(LIR_OpTypeCheck* op) {
     Label *failure_target = should_profile ? &profile_cast_failure : stub->entry();
 
     if (should_profile) {
+      COMMENT("LIR_Assembler::emit_opTypeCheck, type profile path 1");
       Label not_null;
       __ cbnz(value, not_null);
       // Object is null; update MDO and exit
@@ -1476,6 +1481,7 @@ void LIR_Assembler::emit_opTypeCheck(LIR_OpTypeCheck* op) {
     // fall through to the success case
 
     if (should_profile) {
+      COMMENT("LIR_Assembler::emit_opTypeCheck, type profile path 2");
       Register mdo  = klass_RInfo, recv = k_RInfo;
       __ bind(profile_cast_success);
       __ mov_metadata(mdo, md->constant_encoding());
@@ -1485,6 +1491,7 @@ void LIR_Assembler::emit_opTypeCheck(LIR_OpTypeCheck* op) {
       __ b(done);
 
       __ bind(profile_cast_failure);
+      COMMENT("LIR_Assembler::emit_opTypeCheck, type profile path 3");
       __ mov_metadata(mdo, md->constant_encoding());
       Address counter_addr(mdo, md->byte_offset_of_slot(data, CounterData::count_offset()));
       __ lea(rscratch2, counter_addr);

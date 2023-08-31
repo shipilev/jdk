@@ -2603,6 +2603,17 @@ void LIR_Assembler::emit_profile_call(LIR_OpProfileCall* op) {
   int bci          = op->profiled_bci();
   ciMethod* callee = op->profiled_callee();
 
+  Label L_same_batch;
+
+  if (CounterBatching > 0) {
+    __ ldr(rscratch1, Address(rthread, JavaThread::counter_batch_offset()));
+    __ add(rscratch1, rscratch1, 1);
+    __ str(rscratch1, Address(rthread, JavaThread::counter_batch_offset()));
+
+    __ cmp(rscratch1, checked_cast<unsigned char>(CounterBatching));
+    __ br(Assembler::LE, L_same_batch);
+  }
+
   // Update counter for all call types
   ciMethodData* md = method->method_data_or_null();
   assert(md != nullptr, "Sanity");
@@ -2634,6 +2645,7 @@ void LIR_Assembler::emit_profile_call(LIR_OpProfileCall* op) {
         if (known_klass->equals(receiver)) {
           Address data_addr(mdo, md->byte_offset_of_slot(data, VirtualCallData::receiver_count_offset(i)));
           __ addptr(data_addr, DataLayout::counter_increment);
+          __ bind(L_same_batch);
           return;
         }
       }
@@ -2652,6 +2664,7 @@ void LIR_Assembler::emit_profile_call(LIR_OpProfileCall* op) {
           __ str(rscratch1, Address(rscratch2));
           Address data_addr(mdo, md->byte_offset_of_slot(data, VirtualCallData::receiver_count_offset(i)));
           __ addptr(data_addr, DataLayout::counter_increment);
+          __ bind(L_same_batch);
           return;
         }
       }
@@ -2669,6 +2682,8 @@ void LIR_Assembler::emit_profile_call(LIR_OpProfileCall* op) {
     // Static call
     __ addptr(counter_addr, DataLayout::counter_increment);
   }
+
+  __ bind(L_same_batch);
 }
 
 
@@ -2700,6 +2715,17 @@ void LIR_Assembler::emit_updatecrc32(LIR_OpUpdateCRC32* op) {
 }
 
 void LIR_Assembler::emit_profile_type(LIR_OpProfileType* op) {
+  Label L_same_batch;
+
+  if (CounterBatching > 0) {
+    __ ldr(rscratch1, Address(rthread, JavaThread::counter_batch_offset()));
+    __ add(rscratch1, rscratch1, 1);
+    __ str(rscratch1, Address(rthread, JavaThread::counter_batch_offset()));
+
+    __ cmp(rscratch1, checked_cast<unsigned char>(CounterBatching));
+    __ br(Assembler::LE, L_same_batch);
+  }
+
   COMMENT("emit_profile_type {");
   Register obj = op->obj()->as_register();
   Register tmp = op->tmp()->as_pointer_register();
@@ -2853,6 +2879,7 @@ void LIR_Assembler::emit_profile_type(LIR_OpProfileType* op) {
 
     __ bind(next);
   }
+  __ bind(L_same_batch);
   COMMENT("} emit_profile_type");
 }
 

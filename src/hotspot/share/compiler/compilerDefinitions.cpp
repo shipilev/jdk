@@ -371,6 +371,10 @@ void CompilerConfig::set_compilation_policy_flags() {
 
   }
 
+  if (CounterBatching > 0) {
+    FLAG_SET_ERGO(CompileThresholdScaling, 1.0 / CounterBatching);
+  }
+
   // Scale tiered compilation thresholds.
   // CompileThresholdScaling == 0.0 is equivalent to -Xint and leaves compilation thresholds unchanged.
   if (!FLAG_IS_DEFAULT(CompileThresholdScaling) && CompileThresholdScaling > 0.0) {

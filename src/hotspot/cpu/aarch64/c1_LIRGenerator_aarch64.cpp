@@ -255,6 +255,7 @@ void LIRGenerator::increment_counter(LIR_Address* addr, int step) {
 
     __ load(counter_batch_addr, counter_reg);
     __ add(counter_reg, LIR_OprFact::intConst(1), counter_reg);
+    __ store(counter_reg, counter_batch_addr);
 
     // TODO: Add batching
     LIR_Opr imm;

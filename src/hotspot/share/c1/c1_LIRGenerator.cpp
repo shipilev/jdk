@@ -3294,6 +3294,7 @@ void LIRGenerator::increment_event_counter_impl(CodeEmitInfo* info,
 
     __ load(counter_batch_addr, counter_batch_reg);
     __ add(counter_batch_reg, LIR_OprFact::intConst(1), counter_batch_reg);
+    __ store(counter_batch_reg, counter_batch_addr);
 
     LabelObj* L_same_batch = new LabelObj();
     __ cmp(LIR_Condition::lir_cond_lessEqual, counter_batch_reg, LIR_OprFact::intConst(CounterBatching));

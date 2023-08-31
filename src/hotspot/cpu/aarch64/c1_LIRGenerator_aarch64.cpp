@@ -254,7 +254,7 @@ void LIRGenerator::increment_counter(LIR_Address* addr, int step) {
     LIR_Opr counter_reg = new_register(T_INT);
 
     __ load(counter_batch_addr, counter_reg);
-    __ add(counter_reg, LIR_OprFact::intConst(1), counter_reg);
+    __ sub(counter_reg, LIR_OprFact::intConst(1), counter_reg);
     __ store(counter_reg, counter_batch_addr);
 
     // TODO: Add batching
@@ -271,10 +271,10 @@ void LIRGenerator::increment_counter(LIR_Address* addr, int step) {
     }
 
     LabelObj* L_same_batch = new LabelObj();
-    __ cmp(LIR_Condition::lir_cond_lessEqual, counter_reg, LIR_OprFact::intConst(CounterBatching));
-    __ branch(LIR_Condition::lir_cond_lessEqual, L_same_batch->label());
+    __ cmp(LIR_Condition::lir_cond_greater, counter_reg, LIR_OprFact::intConst(0));
+    __ branch(LIR_Condition::lir_cond_greater, L_same_batch->label());
 
-    __ move(LIR_OprFact::intConst(0), counter_reg);
+    __ move(LIR_OprFact::intConst(CounterBatching), counter_reg);
     __ store(counter_reg, counter_batch_addr);
 
     // TODO: make this atomic.

@@ -2607,11 +2607,11 @@ void LIR_Assembler::emit_profile_call(LIR_OpProfileCall* op) {
 
   if (CounterBatching > 0) {
     __ ldr(rscratch1, Address(rthread, JavaThread::counter_batch_offset()));
-    __ add(rscratch1, rscratch1, 1);
+    __ sub(rscratch1, rscratch1, 1);
     __ str(rscratch1, Address(rthread, JavaThread::counter_batch_offset()));
 
-    __ cmp(rscratch1, checked_cast<unsigned char>(CounterBatching));
-    __ br(Assembler::LE, L_same_batch);
+    __ cmp(rscratch1, (unsigned char)0);
+    __ br(Assembler::GT, L_same_batch);
   }
 
   // Update counter for all call types
@@ -2719,11 +2719,11 @@ void LIR_Assembler::emit_profile_type(LIR_OpProfileType* op) {
 
   if (CounterBatching > 0) {
     __ ldr(rscratch1, Address(rthread, JavaThread::counter_batch_offset()));
-    __ add(rscratch1, rscratch1, 1);
+    __ sub(rscratch1, rscratch1, 1);
     __ str(rscratch1, Address(rthread, JavaThread::counter_batch_offset()));
 
-    __ cmp(rscratch1, checked_cast<unsigned char>(CounterBatching));
-    __ br(Assembler::LE, L_same_batch);
+    __ cmp(rscratch1, checked_cast<unsigned char>(0));
+    __ br(Assembler::GT, L_same_batch);
   }
 
   COMMENT("emit_profile_type {");

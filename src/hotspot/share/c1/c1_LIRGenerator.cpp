@@ -3293,14 +3293,14 @@ void LIRGenerator::increment_event_counter_impl(CodeEmitInfo* info,
     LIR_Opr counter_batch_reg = new_register(T_INT);
 
     __ load(counter_batch_addr, counter_batch_reg);
-    __ add(counter_batch_reg, LIR_OprFact::intConst(1), counter_batch_reg);
+    __ sub(counter_batch_reg, LIR_OprFact::intConst(1), counter_batch_reg);
     __ store(counter_batch_reg, counter_batch_addr);
 
     LabelObj* L_same_batch = new LabelObj();
-    __ cmp(LIR_Condition::lir_cond_lessEqual, counter_batch_reg, LIR_OprFact::intConst(CounterBatching));
-    __ branch(LIR_Condition::lir_cond_lessEqual, L_same_batch->label());
+    __ cmp(LIR_Condition::lir_cond_greater, counter_batch_reg, LIR_OprFact::intConst(0));
+    __ branch(LIR_Condition::lir_cond_greater, L_same_batch->label());
 
-    __ move(LIR_OprFact::intConst(0), counter_batch_reg);
+    __ move(LIR_OprFact::intConst(CounterBatching), counter_batch_reg);
     __ store(counter_batch_reg, counter_batch_addr);
 
     // TODO: Make sure we increment by batch size

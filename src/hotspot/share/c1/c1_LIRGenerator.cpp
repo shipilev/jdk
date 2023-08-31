@@ -907,7 +907,8 @@ LIR_Opr LIRGenerator::force_to_spill(LIR_Opr value, BasicType t) {
 }
 
 void LIRGenerator::profile_branch(If* if_instr, If::Condition cond) {
-  if (if_instr->should_profile()) {
+  // FIXME: Cannot profile branches with batching, because it destroys flags
+  if (CounterBatching == 0 && if_instr->should_profile()) {
     ciMethod* method = if_instr->profiled_method();
     assert(method != nullptr, "method should be set if branch is profiled");
     ciMethodData* md = method->method_data_or_null();

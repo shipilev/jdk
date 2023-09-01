@@ -925,19 +925,20 @@ void LIRGenerator::profile_branch(If* if_instr, If::Condition cond) {
 
     int diff = not_taken_count_offset - taken_count_offset;
 
-    LIR_Opr data_reg = new_pointer_register();
+    LIR_Opr data_loc_reg = new_pointer_register();
     LIR_Opr taken_addr = LIR_OprFact::intptrConst(((char*)md->constant_encoding()) + taken_count_offset);
 
-    __ move(taken_addr, data_reg);
+    __ move(taken_addr, data_loc_reg);
 
     LabelObj* L = new LabelObj();
     __ branch(lir_cond(cond), L->label());
-    LIR_Address* fake_incr_value2 = new LIR_Address(data_reg, diff, T_INT);
-    __ leal(fake_incr_value2, data_reg);
+    LIR_Address* fake_incr_value2 = new LIR_Address(data_loc_reg, diff, T_INT);
+    __ leal(fake_incr_value2, data_loc_reg);
     __ branch_destination(L->label());
 
     // MDO cells are intptr_t, so the data_reg width is arch-dependent.
-    LIR_Address* data_addr = new LIR_Address(data_reg, data_reg->type());
+    LIR_Address* data_addr = new LIR_Address(data_loc_reg, data_loc_reg->type());
+    LIR_Opr data_reg = new_pointer_register();
     __ move(data_addr, data_reg);
     // Use leal instead of add to avoid destroying condition codes on x86
     LIR_Address* fake_incr_value = new LIR_Address(data_reg, DataLayout::counter_increment, T_INT);

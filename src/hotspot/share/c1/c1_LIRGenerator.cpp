@@ -2566,18 +2566,15 @@ ciKlass* LIRGenerator::profile_type(ciMethodData* md, int md_base_offset, int md
     return result;
   }
 
-  if (mdp == LIR_OprFact::illegalOpr) {
-    mdp = new_register(T_METADATA);
-    __ metadata2reg(md->constant_encoding(), mdp);
-    if (md_base_offset != 0) {
-      LIR_Address* base_type_address = new LIR_Address(mdp, md_base_offset, T_ADDRESS);
-      mdp = new_pointer_register();
-      __ leal(LIR_OprFact::address(base_type_address), mdp);
-    }
-  }
+  assert(mdp == LIR_OprFact::illegalOpr, "check callers");
+
+  LIR_Opr md_slot_reg = new_pointer_register();
+  LIR_Opr md_slot = LIR_OprFact::intptrConst(((char *) md->constant_encoding()) + md_base_offset + md_offset);
+   __ move(md_slot, md_slot_reg);
+
   LIRItem value(obj, this);
   value.load_item();
-  __ profile_type(new LIR_Address(mdp, md_offset, T_METADATA),
+  __ profile_type(new LIR_Address(md_slot_reg, T_METADATA),
                   value.result(), exact_klass, profiled_k, new_pointer_register(), not_null, exact_signature_k != nullptr);
   return result;
 }

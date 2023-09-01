@@ -2468,11 +2468,10 @@ void LIRGenerator::do_Goto(Goto* x) {
       assert(data->is_JumpData(), "need JumpData for branches");
       offset = md->byte_offset_of_slot(data, JumpData::taken_offset());
     }
-    LIR_Opr md_reg = new_register(T_METADATA);
-    __ metadata2reg(md->constant_encoding(), md_reg);
-
-    increment_counter(new LIR_Address(md_reg, offset,
-                                      NOT_LP64(T_INT) LP64_ONLY(T_LONG)), DataLayout::counter_increment);
+    LIR_Opr md_slot_reg = new_pointer_register();
+    LIR_Opr md_slot = LIR_OprFact::intptrConst(((char *) md->constant_encoding()) + offset);
+    __ move(md_slot, md_slot_reg);
+    increment_counter(new LIR_Address(md_slot_reg, NOT_LP64(T_INT) LP64_ONLY(T_LONG)), DataLayout::counter_increment);
   }
 
   // emit phi-instruction move after safepoint since this simplifies
@@ -3264,28 +3263,30 @@ void LIRGenerator::increment_event_counter_impl(CodeEmitInfo* info,
   assert(level > CompLevel_simple, "Shouldn't be here");
 
   int offset = -1;
-  LIR_Opr counter_holder;
+  LIR_Opr counter_holder = new_pointer_register();
   if (level == CompLevel_limited_profile) {
     MethodCounters* counters_adr = method->ensure_method_counters();
     if (counters_adr == nullptr) {
       bailout("method counters allocation failed");
       return;
     }
-    counter_holder = new_pointer_register();
-    __ move(LIR_OprFact::intptrConst(counters_adr), counter_holder);
     offset = in_bytes(backedge ? MethodCounters::backedge_counter_offset() :
                                  MethodCounters::invocation_counter_offset());
+
+    LIR_Opr counter_slot = LIR_OprFact::intptrConst(((char *) counters_adr) + offset);
+    __ move(counter_slot, counter_holder);
   } else if (level == CompLevel_full_profile) {
-    counter_holder = new_register(T_METADATA);
     offset = in_bytes(backedge ? MethodData::backedge_counter_offset() :
                                  MethodData::invocation_counter_offset());
     ciMethodData* md = method->method_data_or_null();
     assert(md != nullptr, "Sanity");
-    __ metadata2reg(md->constant_encoding(), counter_holder);
+
+    LIR_Opr md_slot = LIR_OprFact::intptrConst(((char *) md->constant_encoding()) + offset);
+    __ move(md_slot, counter_holder);
   } else {
     ShouldNotReachHere();
   }
-  LIR_Address* counter = new LIR_Address(counter_holder, offset, T_INT);
+  LIR_Address* counter = new LIR_Address(counter_holder, T_INT);
   LIR_Opr result = new_register(T_INT);
   __ load(counter, result);
   __ add(result, step, result);

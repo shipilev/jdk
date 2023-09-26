@@ -128,6 +128,21 @@ inline T Atomic::PlatformXchg<4>::operator()(T volatile* dest,
   return xchg_using_helper<int32_t>(ARMAtomicFuncs::_xchg_func, dest, exchange_value);
 }
 
+template<>
+template<typename D, typename I>
+inline D Atomic::PlatformAdd<8>::fetch_then_add(D volatile* dest, I add_value,
+                                                atomic_memory_order order) const {
+  STATIC_ASSERT(8 == sizeof(I));
+  STATIC_ASSERT(8 == sizeof(D));
+
+  D old_value;
+  D new_value;
+  do {
+    old_value = Atomic::PlatformLoad<8>()(dest);
+    new_value = old_value + add_value;
+  } while (old_value != Atomic::PlatformCmpxchg<8>()(dest, old_value, new_value, order));
+  return old_value;
+}
 
 // The memory_order parameter is ignored - we always provide the strongest/most-conservative ordering
 

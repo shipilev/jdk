@@ -59,14 +59,11 @@ TEST(AtomicAddTest, int32) {
   Support().test_fetch_add();
 }
 
-// 64bit Atomic::add is only supported on 64bit platforms.
-#ifdef _LP64
 TEST(AtomicAddTest, int64) {
   using Support = AtomicAddTestSupport<int64_t>;
   Support().test_add();
   Support().test_fetch_add();
 }
-#endif // _LP64
 
 TEST(AtomicAddTest, ptr) {
   uint _test_values[10] = {};

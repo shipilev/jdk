@@ -235,6 +235,8 @@ bool Compiler::is_intrinsic_supported(vmIntrinsics::ID id) {
   case vmIntrinsics::_counterTime:
 #endif
   case vmIntrinsics::_getObjectSize:
+  case vmIntrinsics::_shipilev_magic_sizeOf:
+  case vmIntrinsics::_shipilev_magic_addressOf:
     break;
   case vmIntrinsics::_blackhole:
     break;

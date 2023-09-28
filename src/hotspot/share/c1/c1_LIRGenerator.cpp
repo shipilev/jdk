@@ -1337,11 +1337,36 @@ void LIRGenerator::do_getModifiers(Intrinsic* x) {
   __ move(new LIR_Address(klass, in_bytes(Klass::modifier_flags_offset()), T_INT), result);
 }
 
+void LIRGenerator::do_addressOf(Intrinsic* x) {
+  assert(x->number_of_arguments() == 1, "wrong type");
+  LIR_Opr reg = rlock_result(x);
+
+  LIRItem value(x->argument_at(0), this);
+  value.load_item();
+
+#ifdef _LP64
+  __ move(value.result(), reg, NULL);
+#else
+  LIR_Opr res = new_register(T_INT);
+  __ move(value.result(), res, NULL);
+  __ convert(Bytecodes::_i2l, res, reg);
+#endif
+}
+
+void LIRGenerator::do_sizeOf(Intrinsic* x) {
+  assert(x->number_of_arguments() == 1, "wrong type");
+  do_sizeOf_impl(x, 0);
+}
+
 void LIRGenerator::do_getObjectSize(Intrinsic* x) {
   assert(x->number_of_arguments() == 3, "wrong type");
+  do_sizeOf_impl(x, 2);
+}
+
+void LIRGenerator::do_sizeOf_impl(Intrinsic* x, int arg_idx) {
   LIR_Opr result_reg = rlock_result(x);
 
-  LIRItem value(x->argument_at(2), this);
+  LIRItem value(x->argument_at(arg_idx), this);
   value.load_item();
 
   LIR_Opr klass = new_register(T_METADATA);
@@ -2965,6 +2990,8 @@ void LIRGenerator::do_Intrinsic(Intrinsic* x) {
   case vmIntrinsics::_currentCarrierThread: do_currentCarrierThread(x); break;
   case vmIntrinsics::_currentThread:  do_vthread(x);       break;
   case vmIntrinsics::_scopedValueCache: do_scopedValueCache(x); break;
+  case vmIntrinsics::_shipilev_magic_sizeOf:         do_sizeOf(x);        break;
+  case vmIntrinsics::_shipilev_magic_addressOf:      do_addressOf(x);     break;
 
   case vmIntrinsics::_dlog:           // fall through
   case vmIntrinsics::_dlog10:         // fall through

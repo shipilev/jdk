@@ -29,6 +29,7 @@
 #include "gc/epsilon/epsilonBarrierSet.hpp"
 #include "gc/epsilon/epsilonMonitoringSupport.hpp"
 #include "gc/shared/collectedHeap.hpp"
+#include "gc/shared/markBitMap.hpp"
 #include "gc/shared/softRefPolicy.hpp"
 #include "gc/shared/space.hpp"
 #include "memory/virtualspace.hpp"
@@ -49,6 +50,8 @@ private:
   int64_t _decay_time_ns;
   volatile size_t _last_counter_update;
   volatile size_t _last_heap_print;
+  MemRegion  _bitmap_region;
+  MarkBitMap _bitmap;
 
 public:
   static EpsilonHeap* heap();
@@ -92,6 +95,7 @@ public:
 
   // Allocation
   HeapWord* allocate_work(size_t size, bool verbose = true);
+  HeapWord* allocate_or_collect_work(size_t size, bool verbose = true);
   HeapWord* mem_allocate(size_t size, bool* gc_overhead_limit_was_exceeded) override;
   HeapWord* allocate_new_tlab(size_t min_size,
                               size_t requested_size,
@@ -110,8 +114,8 @@ public:
   void object_iterate(ObjectClosure* cl) override;
 
   // Object pinning support: every object is implicitly pinned
-  void pin_object(JavaThread* thread, oop obj) override { }
-  void unpin_object(JavaThread* thread, oop obj) override { }
+  void pin_object(JavaThread* thread, oop obj) override;
+  void unpin_object(JavaThread* thread, oop obj) override;
 
   // No support for block parsing.
   HeapWord* block_start(const void* addr) const { return nullptr;  }
@@ -140,9 +144,16 @@ public:
   void print_tracing_info() const override;
   bool print_location(outputStream* st, void* addr) const override;
 
+  void entry_collect(GCCause::Cause cause);
+
 private:
   void print_heap_info(size_t used) const;
   void print_metaspace_info() const;
+
+  void vmentry_collect(GCCause::Cause cause);
+
+  void process_roots(OopClosure* cl);
+  void walk_bitmap(ObjectClosure* cl);
 
 };
 

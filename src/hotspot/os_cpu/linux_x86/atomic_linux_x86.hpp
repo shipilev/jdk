@@ -170,6 +170,7 @@ inline D Atomic::PlatformAdd<8>::fetch_then_add(D volatile* dest, I add_value,
 }
 
 // No direct support for 8-byte xchg; emulate using cmpxchg.
+template<>
 struct Atomic::PlatformXchg<8> : Atomic::XchgUsingCmpxchg<8> {};
 
 template<>

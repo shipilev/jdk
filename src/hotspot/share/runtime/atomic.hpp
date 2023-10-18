@@ -684,6 +684,7 @@ struct Atomic::CmpxchgByteUsingInt {
 //// Define the class before including platform file, which may use this
 //// as a base class, requiring it be complete.  The definition is later
 //// in this file, near the other definitions related to cmpxchg.
+template<size_t byte_size>
 struct Atomic::AddUsingCmpxchg {
     template<typename T>
     T operator()(T volatile* dest,

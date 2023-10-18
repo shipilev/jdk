@@ -144,6 +144,9 @@ inline D Atomic::PlatformAdd<8>::fetch_then_add(D volatile* dest, I add_value,
   return old_value;
 }
 
+// No direct support for 8-byte xchg; emulate using cmpxchg.
+struct Atomic::PlatformXchg<8> : Atomic::XchgUsingCmpxchg<8> {};
+
 // The memory_order parameter is ignored - we always provide the strongest/most-conservative ordering
 
 // No direct support for cmpxchg of bytes; emulate using int.

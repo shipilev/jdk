@@ -681,6 +681,41 @@ struct Atomic::CmpxchgByteUsingInt {
                atomic_memory_order order) const;
 };
 
+
+template<size_t byte_size>
+class Atomic::AddUsingCmpxchg {
+public:
+    template<typename D, typename I>
+    static D add_then_fetch(D volatile* dest, I add_value, atomic_memory_order order);
+
+    template<typename D, typename I>
+    static inline D fetch_then_add(D volatile* dest, I add_value,
+                                   atomic_memory_order order);
+};
+
+template<size_t byte_size>
+template<typename D, typename I>
+inline D Atomic::AddUsingCmpxchg<byte_size>::add_then_fetch(D volatile* dest, I add_value, atomic_memory_order order) {
+  D addend = add_value;
+  return fetch_then_add(dest, add_value, order) + add_value;
+}
+
+template<size_t byte_size>
+template<typename D, typename I>
+inline D Atomic::AddUsingCmpxchg<byte_size>::fetch_then_add(D volatile* dest, I add_value,
+                                   atomic_memory_order order) {
+      STATIC_ASSERT(byte_size == sizeof(I));
+      STATIC_ASSERT(byte_size == sizeof(D));
+
+      D old_value;
+      D new_value;
+      do {
+        old_value = Atomic::PlatformLoad<byte_size>()(dest);
+        new_value = old_value + add_value;
+      } while (old_value != Atomic::PlatformCmpxchg<byte_size>()(dest, old_value, new_value, order));
+      return old_value;
+}
+
 // Define the class before including platform file, which may use this
 // as a base class, requiring it be complete.  The definition is later
 // in this file, near the other definitions related to cmpxchg.
@@ -961,31 +996,6 @@ inline D Atomic::add_using_helper(Fn fn, D volatile* dest, I add_value) {
     fn(PrimitiveConversions::cast<Type>(add_value),
        reinterpret_cast<Type volatile*>(dest)));
 }
-
-template<size_t byte_size>
-class Atomic::AddUsingCmpxchg {
-public:
-    template<typename D, typename I>
-    static D add_then_fetch(D volatile* dest, I add_value, atomic_memory_order order) {
-      D addend = add_value;
-      return fetch_then_add(dest, add_value, order) + add_value;
-    }
-
-    template<typename D, typename I>
-    static inline D fetch_then_add(D volatile* dest, I add_value,
-                                   atomic_memory_order order) {
-      STATIC_ASSERT(byte_size == sizeof(I));
-      STATIC_ASSERT(byte_size == sizeof(D));
-
-      D old_value;
-      D new_value;
-      do {
-        old_value = Atomic::PlatformLoad<byte_size>()(dest);
-        new_value = old_value + add_value;
-      } while (old_value != Atomic::PlatformCmpxchg<byte_size>()(dest, old_value, new_value, order));
-      return old_value;
-    }
-};
 
 template<typename D, typename U, typename T>
 inline D Atomic::cmpxchg(D volatile* dest,

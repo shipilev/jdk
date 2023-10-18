@@ -683,7 +683,7 @@ struct Atomic::CmpxchgByteUsingInt {
 
 // Define the class before including platform file, which may use this
 // as a base class, requiring it be complete.  The definition is later
-// in this file, near the other definitions related to cmpxchg.
+// in this file, near the other definitions related to xchg.
 template<size_t byte_size>
 struct Atomic::XchgUsingCmpxchg {
   template<typename T>
@@ -715,9 +715,9 @@ public:
     D old_value;
     D new_value;
     do {
-      old_value = Atomic::PlatformLoad<byte_size>()(dest);
+      old_value = PlatformLoad<byte_size>()(dest);
       new_value = old_value + add_value;
-    } while (old_value != Atomic::PlatformCmpxchg<byte_size>()(dest, old_value, new_value, order));
+    } while (old_value != PlatformCmpxchg<byte_size>()(dest, old_value, new_value, order));
     return old_value;
   }
 };
@@ -1215,7 +1215,6 @@ inline D Atomic::xchg(volatile D* dest, T exchange_value, atomic_memory_order or
   return XchgImpl<D, T>()(dest, exchange_value, order);
 }
 
-
 template<size_t byte_size>
 template<typename T>
 inline T Atomic::XchgUsingCmpxchg<byte_size>::operator()(T volatile* dest,
@@ -1225,8 +1224,8 @@ inline T Atomic::XchgUsingCmpxchg<byte_size>::operator()(T volatile* dest,
 
   T old_value;
   do {
-    old_value = Atomic::PlatformLoad<byte_size>()(dest);
-  } while (old_value != Atomic::PlatformCmpxchg<byte_size>()(dest, old_value, exchange_value, order));
+    old_value = PlatformLoad<byte_size>()(dest);
+  } while (old_value != PlatformCmpxchg<byte_size>()(dest, old_value, exchange_value, order));
   return old_value;
 }
 

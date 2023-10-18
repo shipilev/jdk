@@ -171,6 +171,20 @@ inline D Atomic::PlatformAdd<8>::fetch_then_add(D volatile* dest, I add_value,
 
 template<>
 template<typename T>
+inline T Atomic::PlatformXchg<8>::operator()(T volatile* dest,
+                                             T exchange_value,
+                                             atomic_memory_order order) const {
+  STATIC_ASSERT(8 == sizeof(T));
+
+  T old_value;
+  do {
+    old_value = Atomic::PlatformLoad<8>()(dest);
+  } while (old_value != Atomic::PlatformCmpxchg<8>()(dest, old_value, exchange_value, order));
+  return old_value;
+}
+
+template<>
+template<typename T>
 inline T Atomic::PlatformLoad<8>::operator()(T const volatile* src) const {
   STATIC_ASSERT(8 == sizeof(T));
   volatile int64_t dest;

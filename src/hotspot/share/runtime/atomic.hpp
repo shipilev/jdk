@@ -398,15 +398,15 @@ private:
                                 T compare_value,
                                 T exchange_value);
 
-  // Support platforms that do not provide Read-Modify-Write
-  // byte-level atomic access. To use, derive PlatformCmpxchg<1> from
-  // this class.
+  // Support platforms that do not provide Read-Modify-Write atomic
+  // accesses for non-pointer widths. To use, derive PlatformCmpxchg<1>,
+  // PlatformAdd<S>, PlatformXchg<S> from these classes.
 public: // Temporary, can't be private: C++03 11.4/2. Fixed by C++11.
   struct CmpxchgByteUsingInt;
   template<size_t byte_size>
   struct XchgUsingCmpxchg;
   template<size_t byte_size>
-  struct AddUsingCmpxchg;
+  class AddUsingCmpxchg;
 private:
 
   // Dispatch handler for xchg.  Provides type-based validity
@@ -679,17 +679,6 @@ struct Atomic::CmpxchgByteUsingInt {
                T compare_value,
                T exchange_value,
                atomic_memory_order order) const;
-};
-
-//// Define the class before including platform file, which may use this
-//// as a base class, requiring it be complete.  The definition is later
-//// in this file, near the other definitions related to cmpxchg.
-template<size_t byte_size>
-struct Atomic::AddUsingCmpxchg {
-    template<typename T>
-    T operator()(T volatile* dest,
-                 T exchange_value,
-                 atomic_memory_order order) const;
 };
 
 // Define the class before including platform file, which may use this
@@ -972,6 +961,31 @@ inline D Atomic::add_using_helper(Fn fn, D volatile* dest, I add_value) {
     fn(PrimitiveConversions::cast<Type>(add_value),
        reinterpret_cast<Type volatile*>(dest)));
 }
+
+template<size_t byte_size>
+class Atomic::AddUsingCmpxchg {
+public:
+    template<typename D, typename I>
+    static D add_then_fetch(D volatile* dest, I add_value, atomic_memory_order order) {
+      D addend = add_value;
+      return fetch_then_add(dest, add_value, order) + add_value;
+    }
+
+    template<typename D, typename I>
+    static inline D fetch_then_add(D volatile* dest, I add_value,
+                                   atomic_memory_order order) {
+      STATIC_ASSERT(byte_size == sizeof(I));
+      STATIC_ASSERT(byte_size == sizeof(D));
+
+      D old_value;
+      D new_value;
+      do {
+        old_value = Atomic::PlatformLoad<byte_size>()(dest);
+        new_value = old_value + add_value;
+      } while (old_value != Atomic::PlatformCmpxchg<byte_size>()(dest, old_value, new_value, order));
+      return old_value;
+    }
+};
 
 template<typename D, typename U, typename T>
 inline D Atomic::cmpxchg(D volatile* dest,

@@ -153,35 +153,13 @@ inline T Atomic::PlatformCmpxchg<8>::operator()(T volatile* dest,
   return cmpxchg_using_helper<int64_t>(_Atomic_cmpxchg_long, dest, compare_value, exchange_value);
 }
 
+// No direct support for 8-byte xchg; emulate using cmpxchg.
 template<>
-template<typename T>
-inline T Atomic::PlatformXchg<8>::operator()(T volatile* dest,
-                                             T exchange_value,
-                                             atomic_memory_order order) const {
-  STATIC_ASSERT(8 == sizeof(T));
+struct Atomic::PlatformXchg<8> : Atomic::XchgUsingCmpxchg<8> {};
 
-  T old_value;
-  do {
-    old_value = Atomic::PlatformLoad<8>()(dest);
-  } while (old_value != Atomic::PlatformCmpxchg<8>()(dest, old_value, exchange_value, order));
-  return old_value;
-}
-
+// No direct support for 8-byte add; emulate using cmpxchg.
 template<>
-template<typename D, typename I>
-inline D Atomic::PlatformAdd<8>::fetch_then_add(D volatile* dest, I add_value,
-                                                atomic_memory_order order) const {
-  STATIC_ASSERT(8 == sizeof(I));
-  STATIC_ASSERT(8 == sizeof(D));
-
-  D old_value;
-  D new_value;
-  do {
-    old_value = Atomic::PlatformLoad<8>()(dest);
-    new_value = old_value + add_value;
-  } while (old_value != Atomic::PlatformCmpxchg<8>()(dest, old_value, new_value, order));
-  return old_value;
-}
+struct Atomic::PlatformAdd<8> : Atomic::AddUsingCmpxchg<8> {};
 
 template<>
 template<typename T>

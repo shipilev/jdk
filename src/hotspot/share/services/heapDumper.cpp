@@ -722,8 +722,10 @@ void DumpWriter::do_compress() {
   }
 }
 
-// Support class with a collection of functions used when dumping the heap
+class DumperClassMetadataTable;
+class DumperClassMetadataTableEntry;
 
+// Support class with a collection of functions used when dumping the heap
 class DumperSupport : AllStatic {
  public:
 
@@ -738,7 +740,7 @@ class DumperSupport : AllStatic {
   static u4 sig2size(Symbol* sig);
 
   // returns the size of the instance of the given class
-  static u4 instance_size(Klass* k);
+  static u4 instance_size(Klass* k, DumperClassMetadataTableEntry* cache_entry);
 
   // dump a jfloat
   static void dump_float(AbstractDumpWriter* writer, jfloat f);
@@ -751,13 +753,13 @@ class DumperSupport : AllStatic {
   // dumps static fields of the given class
   static void dump_static_fields(AbstractDumpWriter* writer, Klass* k);
   // dump the raw values of the instance fields of the given object
-  static void dump_instance_fields(AbstractDumpWriter* writer, oop o);
+  static void dump_instance_fields(AbstractDumpWriter* writer, oop o, DumperClassMetadataTableEntry* cache_entry);
   // get the count of the instance fields for a given class
   static u2 get_instance_fields_count(InstanceKlass* ik);
   // dumps the definition of the instance fields for a given class
   static void dump_instance_field_descriptors(AbstractDumpWriter* writer, Klass* k);
   // creates HPROF_GC_INSTANCE_DUMP record for the given object
-  static void dump_instance(AbstractDumpWriter* writer, oop o);
+  static void dump_instance(AbstractDumpWriter* writer, oop o, DumperClassMetadataTable* cache);
   // creates HPROF_GC_CLASS_DUMP record for the given instance class
   static void dump_instance_class(AbstractDumpWriter* writer, Klass* k);
   // creates HPROF_GC_CLASS_DUMP record for a given array class
@@ -784,6 +786,90 @@ class DumperSupport : AllStatic {
     } else {
       return o;
     }
+  }
+};
+
+// Hash table of klasses to the klass metadata. This should greatly improve the
+// hash dumping performance. This hash table is supposed to be used by a single
+// thread only.
+//
+class DumperClassMetadataTableEntry : public CHeapObj<mtServiceability> {
+public:
+  GrowableArray<char> _sigs_start;
+  GrowableArray<int> _offsets;
+  u4 _instance_size;
+  int _entries;
+
+public:
+  DumperClassMetadataTableEntry() : _instance_size(0), _entries(0) {};
+};
+
+class DumperClassMetadataTable : public StackObj {
+private:
+  static unsigned int ptr_hash(void* const& s1) {
+    // 2654435761 = 2^32 * Phi (golden ratio)
+    return (unsigned int)(((uint32_t)(uintptr_t)s1) * 2654435761u);
+  }
+
+  // ResourceHashtable SIZE is specified at compile time so we
+  // use 1031 which is the first prime after 1024.
+  typedef ResourceHashtable<void*, DumperClassMetadataTableEntry*, 1031, AnyObj::C_HEAP, mtServiceability,
+          &DumperClassMetadataTable::ptr_hash> PtrTable;
+  PtrTable* _ptrs;
+
+  // Single-slot cache to handle the major case of objects of the same
+  // class back-to-back, e.g. from T[].
+  InstanceKlass* _last_ik;
+  DumperClassMetadataTableEntry* _last_entry;
+
+public:
+  DumperClassMetadataTableEntry* lookup_or_create(InstanceKlass* ik) {
+    if (_last_ik == ik) {
+      return _last_entry;
+    }
+
+    DumperClassMetadataTableEntry* entry;
+    DumperClassMetadataTableEntry** from_cache = _ptrs->get(ik);
+    if (from_cache == nullptr) {
+      entry = new DumperClassMetadataTableEntry();
+
+      u4 instance_size = 0;
+      for (HierarchicalFieldStream<JavaFieldStream> fld(ik); !fld.done(); fld.next()) {
+        if (!fld.access_flags().is_static()) {
+          Symbol* sig = fld.signature();
+          entry->_sigs_start.push(sig->char_at(0));
+          entry->_offsets.push(fld.offset());
+          entry->_entries++;
+
+          instance_size += DumperSupport::sig2size(sig);
+        }
+      }
+
+      entry->_instance_size = instance_size;
+      _ptrs->put(ik, entry);
+    } else {
+      entry = *from_cache;
+    }
+
+    // Remember for single-slot cache.
+    _last_ik = ik;
+    _last_entry = entry;
+
+    return entry;
+  }
+
+  DumperClassMetadataTable() : _ptrs(new (mtServiceability) PtrTable), _last_ik(nullptr), _last_entry(nullptr) {}
+
+  ~DumperClassMetadataTable() {
+    class CleanupEntry: StackObj {
+    public:
+      bool do_entry(void*& key, DumperClassMetadataTableEntry*& entry) {
+        delete entry;
+        return true;
+      }
+    } cleanup;
+    _ptrs->unlink(&cleanup);
+    delete _ptrs;
   }
 };
 
@@ -931,16 +1017,19 @@ void DumperSupport::dump_field_value(AbstractDumpWriter* writer, char type, oop 
 }
 
 // returns the size of the instance of the given class
-u4 DumperSupport::instance_size(Klass* k) {
-  InstanceKlass* ik = InstanceKlass::cast(k);
-  u4 size = 0;
-
-  for (HierarchicalFieldStream<JavaFieldStream> fld(ik); !fld.done(); fld.next()) {
-    if (!fld.access_flags().is_static()) {
-      size += sig2size(fld.signature());
+u4 DumperSupport::instance_size(Klass* k, DumperClassMetadataTableEntry* cache_entry) {
+  if (cache_entry != nullptr) {
+    return cache_entry->_instance_size;
+  } else {
+    InstanceKlass* ik = InstanceKlass::cast(k);
+    u4 size = 0;
+    for (HierarchicalFieldStream<JavaFieldStream> fld(ik); !fld.done(); fld.next()) {
+      if (!fld.access_flags().is_static()) {
+        size += sig2size(fld.signature());
+      }
     }
+    return size;
   }
-  return size;
 }
 
 u4 DumperSupport::get_static_fields_size(InstanceKlass* ik, u2& field_count) {
@@ -1012,14 +1101,11 @@ void DumperSupport::dump_static_fields(AbstractDumpWriter* writer, Klass* k) {
 }
 
 // dump the raw values of the instance fields of the given object
-void DumperSupport::dump_instance_fields(AbstractDumpWriter* writer, oop o) {
-  InstanceKlass* ik = InstanceKlass::cast(o->klass());
-
-  for (HierarchicalFieldStream<JavaFieldStream> fld(ik); !fld.done(); fld.next()) {
-    if (!fld.access_flags().is_static()) {
-      Symbol* sig = fld.signature();
-      dump_field_value(writer, sig->char_at(0), o, fld.offset());
-    }
+void DumperSupport::dump_instance_fields(AbstractDumpWriter* writer, oop o, DumperClassMetadataTableEntry* cache_entry) {
+  for (int c = 0; c < cache_entry->_entries; c++) {
+    char sig_start = cache_entry->_sigs_start.at(c);
+    int offset = cache_entry->_offsets.at(c);
+    dump_field_value(writer, sig_start, o, offset);
   }
 }
 
@@ -1050,9 +1136,12 @@ void DumperSupport::dump_instance_field_descriptors(AbstractDumpWriter* writer, 
 }
 
 // creates HPROF_GC_INSTANCE_DUMP record for the given object
-void DumperSupport::dump_instance(AbstractDumpWriter* writer, oop o) {
+void DumperSupport::dump_instance(AbstractDumpWriter* writer, oop o, DumperClassMetadataTable* cache) {
   InstanceKlass* ik = InstanceKlass::cast(o->klass());
-  u4 is = instance_size(ik);
+
+  DumperClassMetadataTableEntry* cache_entry = cache->lookup_or_create(ik);
+
+  u4 is = instance_size(ik, cache_entry);
   u4 size = 1 + sizeof(address) + 4 + sizeof(address) + 4 + is;
 
   writer->start_sub_record(HPROF_GC_INSTANCE_DUMP, size);
@@ -1066,7 +1155,7 @@ void DumperSupport::dump_instance(AbstractDumpWriter* writer, oop o) {
   writer->write_u4(is);
 
   // field values
-  dump_instance_fields(writer, o);
+  dump_instance_fields(writer, o, cache_entry);
 
   writer->end_sub_record();
 }
@@ -1111,7 +1200,7 @@ void DumperSupport::dump_instance_class(AbstractDumpWriter* writer, Klass* k) {
   writer->write_objectID(oop(nullptr));
 
   // instance size
-  writer->write_u4(DumperSupport::instance_size(ik));
+  writer->write_u4(DumperSupport::instance_size(ik, nullptr));
 
   // size of constant pool - ignored by HAT 1.1
   writer->write_u2(0);
@@ -1763,6 +1852,8 @@ class HeapObjectDumper : public ObjectClosure {
   AbstractDumpWriter* _writer;
   AbstractDumpWriter* writer()                  { return _writer; }
 
+  DumperClassMetadataTable _cache;
+
  public:
   HeapObjectDumper(AbstractDumpWriter* writer) {
     _writer = writer;
@@ -1787,7 +1878,7 @@ void HeapObjectDumper::do_object(oop o) {
 
   if (o->is_instance()) {
     // create a HPROF_GC_INSTANCE record for each object
-    DumperSupport::dump_instance(writer(), o);
+    DumperSupport::dump_instance(writer(), o, &_cache);
   } else if (o->is_objArray()) {
     // create a HPROF_GC_OBJ_ARRAY_DUMP record for each object array
     DumperSupport::dump_object_array(writer(), objArrayOop(o));

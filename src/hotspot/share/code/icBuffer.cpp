@@ -84,12 +84,24 @@ static ICRefillVerifier* current_ic_refill_verifier() {
 
 void ICStub::finalize() {
   if (!is_empty()) {
+//    jlong time1 = os::javaTimeNanos();
+
     ResourceMark rm;
     CompiledIC *ic = CompiledIC_at(CodeCache::find_compiled(ic_site()), ic_site());
     assert(CodeCache::find_compiled(ic->instruction_address()) != nullptr, "inline cache in non-compiled?");
 
+    address dest = destination();
+    void *val = cached_value();
+
+//    jlong time2 = os::javaTimeNanos();
+
     assert(this == ICStub_from_destination_address(ic->stub_address()), "wrong owner of ic buffer");
-    ic->set_ic_destination_and_value(destination(), cached_value());
+    ic->set_ic_destination_and_value(dest, val);
+
+//    jlong time3 = os::javaTimeNanos();
+//    if (UseNewCode) {
+//      tty->print_cr(" ICStub::finalize took: " JLONG_FORMAT " ns; " JLONG_FORMAT " ns", (time2 - time1), (time3 - time2));
+//    }
   }
 }
 
@@ -177,13 +189,23 @@ bool InlineCacheBuffer::needs_update_inline_caches() {
 }
 
 void InlineCacheBuffer::update_inline_caches() {
-  if (buffer()->number_of_stubs() > 0) {
+  int nos = buffer()->number_of_stubs();
+  jlong time1 = os::javaTimeNanos();
+  if (nos > 0) {
     if (TraceICBuffer) {
-      tty->print_cr("[updating inline caches with %d stubs]", buffer()->number_of_stubs());
+      tty->print_cr("[updating inline caches with %d stubs]", nos);
     }
     buffer()->remove_all();
   }
+  jlong time2 = os::javaTimeNanos();
+
   release_pending_icholders();
+
+  jlong time3 = os::javaTimeNanos();
+
+  if (UseNewCode) {
+    tty->print_cr("purged %d stubs in " JLONG_FORMAT " ns, released icholders in " JLONG_FORMAT " ns", nos, (time2 - time1), (time3 - time2));
+  }
 }
 
 

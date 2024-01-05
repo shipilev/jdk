@@ -201,12 +201,26 @@ void StubQueue::remove_first(int n) {
 }
 
 
-void StubQueue::remove_all(){
+void StubQueue::remove_all() {
   debug_only(verify();)
-  remove_first(number_of_stubs());
-  assert(number_of_stubs() == 0, "sanity check");
-}
 
+  int idx = 0;
+  for (int c = 0; c < number_of_stubs(); c++) {
+    Stub *s = stub_at(idx);
+    debug_only(stub_verify(s);)
+    stub_finalize(s);
+    idx += stub_size(s);
+  }
+
+  // buffer is now empty
+  // => reset queue indices
+  _queue_begin  = 0;
+  _queue_end    = 0;
+  _buffer_limit = _buffer_size;
+  _number_of_stubs = 0;
+
+  debug_only(verify();)
+}
 
 void StubQueue::verify() {
   // verify only if initialized

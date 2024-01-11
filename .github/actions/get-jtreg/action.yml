@@ -39,6 +39,9 @@ runs:
       with:
         var: JTREG_VERSION
 
+    - name: 'Do wget directly'
+      run: wget -v https://git.openjdk.java.net/jtharness/archive/jt6.0-b24.zip > /dev/null
+
     - name: 'Check cache for JTReg'
       id: get-cached-jtreg
       uses: actions/cache@v3

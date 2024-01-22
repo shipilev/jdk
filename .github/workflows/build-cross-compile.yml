@@ -113,8 +113,16 @@ jobs:
               g++-${{ inputs.gcc-major-version }} \
               gcc-${{ inputs.gcc-major-version }}-${{ matrix.gnu-arch }}-linux-gnu${{ matrix.gnu-abi}} \
               g++-${{ inputs.gcc-major-version }}-${{ matrix.gnu-arch }}-linux-gnu${{ matrix.gnu-abi}} \
-              libxrandr-dev libxtst-dev libcups2-dev libasound2-dev
+              libxrandr-dev libxtst-dev libcups2-dev libasound2-dev \
+              ccache
           sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-${{ inputs.gcc-major-version }} 100 --slave /usr/bin/g++ g++ /usr/bin/g++-${{ inputs.gcc-major-version }}
+
+      - name: 'Check cache for ccache'
+        id: get-cached-ccache
+        uses: actions/cache@v3
+        with:
+          path: .ccache
+          key: ccache-${{ github.job }}-${{ matrix.debian-arch }}-${{ hashFiles('./.github/workflows/build-cross-compile.yml') }}
 
       - name: 'Check cache for sysroot'
         id: get-cached-sysroot
@@ -175,6 +183,8 @@ jobs:
           --openjdk-target=${{ matrix.gnu-arch }}-linux-gnu${{ matrix.gnu-abi}}
           --with-sysroot=sysroot
           --with-jmod-compress=zip-1
+          --enable-ccache
+          --with-ccache-dir=.ccache/
           CC=${{ matrix.gnu-arch }}-linux-gnu${{ matrix.gnu-abi}}-gcc-${{ inputs.gcc-major-version }}
           CXX=${{ matrix.gnu-arch }}-linux-gnu${{ matrix.gnu-abi}}-g++-${{ inputs.gcc-major-version }}
           ${{ inputs.extra-conf-options }} ${{ inputs.configure-arguments }} || (

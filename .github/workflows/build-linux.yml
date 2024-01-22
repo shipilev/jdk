@@ -28,6 +28,9 @@ name: 'Build (linux)'
 on:
   workflow_call:
     inputs:
+      job-label:
+        required: true
+        type: string
       platform:
         required: true
         type: string
@@ -111,8 +114,22 @@ jobs:
           fi
           sudo apt-get update
           sudo apt-get install --only-upgrade apt
-          sudo apt-get install gcc-${{ inputs.gcc-major-version }}${{ inputs.gcc-package-suffix }} g++-${{ inputs.gcc-major-version }}${{ inputs.gcc-package-suffix }} libxrandr-dev${{ steps.arch.outputs.suffix }} libxtst-dev${{ steps.arch.outputs.suffix }} libcups2-dev${{ steps.arch.outputs.suffix }} libasound2-dev${{ steps.arch.outputs.suffix }} ${{ inputs.apt-extra-packages }}
+          sudo apt-get install gcc-${{ inputs.gcc-major-version }}${{ inputs.gcc-package-suffix }} \
+                               g++-${{ inputs.gcc-major-version }}${{ inputs.gcc-package-suffix }} \
+                               libxrandr-dev${{ steps.arch.outputs.suffix }} \
+                               libxtst-dev${{ steps.arch.outputs.suffix }} \
+                               libcups2-dev${{ steps.arch.outputs.suffix }} \
+                               libasound2-dev${{ steps.arch.outputs.suffix }} \
+                               ccache \
+                               ${{ inputs.apt-extra-packages }}
           sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-${{ inputs.gcc-major-version }} 100 --slave /usr/bin/g++ g++ /usr/bin/g++-${{ inputs.gcc-major-version }}
+
+      - name: 'Check cache for ccache'
+        id: get-cached-ccache
+        uses: actions/cache@v3
+        with:
+          path: .ccache
+          key: ccache-${{ inputs.job-label }}-${{ matrix.debug-level }}-${{ hashFiles('./.github/workflows/build-linux.yml') }}
 
       - name: 'Configure'
         run: >
@@ -125,6 +142,8 @@ jobs:
           --with-gtest=${{ steps.gtest.outputs.path }}
           --with-zlib=system
           --with-jmod-compress=zip-1
+          --enable-ccache
+          --with-ccache-dir=.ccache/
           ${{ inputs.extra-conf-options }} ${{ inputs.configure-arguments }} || (
           echo "Dumping config.log:" &&
           cat config.log &&

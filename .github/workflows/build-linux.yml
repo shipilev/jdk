@@ -133,12 +133,11 @@ jobs:
           --with-zlib=system
           --with-jmod-compress=zip-1
           --enable-ccache
+          --with-ccache-dir=.ccache/
           ${{ inputs.extra-conf-options }} ${{ inputs.configure-arguments }} || (
           echo "Dumping config.log:" &&
           cat config.log &&
           exit 1)
-        env:
-          CCACHE_DIR: .ccache/
 
       - name: 'Build'
         id: build

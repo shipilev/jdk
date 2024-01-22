@@ -111,7 +111,14 @@ jobs:
           fi
           sudo apt-get update
           sudo apt-get install --only-upgrade apt
-          sudo apt-get install gcc-${{ inputs.gcc-major-version }}${{ inputs.gcc-package-suffix }} g++-${{ inputs.gcc-major-version }}${{ inputs.gcc-package-suffix }} libxrandr-dev${{ steps.arch.outputs.suffix }} libxtst-dev${{ steps.arch.outputs.suffix }} libcups2-dev${{ steps.arch.outputs.suffix }} libasound2-dev${{ steps.arch.outputs.suffix }} ${{ inputs.apt-extra-packages }} ccache
+          sudo apt-get install gcc-${{ inputs.gcc-major-version }}${{ inputs.gcc-package-suffix }} \
+                               g++-${{ inputs.gcc-major-version }}${{ inputs.gcc-package-suffix }} \
+                               libxrandr-dev${{ steps.arch.outputs.suffix }} \
+                               libxtst-dev${{ steps.arch.outputs.suffix }} \
+                               libcups2-dev${{ steps.arch.outputs.suffix }} \
+                               libasound2-dev${{ steps.arch.outputs.suffix }} \
+                               ccache \
+                               ${{ inputs.apt-extra-packages }}
           sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-${{ inputs.gcc-major-version }} 100 --slave /usr/bin/g++ g++ /usr/bin/g++-${{ inputs.gcc-major-version }}
 
       - name: 'Check cache for ccache'
@@ -119,7 +126,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: .ccache
-          key: ccache-${{ inputs.platform }}-${{ hashFiles('./.github/workflows/build-cross-compile.yml') }}
+          key: ccache-${{ github.job }}-${{ matrix.debug-level }}-${{ hashFiles('./.github/workflows/build-cross-compile.yml') }}
 
       - name: 'Configure'
         run: >

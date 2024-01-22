@@ -175,6 +175,7 @@ jobs:
           --with-build-jdk=${{ steps.buildjdk.outputs.jdk-path }}
           --with-jmod-compress=zip-1
           --enable-ccache
+          CCACHE_DIR=.ccache/
           CC=${{ matrix.gnu-arch }}-linux-gnu${{ matrix.gnu-abi}}-gcc-${{ inputs.gcc-major-version }}
           CXX=${{ matrix.gnu-arch }}-linux-gnu${{ matrix.gnu-abi}}-g++-${{ inputs.gcc-major-version }}
           ${{ inputs.extra-conf-options }} ${{ inputs.configure-arguments }} || (

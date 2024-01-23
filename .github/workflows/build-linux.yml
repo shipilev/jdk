@@ -28,6 +28,9 @@ name: 'Build (linux)'
 on:
   workflow_call:
     inputs:
+      job-label:
+        required: true
+        type: string
       platform:
         required: true
         type: string
@@ -126,7 +129,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: .ccache
-          key: ccache-${{ github.job }}-${{ matrix.debug-level }}-${{ hashFiles('./.github/workflows/build-cross-compile.yml') }}
+          key: ccache-${{ inputs.job-label }}-${{ matrix.debug-level }}-${{ hashFiles('./.github/workflows/build-cross-compile.yml') }}
 
       - name: 'Configure'
         run: >

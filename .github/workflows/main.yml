@@ -129,6 +129,7 @@ jobs:
     needs: select
     uses: ./.github/workflows/build-linux.yml
     with:
+      job-label: linux-x64
       platform: linux-x64
       gcc-major-version: '10'
       configure-arguments: ${{ github.event.inputs.configure-arguments }}
@@ -141,6 +142,7 @@ jobs:
     needs: select
     uses: ./.github/workflows/build-linux.yml
     with:
+      job-label: linux-x86
       platform: linux-x86
       gcc-major-version: '10'
       gcc-package-suffix: '-multilib'
@@ -158,6 +160,7 @@ jobs:
     needs: select
     uses: ./.github/workflows/build-linux.yml
     with:
+      job-label: linux-x64-hs-nopch
       platform: linux-x64
       make-target: 'hotspot'
       debug-levels: '[ "debug" ]'
@@ -172,6 +175,7 @@ jobs:
     needs: select
     uses: ./.github/workflows/build-linux.yml
     with:
+      job-label: linux-x64-hs-zero
       platform: linux-x64
       make-target: 'hotspot'
       debug-levels: '[ "debug" ]'
@@ -186,6 +190,7 @@ jobs:
     needs: select
     uses: ./.github/workflows/build-linux.yml
     with:
+      job-label: linux-x64-hs-minimal
       platform: linux-x64
       make-target: 'hotspot'
       debug-levels: '[ "debug" ]'
@@ -200,6 +205,7 @@ jobs:
     needs: select
     uses: ./.github/workflows/build-linux.yml
     with:
+      job-label: linux-x64-hs-optimized
       platform: linux-x64
       make-target: 'hotspot'
       # Technically this is not the "debug" level, but we can't inject a new matrix state for just this job

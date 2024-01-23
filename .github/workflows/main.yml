@@ -282,6 +282,7 @@ jobs:
     needs: select
     uses: ./.github/workflows/build-linux.yml
     with:
+      job-label: docs
       platform: linux-x64
       debug-levels: '[ "debug" ]'
       make-target: 'docs-jdk-bundles'

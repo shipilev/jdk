@@ -109,20 +109,23 @@ jobs:
 
       - name: 'Run tests'
         id: run-tests
-        run: |
-          make test-prebuilt \
-            TEST='${{ matrix.test-suite }}' \
-            BOOT_JDK=${{ steps.bootjdk.outputs.path }} \
-            JT_HOME=${{ steps.jtreg.outputs.path }} \
-            JDK_IMAGE_DIR=${{ steps.bundles.outputs.jdk-path }} \
-            SYMBOLS_IMAGE_DIR=${{ steps.bundles.outputs.symbols-path }} \
-            TEST_IMAGE_DIR=${{ steps.bundles.outputs.tests-path }} \
-            JTREG='JAVA_OPTIONS=-XX:-CreateCoredumpOnCrash;VERBOSE=fail,error,time;KEYWORDS=!headful'
-          
-          # Invoke the error reporting regardless of the exit code
-          bash ./.github/scripts/gen-test-summary.sh "$GITHUB_STEP_SUMMARY" "$GITHUB_OUTPUT"
+        run: >
+          make test-prebuilt
+          TEST='${{ matrix.test-suite }}'
+          BOOT_JDK=${{ steps.bootjdk.outputs.path }}
+          JT_HOME=${{ steps.jtreg.outputs.path }}
+          JDK_IMAGE_DIR=${{ steps.bundles.outputs.jdk-path }}
+          SYMBOLS_IMAGE_DIR=${{ steps.bundles.outputs.symbols-path }}
+          TEST_IMAGE_DIR=${{ steps.bundles.outputs.tests-path }}
+          JTREG='JAVA_OPTIONS=-XX:-CreateCoredumpOnCrash;VERBOSE=fail,error,time;KEYWORDS=!headful'
         env:
           PATH: ${{ steps.path.outputs.value }}
+
+      # This is a separate step to properly expose the exit code from the make test-prebuilt
+      # above. This runs always, e.g. even on test error.
+      - name: 'Generate test summary'
+        run: bash ./.github/scripts/gen-test-summary.sh "$GITHUB_STEP_SUMMARY" "$GITHUB_OUTPUT"
+        if: always()
 
         # This is a separate step, since if the markdown from a step gets bigger than
         # 1024 kB it is skipped, but then the short summary above is still generated

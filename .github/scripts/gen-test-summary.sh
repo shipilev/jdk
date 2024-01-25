@@ -32,7 +32,7 @@ results_dir=build/run-test-prebuilt/test-results/$test_suite_name/text
 
 if [[ ! -f build/run-test-prebuilt/make-support/exit-with-error ]]; then
   # There were no failures, exit now
-  exit
+  exit 0
 fi
 
 failures=$(sed -E -e 's/(.*)\.(java|sh)/\1/' -e '/^#/d' $results_dir/newfailures.txt 2> /dev/null || true)

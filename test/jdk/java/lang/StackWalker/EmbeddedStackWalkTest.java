@@ -125,12 +125,12 @@ public class EmbeddedStackWalkTest {
                  .filter(cn -> !cn.startsWith("jdk.internal.reflect.") && !cn.startsWith("java.lang.invoke"))
                  .skip(2).findFirst()
             ).get();
-            assertEquals(caller, C2.class.getName());
+            assertEquals(caller, "booo");
 
-            verify(walker, C1.class, "call");
-            verify(walker, C2.class, "call");
-            verify(walker, C2.class, "run");
-            verify(walker, C2.class, "walk");
+            verify(walker, C1.class, "callioasdjfoasf");
+            verify(walker, C2.class, "callaisdfjas");
+            verify(walker, C2.class, "runaisdjofasdf");
+            verify(walker, C2.class, "walkasdfjioasjdfasdf");
             verify(walker, C2.class, "testEmbeddedWalker");
         } // here is the end line number of approximate range, L136.
 

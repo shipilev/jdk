@@ -56,11 +56,15 @@ jobs:
       matrix:
         test-name:
           - 'jdk/tier1 part 1'
+          - 'jdk/tier1 part 2'
           - 'lib-test/tier1'
 
         include:
           - test-name: 'jdk/tier1 part 1'
             test-suite: 'test/jdk/:tier1_part1'
+
+          - test-name: 'jdk/tier1 part 2'
+            test-suite: 'test/jdk/:tier1_part2'
 
           - test-name: 'lib-test/tier1'
             test-suite: 'test/lib-test/:tier1'

@@ -641,7 +641,6 @@ bool HandshakeState::possibly_can_process_handshake() {
 
     LogStreamHandle(Debug, handshake) log;
     _handshakee->print_on(&log);
-    _handshakee->print_stack_on(&log);
 
     return false;
   }

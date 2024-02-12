@@ -46,6 +46,9 @@ public:
   void lock();
   void unlock();
 
+  void SpinAcquire(volatile int * adr);
+  void SpinRelease(volatile int * adr);
+
   bool owned_by_self() {
 #ifdef ASSERT
     return _state == locked && _owner == Thread::current();

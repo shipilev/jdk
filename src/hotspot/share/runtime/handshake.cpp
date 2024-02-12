@@ -645,8 +645,6 @@ HandshakeState::ProcessResult HandshakeState::try_process(HandshakeOperation* ma
 
   if (!has_operation()) {
     // JT has already cleared its handshake
-    log_debug(handshake)("Handshake is already cleared, thread " INTPTR_FORMAT,
-            p2i(current_thread));
     return HandshakeState::_no_operation;
   }
 

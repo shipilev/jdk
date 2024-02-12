@@ -43,25 +43,8 @@ private:
 public:
   ShenandoahLock() : _state(unlocked), _owner(nullptr) {};
 
-  void lock() {
-#ifdef ASSERT
-    assert(_owner != Thread::current(), "reentrant locking attempt, would deadlock");
-#endif
-    Thread::SpinAcquire(&_state, "Shenandoah Heap Lock");
-#ifdef ASSERT
-    assert(_state == locked, "must be locked");
-    assert(_owner == nullptr, "must not be owned");
-    _owner = Thread::current();
-#endif
-  }
-
-  void unlock() {
-#ifdef ASSERT
-    assert (_owner == Thread::current(), "sanity");
-    _owner = nullptr;
-#endif
-    Thread::SpinRelease(&_state);
-  }
+  void lock();
+  void unlock();
 
   bool owned_by_self() {
 #ifdef ASSERT

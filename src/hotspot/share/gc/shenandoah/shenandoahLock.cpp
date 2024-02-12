@@ -28,8 +28,35 @@
 
 #include "gc/shenandoah/shenandoahLock.hpp"
 #include "runtime/atomic.hpp"
+#include "runtime/interfaceSupport.inline.hpp"
 #include "runtime/javaThread.hpp"
 #include "runtime/os.inline.hpp"
+
+void ShenandoahLock::lock() {
+#ifdef ASSERT
+  assert(_owner != Thread::current(), "reentrant locking attempt, would deadlock");
+#endif
+  Thread* current = Thread::current();
+  if (current->is_Java_thread()) {
+    ThreadBlockInVM tbim(JavaThread::cast(current));
+    Thread::SpinAcquire(&_state, "Shenandoah Heap Lock");
+  } else {
+    Thread::SpinAcquire(&_state, "Shenandoah Heap Lock");
+  }
+#ifdef ASSERT
+  assert(_state == locked, "must be locked");
+  assert(_owner == nullptr, "must not be owned");
+  _owner = Thread::current();
+#endif
+}
+
+void ShenandoahLock::unlock() {
+#ifdef ASSERT
+  assert (_owner == Thread::current(), "sanity");
+  _owner = nullptr;
+#endif
+  Thread::SpinRelease(&_state);
+}
 
 ShenandoahSimpleLock::ShenandoahSimpleLock() {
   assert(os::mutex_init_done(), "Too early!");

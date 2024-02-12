@@ -275,6 +275,8 @@ class VM_HandshakeAllThreads: public VM_Operation {
       // Observing a blocked state may of course be transient but the processing is guarded
       // by mutexes and we optimistically begin by working on the blocked threads
       jtiwh.rewind();
+      log_debug(handshake)("Walking threads");
+
       for (JavaThread* thr = jtiwh.next(); thr != nullptr; thr = jtiwh.next()) {
         // A new thread on the ThreadsList will not have an operation,
         // hence it is skipped in handshake_try_process.
@@ -284,8 +286,11 @@ class VM_HandshakeAllThreads: public VM_Operation {
           emitted_handshakes_executed++;
         }
       }
+      log_debug(handshake)("Walking threads done, processing");
       hsy.process();
+      log_debug(handshake)("Processing done");
     } while (!_op->is_completed());
+    log_debug(handshake)("Op completed");
 
     // This pairs up with the release store in do_handshake(). It prevents future
     // loads from floating above the load of _pending_threads in is_completed()
@@ -636,18 +641,29 @@ bool HandshakeState::claim_handshake() {
 }
 
 HandshakeState::ProcessResult HandshakeState::try_process(HandshakeOperation* match_op) {
+  Thread* current_thread = Thread::current();
+
   if (!has_operation()) {
     // JT has already cleared its handshake
+    log_debug(handshake)("Handshake is already cleared, thread " INTPTR_FORMAT,
+            p2i(current_thread));
     return HandshakeState::_no_operation;
   }
 
   if (!possibly_can_process_handshake()) {
     // JT is observed in an unsafe state, it must notice the handshake itself
+    log_debug(handshake)("Handshake is not safe, thread " INTPTR_FORMAT,
+            p2i(current_thread));
     return HandshakeState::_not_safe;
   }
 
+  log_debug(handshake)("Handshake about to claim a mutex, thread " INTPTR_FORMAT,
+          p2i(current_thread));
+
   // Claim the mutex if there still an operation to be executed.
   if (!claim_handshake()) {
+    log_debug(handshake)("Handshake claim failed, thread " INTPTR_FORMAT,
+            p2i(current_thread));
     return HandshakeState::_claim_failed;
   }
 
@@ -655,11 +671,12 @@ HandshakeState::ProcessResult HandshakeState::try_process(HandshakeOperation* ma
   // can observe a safe state the thread cannot possibly continue without
   // getting caught by the mutex.
   if (!can_process_handshake()) {
+    log_debug(handshake)("Handshake cannot process while holding the mutex, thread " INTPTR_FORMAT,
+            p2i(current_thread));
     _lock.unlock();
     return HandshakeState::_not_safe;
   }
 
-  Thread* current_thread = Thread::current();
 
   HandshakeOperation* op = get_op();
 
@@ -667,7 +684,7 @@ HandshakeState::ProcessResult HandshakeState::try_process(HandshakeOperation* ma
   assert(SafepointMechanism::local_poll_armed(_handshakee), "Must be");
   assert(op->_target == nullptr || _handshakee == op->_target, "Wrong thread");
 
-  log_trace(handshake)("Processing handshake " INTPTR_FORMAT " by %s(%s)", p2i(op),
+  log_debug(handshake)("Processing handshake " INTPTR_FORMAT " by %s(%s)", p2i(op),
                        op == match_op ? "handshaker" : "cooperative",
                        current_thread->is_VM_thread() ? "VM Thread" : "JavaThread");
 
@@ -680,7 +697,7 @@ HandshakeState::ProcessResult HandshakeState::try_process(HandshakeOperation* ma
 
   _lock.unlock();
 
-  log_trace(handshake)("%s(" INTPTR_FORMAT ") executed an op for JavaThread: " INTPTR_FORMAT " %s target op: " INTPTR_FORMAT,
+  log_debug(handshake)("%s(" INTPTR_FORMAT ") executed an op for JavaThread: " INTPTR_FORMAT " %s target op: " INTPTR_FORMAT,
                        current_thread->is_VM_thread() ? "VM Thread" : "JavaThread",
                        p2i(current_thread), p2i(_handshakee),
                        op == match_op ? "including" : "excluding", p2i(match_op));

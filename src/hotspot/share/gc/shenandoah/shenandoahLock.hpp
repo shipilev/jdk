@@ -43,11 +43,34 @@ private:
 public:
   ShenandoahLock() : _state(unlocked), _owner(nullptr) {};
 
-  void lock();
-  void unlock();
+  void lock() {
+    Thread* current = Thread::current();
+    assert(_owner != current, "reentrant locking attempt, would deadlock");
 
-  void SpinAcquire(volatile int * adr);
-  void SpinRelease(volatile int * adr);
+    // Try to acquire fast, or dive into contended lock handling.
+    // Handle Java threads specially, since they might require blocking in VM.
+    if (Atomic::cmpxchg(&_state, 0, 1) != 0) {
+      if (current->is_Java_thread()) {
+        contended_lock(JavaThread::cast(current));
+      } else {
+        contended_lock();
+      }
+    }
+
+    assert(_state == locked, "must be locked");
+    assert(_owner == nullptr, "must not be owned");
+    DEBUG_ONLY(_owner = current;)
+  }
+
+  void unlock() {
+    assert(_owner == Thread::current(), "sanity");
+    DEBUG_ONLY(_owner = nullptr;)
+    OrderAccess::fence();
+    _state = 0;
+  }
+
+  void contended_lock(JavaThread* thread);
+  void contended_lock();
 
   bool owned_by_self() {
 #ifdef ASSERT

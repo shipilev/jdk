@@ -32,67 +32,41 @@
 #include "runtime/javaThread.hpp"
 #include "runtime/os.inline.hpp"
 
-void ShenandoahLock::SpinAcquire(volatile int * adr) {
-  if (Atomic::cmpxchg(adr, 0, 1) == 0) {
-    return;   // normal fast-path return
-  }
-
-  // Slow-path : We've encountered contention -- Spin/Yield/Block strategy.
+void ShenandoahLock::contended_lock() {
   int ctr = 0;
-  int Yields = 0;
-  for (;;) {
-    while (*adr != 0) {
-      ++ctr;
-      if ((ctr & 0xFFF) == 0 || !os::is_MP()) {
-        Thread* current = Thread::current();
-        if (current->is_Java_thread()) {
-          ThreadBlockInVM tbim(JavaThread::cast(current));
-          if (Yields > 5) {
-            os::naked_short_sleep(1);
-          } else {
-            os::naked_yield();
-            ++Yields;
-          }
-        } else {
-          if (Yields > 5) {
-            os::naked_short_sleep(1);
-          } else {
-            os::naked_yield();
-            ++Yields;
-          }
-        }
+  int yields = 0;
+  while (Atomic::cmpxchg(&_state, 0, 1) != 0) {
+    ++ctr;
+    if ((ctr & 0xFFF) == 0 || !os::is_MP()) {
+      if (yields > 5) {
+        os::naked_short_sleep(1);
       } else {
-        SpinPause();
+        os::naked_yield();
+        ++yields;
       }
+    } else {
+      SpinPause();
     }
-    if (Atomic::cmpxchg(adr, 0, 1) == 0) return;
   }
 }
 
-void ShenandoahLock::SpinRelease(volatile int * adr) {
-  OrderAccess::fence();      // guarantee at least release consistency.
-  *adr = 0;
-}
-
-
-void ShenandoahLock::lock() {
-#ifdef ASSERT
-  assert(_owner != Thread::current(), "reentrant locking attempt, would deadlock");
-#endif
-  SpinAcquire(&_state);
-#ifdef ASSERT
-  assert(_state == locked, "must be locked");
-  assert(_owner == nullptr, "must not be owned");
-  _owner = Thread::current();
-#endif
-}
-
-void ShenandoahLock::unlock() {
-#ifdef ASSERT
-  assert (_owner == Thread::current(), "sanity");
-  _owner = nullptr;
-#endif
-  SpinRelease(&_state);
+void ShenandoahLock::contended_lock(JavaThread* current) {
+  int ctr = 0;
+  int yields = 0;
+  while (Atomic::cmpxchg(&_state, 0, 1) != 0) {
+    ++ctr;
+    if ((ctr & 0xFFF) == 0 || !os::is_MP()) {
+      ThreadBlockInVM tbim(current);
+      if (yields > 5) {
+        os::naked_short_sleep(1);
+      } else {
+        os::naked_yield();
+        ++yields;
+      }
+    } else {
+      SpinPause();
+    }
+  }
 }
 
 ShenandoahSimpleLock::ShenandoahSimpleLock() {

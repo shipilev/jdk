@@ -639,6 +639,10 @@ bool HandshakeState::possibly_can_process_handshake() {
     log_debug(handshake)("Handshake cannot process handshake, thread " INTPTR_FORMAT " is in %s",
             p2i(_handshakee), _shipilev_thread_state_name(_handshakee->thread_state()));
 
+    LogStreamHandle(Debug, handshake) log;
+    _handshakee->print_on(&log);
+    _handshakee->print_active_stack_on(&log);
+
     return false;
   }
   }

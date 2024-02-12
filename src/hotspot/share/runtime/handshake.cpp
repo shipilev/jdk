@@ -604,6 +604,24 @@ bool HandshakeState::can_process_handshake() {
   return SafepointSynchronize::handshake_safe(_handshakee);
 }
 
+// Printing
+const char* _shipilev_thread_state_name(JavaThreadState _thread_state) {
+  switch (_thread_state) {
+    case _thread_uninitialized:     return "_thread_uninitialized";
+    case _thread_new:               return "_thread_new";
+    case _thread_new_trans:         return "_thread_new_trans";
+    case _thread_in_native:         return "_thread_in_native";
+    case _thread_in_native_trans:   return "_thread_in_native_trans";
+    case _thread_in_vm:             return "_thread_in_vm";
+    case _thread_in_vm_trans:       return "_thread_in_vm_trans";
+    case _thread_in_Java:           return "_thread_in_Java";
+    case _thread_in_Java_trans:     return "_thread_in_Java_trans";
+    case _thread_blocked:           return "_thread_blocked";
+    case _thread_blocked_trans:     return "_thread_blocked_trans";
+    default:                        return "unknown thread state";
+  }
+}
+
 bool HandshakeState::possibly_can_process_handshake() {
   // Note that this method is allowed to produce false positives.
   if (_handshakee->is_terminated()) {
@@ -617,8 +635,12 @@ bool HandshakeState::possibly_can_process_handshake() {
   case _thread_blocked:
     return true;
 
-  default:
+  default: {
+    log_debug(handshake)("Handshake cannot process handshake, thread " INTPTR_FORMAT " is in %s",
+            p2i(_handshakee), _shipilev_thread_state_name(_handshakee->thread_state()));
+
     return false;
+  }
   }
 }
 

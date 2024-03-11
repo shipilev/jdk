@@ -33,18 +33,15 @@ import java.util.concurrent.TimeUnit;
 @Fork(value = 3, jvmArgsAppend = {"-XX:+TieredCompilation", "-XX:TieredStopAtLevel=1"})
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
-@Threads(Threads.MAX)
 @State(Scope.Benchmark)
-public class SecondarySuperCacheInterContention {
+public class SecondarySuperCacheMiss {
 
     // This test targets C1 specifically, to enter the interesting code path
     // without heavily optimizing compiler like C2 optimizing based on profiles,
     // or folding the instanceof checks.
 
-    // The test verifies what happens on unhappy path, when we contend a lot over
-    // the secondary super cache, where different threads want to update the cache
-    // with different value. In tihs test, every thread comes with its own stable
-    // cached value. Meaning, this tests the INTER-thread contention.
+    // The test verifies what happens on unhappy path, when we keep missing and
+    // updating the secondary super cache either from a single or multiple threads.
 
     interface IA {}
     interface IB {}
@@ -61,19 +58,22 @@ public class SecondarySuperCacheInterContention {
     }
 
     @Benchmark
-    @OperationsPerInvocation(2)
-    @Group("test")
-    @GroupThreads(1)
-    public void t1(Blackhole bh) {
-        bh.consume(o1 instanceof IA);
-        bh.consume(o2 instanceof IA);
+    @Threads(1)
+    @OperationsPerInvocation(4)
+    public void single(Blackhole bh) {
+        test(bh);
     }
 
     @Benchmark
-    @OperationsPerInvocation(2)
-    @Group("test")
-    @GroupThreads(1)
-    public void t2(Blackhole bh) {
+    @Threads(Threads.MAX)
+    @OperationsPerInvocation(4)
+    public void multi(Blackhole bh) {
+        test(bh);
+    }
+
+    void test(Blackhole bh) {
+        bh.consume(o1 instanceof IA);
+        bh.consume(o2 instanceof IA);
         bh.consume(o1 instanceof IB);
         bh.consume(o2 instanceof IB);
     }

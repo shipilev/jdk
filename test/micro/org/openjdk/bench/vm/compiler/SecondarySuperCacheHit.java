@@ -35,14 +35,18 @@ import java.util.concurrent.TimeUnit;
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 @Threads(1)
 @State(Scope.Benchmark)
-public class SecondarySuperCacheHits {
+public class SecondarySuperCacheHit {
 
     // This test targets C1 specifically, to enter the interesting code path
     // without heavily optimizing compiler like C2 optimizing based on profiles,
     // or folding the instanceof checks.
 
     // The test verifies what happens on a happy path, when we can actually cache
-    // the last super and use it effectively.
+    // the last super and use it effectively. This test also verifies how quickly
+    // the secondary super cache converges to the stable value, as we ask for
+    // the same secondary super ITERS times.
+
+    static final int ITERS = 10000;
 
     interface I01 {}
     interface I02 {}
@@ -74,8 +78,6 @@ public class SecondarySuperCacheHits {
     public void setup() {
         o = new C1();
     }
-
-    static final int ITERS = 10000;
 
     @Benchmark
     @OperationsPerInvocation(20*ITERS)

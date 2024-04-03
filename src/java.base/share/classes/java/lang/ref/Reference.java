@@ -402,6 +402,7 @@ public abstract sealed class Reference<T>
      * assignment of the referent field won't do for some garbage
      * collectors.
      */
+    @IntrinsicCandidate
     private native void clear0();
 
     /* -- Operations on inactive FinalReferences -- */

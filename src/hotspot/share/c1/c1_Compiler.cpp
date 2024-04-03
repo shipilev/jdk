@@ -146,6 +146,7 @@ bool Compiler::is_intrinsic_supported(vmIntrinsics::ID id) {
     // the referent field can be registered by the G1 pre-barrier code.
     // Also to prevent commoning reads from this field across safepoint
     // since GC can change its value.
+  case vmIntrinsics::_Reference_clear0:
   case vmIntrinsics::_loadFence:
   case vmIntrinsics::_storeFence:
   case vmIntrinsics::_storeStoreFence:

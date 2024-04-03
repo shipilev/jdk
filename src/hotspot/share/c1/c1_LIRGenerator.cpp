@@ -3038,6 +3038,10 @@ void LIRGenerator::do_Intrinsic(Intrinsic* x) {
     do_blackhole(x);
     break;
 
+  case vmIntrinsics::_Reference_clear0:
+    do_Reference_clear(x);
+    break;
+
   default: ShouldNotReachHere(); break;
   }
 }
@@ -3444,6 +3448,45 @@ void LIRGenerator::do_blackhole(Intrinsic *x) {
     vitem.load_item();
     // ...and leave it unused.
   }
+}
+
+void LIRGenerator::do_Reference_clear(Intrinsic* x) {
+  assert(x->number_of_arguments() == 1, "wrong type");
+
+  LIRItem reference(x->argument_at(0), this);
+  reference.load_item();
+
+  // need to perform the null check on the reference object
+  CodeEmitInfo* info = nullptr;
+  if (x->needs_null_check()) {
+    info = state_for(x);
+  }
+
+  DecoratorSet decorators = IN_HEAP | AS_NO_KEEPALIVE | ON_UNKNOWN_OOP_REF;
+  LIR_Opr referent_offset = LIR_OprFact::intConst(java_lang_ref_Reference::referent_offset());
+
+  LIR_Opr referent = new_register(T_OBJECT);
+  access_load_at(decorators,
+                 T_OBJECT,
+                 reference,
+                 referent_offset,
+                 referent,
+                 nullptr,
+                 info);
+
+  LabelObj* L_null = new LabelObj();
+  __ cmp(lir_cond_equal, referent, LIR_OprFact::oopConst(nullptr));
+  __ branch(lir_cond_equal, L_null->label());
+
+  access_store_at(decorators,
+                  T_OBJECT,
+                  reference,
+                  referent_offset,
+                  LIR_OprFact::oopConst(nullptr),
+                  nullptr,
+                  info);
+
+  __ branch_destination(L_null->label());
 }
 
 LIR_Opr LIRGenerator::call_runtime(Value arg1, address entry, ValueType* result_type, CodeEmitInfo* info) {

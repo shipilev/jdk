@@ -575,6 +575,7 @@ bool LibraryCallKit::try_to_inline(int predicate) {
   case vmIntrinsics::_Reference_get:            return inline_reference_get();
   case vmIntrinsics::_Reference_refersTo0:      return inline_reference_refersTo0(false);
   case vmIntrinsics::_PhantomReference_refersTo0: return inline_reference_refersTo0(true);
+  case vmIntrinsics::_Reference_clear0:         return inline_reference_clear0();
 
   case vmIntrinsics::_Class_cast:               return inline_Class_cast();
 
@@ -6768,6 +6769,55 @@ bool LibraryCallKit::inline_reference_refersTo0(bool is_phantom) {
   return true;
 }
 
+//----------------------------inline_reference_refersTo0----------------------------
+// void java.lang.ref.Reference.clear0();
+bool LibraryCallKit::inline_reference_clear0() {
+  // This matches the implementation in JVM_ReferenceClear.
+
+  // Get arguments:
+  Node* reference_obj = null_check_receiver();
+  if (stopped()) return true;
+
+  // Perform accesses only with these decorators.
+  DecoratorSet decorators = IN_HEAP | AS_NO_KEEPALIVE | ON_UNKNOWN_OOP_REF;
+
+  const int referent_offset = java_lang_ref_Reference::referent_offset();
+  Node* referent_field_addr = basic_plus_adr(reference_obj, referent_offset);
+  const TypePtr* referent_field_addr_type = _gvn.type(referent_field_addr)->isa_ptr();
+
+  const Type* val_type = TypeOopPtr::make_from_klass(env()->Object_klass());
+
+  Node* referent = access_load_at(reference_obj,
+                                  referent_field_addr,
+                                  referent_field_addr_type,
+                                  val_type,
+                                  T_OBJECT,
+                                  decorators);
+
+  // Add memory barrier to prevent commoning reads from this field
+  // across safepoint since GC can change its value.
+  insert_mem_bar(Op_MemBarCPUOrder);
+
+  Node* cmp = _gvn.transform(new CmpPNode(referent, null()));
+  Node* bol = _gvn.transform(new BoolNode(cmp, BoolTest::eq));
+  IfNode* if_node = create_and_map_if(control(), bol, PROB_FAIR, COUNT_UNKNOWN);
+
+  {
+    PreserveJVMState pjvms(this);
+    set_control(_gvn.transform(new IfFalseNode(if_node)));
+
+    access_store_at(reference_obj,
+                    referent_field_addr,
+                    referent_field_addr_type,
+                    null(),
+                    val_type,
+                    T_OBJECT,
+                    decorators);
+  }
+
+  set_control(_gvn.transform(new IfTrueNode(if_node)));
+  return true;
+}
 
 Node* LibraryCallKit::load_field_from_object(Node* fromObj, const char* fieldName, const char* fieldTypeString,
                                              DecoratorSet decorators, bool is_static,

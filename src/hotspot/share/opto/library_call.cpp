@@ -6798,6 +6798,7 @@ bool LibraryCallKit::inline_reference_clear0() {
   Node* cmp = _gvn.transform(new CmpPNode(referent, null()));
   Node* bol = _gvn.transform(new BoolNode(cmp, BoolTest::eq));
   IfNode* if_node = create_and_map_if(control(), bol, PROB_FAIR, COUNT_UNKNOWN);
+//  set_control(_gvn.transform(new IfTrueNode(if_node)));
 
   {
     PreserveJVMState pjvms(this);
@@ -6812,7 +6813,6 @@ bool LibraryCallKit::inline_reference_clear0() {
                     decorators);
   }
 
-  set_control(_gvn.transform(new IfTrueNode(if_node)));
   return true;
 }
 

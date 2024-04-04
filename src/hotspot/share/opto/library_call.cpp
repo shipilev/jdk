@@ -6778,13 +6778,10 @@ bool LibraryCallKit::inline_reference_clear0() {
   Node* reference_obj = null_check_receiver();
   if (stopped()) return true;
 
-  // Perform accesses only with these decorators.
+  // Common access parameters
   DecoratorSet decorators = IN_HEAP | AS_NO_KEEPALIVE | ON_UNKNOWN_OOP_REF;
-
-  const int referent_offset = java_lang_ref_Reference::referent_offset();
-  Node* referent_field_addr = basic_plus_adr(reference_obj, referent_offset);
+  Node* referent_field_addr = basic_plus_adr(reference_obj, java_lang_ref_Reference::referent_offset());
   const TypePtr* referent_field_addr_type = _gvn.type(referent_field_addr)->isa_ptr();
-
   const Type* val_type = TypeOopPtr::make_from_klass(env()->Object_klass());
 
   Node* referent = access_load_at(reference_obj,

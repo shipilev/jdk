@@ -150,7 +150,6 @@ class InterpreterOopMap: ResourceObj {
 };
 
 class OopMapCache : public CHeapObj<mtClass> {
- static OopMapCacheEntry* volatile _old_entries;
  private:
   enum { _size        = 32,     // Use fixed size for now
          _probe_depth = 3       // probe depth in case of collisions
@@ -161,8 +160,6 @@ class OopMapCache : public CHeapObj<mtClass> {
   unsigned int hash_value_for(const methodHandle& method, int bci) const;
   OopMapCacheEntry* entry_at(int i) const;
   bool put_at(int i, OopMapCacheEntry* entry, OopMapCacheEntry* old);
-
-  static void enqueue_for_cleanup(OopMapCacheEntry* entry);
 
   void flush();
 
@@ -179,7 +176,6 @@ class OopMapCache : public CHeapObj<mtClass> {
 
   // Compute an oop map without updating the cache or grabbing any locks (for debugging)
   static void compute_one_oop_map(const methodHandle& method, int bci, InterpreterOopMap* entry);
-  static void cleanup_old_entries();
 };
 
 #endif // SHARE_INTERPRETER_OOPMAPCACHE_HPP

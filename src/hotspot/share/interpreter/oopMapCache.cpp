@@ -441,8 +441,6 @@ inline unsigned int OopMapCache::hash_value_for(const methodHandle& method, int 
          ^ ((unsigned int) method->size_of_parameters() << 6);
 }
 
-OopMapCacheEntry* volatile OopMapCache::_old_entries = nullptr;
-
 OopMapCache::OopMapCache() {
   _array  = NEW_C_HEAP_ARRAY(OopMapCacheEntry*, _size, mtClass);
   for(int i = 0; i < _size; i++) _array[i] = nullptr;
@@ -499,10 +497,7 @@ void OopMapCache::flush_obsolete_entries() {
 void OopMapCache::lookup(const methodHandle& method,
                          int bci,
                          InterpreterOopMap* entry_for) {
-  assert(SafepointSynchronize::is_at_safepoint(), "called by GC in a safepoint");
   int probe = hash_value_for(method, bci);
-  int i;
-  OopMapCacheEntry* entry = nullptr;
 
   if (log_is_enabled(Debug, interpreter, oopmap)) {
     static int count = 0;
@@ -513,8 +508,8 @@ void OopMapCache::lookup(const methodHandle& method,
   }
 
   // Search hashtable for match
-  for(i = 0; i < _probe_depth; i++) {
-    entry = entry_at(probe + i);
+  for (int i = 0; i < _probe_depth; i++) {
+    OopMapCacheEntry*  entry = entry_at(probe + i);
     if (entry != nullptr && !entry->is_empty() && entry->match(method, bci)) {
       entry_for->resource_copy(entry);
       assert(!entry_for->is_empty(), "A non-empty oop map should be returned");
@@ -541,8 +536,8 @@ void OopMapCache::lookup(const methodHandle& method,
   }
 
   // First search for an empty slot
-  for(i = 0; i < _probe_depth; i++) {
-    entry = entry_at(probe + i);
+  for (int i = 0; i < _probe_depth; i++) {
+    OopMapCacheEntry* entry = entry_at(probe + i);
     if (entry == nullptr) {
       if (put_at(probe + i, tmp, nullptr)) {
         assert(!entry_for->is_empty(), "A non-empty oop map should be returned");
@@ -557,46 +552,13 @@ void OopMapCache::lookup(const methodHandle& method,
   // where the first entry in the collision array is replaced with the new one.
   OopMapCacheEntry* old = entry_at(probe + 0);
   if (put_at(probe + 0, tmp, old)) {
-    enqueue_for_cleanup(old);
+    OopMapCacheEntry::deallocate(old);
   } else {
     OopMapCacheEntry::deallocate(tmp);
   }
 
   assert(!entry_for->is_empty(), "A non-empty oop map should be returned");
   return;
-}
-
-void OopMapCache::enqueue_for_cleanup(OopMapCacheEntry* entry) {
-  bool success = false;
-  OopMapCacheEntry* head;
-  do {
-    head = _old_entries;
-    entry->_next = head;
-    success = Atomic::cmpxchg(&_old_entries, head, entry) == head;
-  } while (!success);
-
-  if (log_is_enabled(Debug, interpreter, oopmap)) {
-    ResourceMark rm;
-    log_debug(interpreter, oopmap)("enqueue %s at bci %d for cleanup",
-                          entry->method()->name_and_sig_as_C_string(), entry->bci());
-  }
-}
-
-// This is called after GC threads are done and nothing is accessing the old_entries
-// list, so no synchronization needed.
-void OopMapCache::cleanup_old_entries() {
-  OopMapCacheEntry* entry = _old_entries;
-  _old_entries = nullptr;
-  while (entry != nullptr) {
-    if (log_is_enabled(Debug, interpreter, oopmap)) {
-      ResourceMark rm;
-      log_debug(interpreter, oopmap)("cleanup entry %s at bci %d",
-                          entry->method()->name_and_sig_as_C_string(), entry->bci());
-    }
-    OopMapCacheEntry* next = entry->_next;
-    OopMapCacheEntry::deallocate(entry);
-    entry = next;
-  }
 }
 
 void OopMapCache::compute_one_oop_map(const methodHandle& method, int bci, InterpreterOopMap* entry) {

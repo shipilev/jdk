@@ -741,9 +741,9 @@ HeapWord* ShenandoahFreeSet::try_allocate_in(ShenandoahHeapRegion* r, Shenandoah
     if (adjusted_size >= req.min_size()) {
       result = r->allocate(adjusted_size, req.type());
       log_debug(gc)("Allocated " SIZE_FORMAT " words (adjusted from " SIZE_FORMAT ") for %s @" PTR_FORMAT
-                          " from %s region " SIZE_FORMAT ", free bytes remaining: " SIZE_FORMAT,
+                          " from %s region " SIZE_FORMAT ", free bytes remaining: " SIZE_FORMAT " (" PTR_FORMAT ")",
                           adjusted_size, req.size(), ShenandoahAllocRequest::alloc_type_to_string(req.type()), p2i(result),
-                          _partitions.partition_membership_name(r->index()), r->index(), r->free());
+                          _partitions.partition_membership_name(r->index()), r->index(), r->free(), p2i(Thread::current()));
       assert (result != nullptr, "Allocation must succeed: free " SIZE_FORMAT ", actual " SIZE_FORMAT, free, adjusted_size);
       req.set_actual_size(adjusted_size);
     } else {

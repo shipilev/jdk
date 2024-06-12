@@ -44,7 +44,7 @@ void ShenandoahLock::contended_lock(bool allow_block_for_safepoint) {
     contended_lock_real(allow_block_for_safepoint);
     jlong time2 = os::javaTimeNanos();
 
-    log_info(gc)("CONTENDED LOCKING by %s (" PTR_FORMAT ") took " JLONG_FORMAT " ns", name, p2i(thread), (time2 - time1));
+    log_info(gc)("CONTENDED LOCKING by %s (" PTR_FORMAT ") took " JLONG_FORMAT " us", name, p2i(thread), (time2 - time1) / 1000);
   } else {
     contended_lock_real(allow_block_for_safepoint);
   }

@@ -51,7 +51,7 @@ void ShenandoahLock::contended_lock(bool allow_block_for_safepoint) {
     jlong time2 = os::javaTimeNanos();
 
     c = Atomic::sub(&_contenders, 1);
-    if (time2 - time1 > 10000) {
+    if (time2 - time1 > 1000) {
       log_info(gc)("CONTENDED LOCKING (" PTR_FORMAT ") by %s (" PTR_FORMAT ") took " JLONG_FORMAT " us, %d contenders",
                    p2i(this), name, p2i(thread), (time2 - time1) / 1000, c);
     }

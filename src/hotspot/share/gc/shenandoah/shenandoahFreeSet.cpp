@@ -926,7 +926,7 @@ void ShenandoahFreeSet::recycle_trash() {
         candidates[num++] = r;
       } else {
         // Flush
-        os::naked_short_nanosleep(1000);
+        os::naked_short_nanosleep(10000);
         double timestamp = os::elapsedTime();
         ShenandoahHeapLocker locker(_heap->lock());
         for (size_t c = 0; c < num; c++) {
@@ -938,10 +938,13 @@ void ShenandoahFreeSet::recycle_trash() {
   }
 
   // Flush the rest
-  double timestamp = os::elapsedTime();
-  ShenandoahHeapLocker locker(_heap->lock());
-  for (size_t c = 0; c < num; c++) {
-    try_recycle_trashed(candidates[c], timestamp);
+  if (num > 0) {
+    os::naked_short_nanosleep(10000);
+    double timestamp = os::elapsedTime();
+    ShenandoahHeapLocker locker(_heap->lock());
+    for (size_t c = 0; c < num; c++) {
+      try_recycle_trashed(candidates[c], timestamp);
+    }
   }
 }
 

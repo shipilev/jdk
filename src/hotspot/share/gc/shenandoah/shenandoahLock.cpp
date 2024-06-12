@@ -34,17 +34,19 @@
 
 void ShenandoahLock::contended_lock(bool allow_block_for_safepoint) {
   if (UseNewCode) {
+    int c = Atomic::add(&_contenders, 1);
     Thread* thread = Thread::current();
     ResourceMark rm;
-
+    
     const char* name = thread->is_Java_thread() ? "Java thread" : thread->name();
-    log_info(gc)("CONTENDED LOCKING by %s (" PTR_FORMAT ") started", name, p2i(thread));
+    log_info(gc)("CONTENDED LOCKING by %s (" PTR_FORMAT ") started, %d contenders", name, p2i(thread), c);
 
     jlong time1 = os::javaTimeNanos();
     contended_lock_real(allow_block_for_safepoint);
     jlong time2 = os::javaTimeNanos();
 
-    log_info(gc)("CONTENDED LOCKING by %s (" PTR_FORMAT ") took " JLONG_FORMAT " us", name, p2i(thread), (time2 - time1) / 1000);
+    c = Atomic::sub(&_contenders, 1);
+    log_info(gc)("CONTENDED LOCKING by %s (" PTR_FORMAT ") took " JLONG_FORMAT " us, %d contenders", name, p2i(thread), (time2 - time1) / 1000, c);
   } else {
     contended_lock_real(allow_block_for_safepoint);
   }

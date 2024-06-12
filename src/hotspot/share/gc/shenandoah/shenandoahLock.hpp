@@ -39,6 +39,8 @@ private:
   shenandoah_padding(1);
   volatile Thread* _owner;
   shenandoah_padding(2);
+  volatile int _contenders;
+  shenandoah_padding(3);
 
   bool try_lock() {
     if (Atomic::load(&_state) == locked) {
@@ -52,7 +54,7 @@ private:
   void contended_lock_real(bool allow_block_for_safepoint);
 
 public:
-  ShenandoahLock() : _state(unlocked), _owner(nullptr) {};
+  ShenandoahLock() : _state(unlocked), _owner(nullptr), _contenders(0) {};
 
   void lock(bool allow_block_for_safepoint) {
     assert(Atomic::load(&_owner) != Thread::current(), "reentrant locking attempt, would deadlock");

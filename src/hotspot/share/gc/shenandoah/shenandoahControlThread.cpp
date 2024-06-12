@@ -55,8 +55,8 @@ void ShenandoahControlThread::run_service() {
   const GCCause::Cause default_cause = GCCause::_shenandoah_concurrent_gc;
   int sleep = ShenandoahControlIntervalMin;
 
-  jlong last_shrink_time = os::javaTimeNanos();
-  jlong last_sleep_adjust_time = os::javaTimeNanos();
+  double last_shrink_time = os::elapsedTime();
+  double last_sleep_adjust_time = os::elapsedTime();
 
   // Shrink period avoids constantly polling regions for shrinking.
   // Having a period 10x lower than the delay would mean we hit the
@@ -240,16 +240,16 @@ void ShenandoahControlThread::run_service() {
       }
     }
 
-    const jlong current = os::javaTimeNanos();
+    const double current = os::elapsedTime();
 
     if (ShenandoahUncommit && (is_gc_requested || soft_max_changed || (current - last_shrink_time > shrink_period))) {
       // Explicit GC tries to uncommit everything down to min capacity.
       // Soft max change tries to uncommit everything down to target capacity.
       // Periodic uncommit tries to uncommit suitable regions down to min capacity.
 
-      jlong shrink_before = (is_gc_requested || soft_max_changed) ?
+      double shrink_before = (is_gc_requested || soft_max_changed) ?
                              current :
-                             current - (ShenandoahUncommitDelay * NANOSECS_PER_MILLISEC);
+                             current - (ShenandoahUncommitDelay / 1000.0);
 
       size_t shrink_until = soft_max_changed ?
                              heap->soft_max_capacity() :
@@ -265,7 +265,7 @@ void ShenandoahControlThread::run_service() {
     // back off exponentially.
     if (heap->has_changed()) {
       sleep = ShenandoahControlIntervalMin;
-    } else if ((current - last_sleep_adjust_time) / NANOSECS_PER_MILLISEC > ShenandoahControlIntervalAdjustPeriod){
+    } else if ((current - last_sleep_adjust_time) * 1000 > ShenandoahControlIntervalAdjustPeriod){
       sleep = MIN2<int>(ShenandoahControlIntervalMax, MAX2(1, sleep * 2));
       last_sleep_adjust_time = current;
     }

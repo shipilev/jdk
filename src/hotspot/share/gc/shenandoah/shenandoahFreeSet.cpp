@@ -900,13 +900,13 @@ HeapWord* ShenandoahFreeSet::allocate_contiguous(ShenandoahAllocRequest& req) {
 }
 
 void ShenandoahFreeSet::try_recycle_trashed(ShenandoahHeapRegion *r) {
-  try_recycle_trashed(r, os::javaTimeNanos());
+  try_recycle_trashed(r, os::elapsedTime());
 }
 
-void ShenandoahFreeSet::try_recycle_trashed(ShenandoahHeapRegion *r, jlong time_ns) {
+void ShenandoahFreeSet::try_recycle_trashed(ShenandoahHeapRegion *r, double timestamp) {
   if (r->is_trash()) {
     _heap->decrease_used(r->used());
-    r->recycle(time_ns);
+    r->recycle(timestamp);
   }
 }
 
@@ -914,13 +914,13 @@ void ShenandoahFreeSet::recycle_trash() {
   // lock is not reentrable, check we don't have it
   shenandoah_assert_not_heaplocked();
 
-  jlong time_ns = os::javaTimeNanos();
+  double timestamp = os::elapsedTime();
   for (size_t i = 0; i < _heap->num_regions(); i++) {
     ShenandoahHeapRegion* r = _heap->get_region(i);
     if (r->is_trash()) {
       {
         ShenandoahHeapLocker locker(_heap->lock());
-        try_recycle_trashed(r, time_ns);
+        try_recycle_trashed(r, timestamp);
       }
       // Play nice with other lock users: sleep a little here.
       os::naked_short_nanosleep(1);

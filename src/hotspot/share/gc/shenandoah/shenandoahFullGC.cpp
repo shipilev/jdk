@@ -908,11 +908,14 @@ public:
 class ShenandoahPostCompactClosure : public ShenandoahHeapRegionClosure {
 private:
   ShenandoahHeap* const _heap;
-  jlong const _time_ns;
+  double const _timestamp;
   size_t _live;
 
 public:
-  ShenandoahPostCompactClosure() : _heap(ShenandoahHeap::heap()), _live(0), _time_ns(os::javaTimeNanos()) {
+  ShenandoahPostCompactClosure() :
+    _heap(ShenandoahHeap::heap()),
+    _timestamp(os::elapsedTime()),
+    _live(0) {
   }
 
   void heap_region_do(ShenandoahHeapRegion* r) {
@@ -945,7 +948,7 @@ public:
     // Recycle all trash regions
     if (r->is_trash()) {
       live = 0;
-      r->recycle(_time_ns);
+      r->recycle(_timestamp);
     }
 
     r->set_live_data(live);

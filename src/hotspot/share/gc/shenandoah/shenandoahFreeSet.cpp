@@ -914,17 +914,36 @@ void ShenandoahFreeSet::recycle_trash() {
   // lock is not reentrable, check we don't have it
   shenandoah_assert_not_heaplocked();
 
-  double timestamp = os::elapsedTime();
+  // Try to be incremental to avoid contention on heap lock.
+  constexpr size_t SIZE = 16;
+  ShenandoahHeapRegion* candidates[SIZE];
+  size_t num = 0;
+
   for (size_t i = 0; i < _heap->num_regions(); i++) {
-    ShenandoahHeapRegion* r = _heap->get_region(i);
+    ShenandoahHeapRegion *r = _heap->get_region(i);
     if (r->is_trash()) {
-      {
+      if (num < SIZE) {
+        candidates[num++] = r;
+      } else {
+        // Flush
+        double timestamp = os::elapsedTime();
+        // Play nice with other lock users: sleep a little here.
+        os::naked_short_nanosleep(1);
+
         ShenandoahHeapLocker locker(_heap->lock());
-        try_recycle_trashed(r, timestamp);
+        for (int c = 0; c < num; c++) {
+          try_recycle_trashed(candidates[c], timestamp);
+        }
+        num = 0;
       }
-      // Play nice with other lock users: sleep a little here.
-      os::naked_short_nanosleep(1);
     }
+  }
+
+  // Flush the rest
+  double timestamp = os::elapsedTime();
+  ShenandoahHeapLocker locker(_heap->lock());
+  for (int c = 0; c < num; c++) {
+    try_recycle_trashed(candidates[c], timestamp);
   }
 }
 

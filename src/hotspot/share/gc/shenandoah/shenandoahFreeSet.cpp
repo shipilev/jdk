@@ -915,7 +915,7 @@ void ShenandoahFreeSet::recycle_trash() {
   shenandoah_assert_not_heaplocked();
 
   // Try to be incremental to avoid contention on heap lock.
-  constexpr size_t SIZE = 16;
+  constexpr size_t SIZE = 32;
   ShenandoahHeapRegion* candidates[SIZE];
   size_t num = 0;
 
@@ -927,9 +927,6 @@ void ShenandoahFreeSet::recycle_trash() {
       } else {
         // Flush
         double timestamp = os::elapsedTime();
-        // Play nice with other lock users: sleep a little here.
-        os::naked_short_nanosleep(1);
-
         ShenandoahHeapLocker locker(_heap->lock());
         for (size_t c = 0; c < num; c++) {
           try_recycle_trashed(candidates[c], timestamp);

@@ -931,7 +931,7 @@ void ShenandoahFreeSet::recycle_trash() {
         os::naked_short_nanosleep(1);
 
         ShenandoahHeapLocker locker(_heap->lock());
-        for (int c = 0; c < num; c++) {
+        for (size_t c = 0; c < num; c++) {
           try_recycle_trashed(candidates[c], timestamp);
         }
         num = 0;

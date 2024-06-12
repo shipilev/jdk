@@ -33,11 +33,25 @@
 #include "runtime/os.inline.hpp"
 
 void ShenandoahLock::contended_lock(bool allow_block_for_safepoint) {
-  Thread* thread = Thread::current();
-  {
+  if (UseNewCode) {
+    Thread* thread = Thread::current();
     ResourceMark rm;
-    log_info(gc)("CONTENDED LOCKING by %s started", thread->name());
+
+    const char* name = thread->is_Java_thread() ? "Java thread" : thread->name();
+    log_info(gc)("CONTENDED LOCKING by %s (" PTR_FORMAT ") started", name, p2i(thread));
+
+    jlong time1 = os::javaTimeNanos();
+    contended_lock_real(allow_block_for_safepoint);
+    jlong time2 = os::javaTimeNanos();
+
+    log_info(gc)("CONTENDED LOCKING by %s (" PTR_FORMAT ") took " JLONG_FORMAT " ns", name, p2i(thread), (time2 - time1));
+  } else {
+    contended_lock_real(allow_block_for_safepoint);
   }
+}
+
+void ShenandoahLock::contended_lock_real(bool allow_block_for_safepoint) {
+  Thread* thread = Thread::current();
   if (thread->is_Java_thread()) {
     // Java threads spin a little before yielding and potentially blocking.
     constexpr uint32_t SPINS = 0x1F;

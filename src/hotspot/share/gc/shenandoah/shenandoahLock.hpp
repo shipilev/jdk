@@ -49,6 +49,7 @@ private:
 
   template<bool ALLOW_BLOCK, uint32_t MAX_SPINS>
   void contended_lock_internal(JavaThread* java_thread);
+  void contended_lock_real(bool allow_block_for_safepoint);
 
 public:
   ShenandoahLock() : _state(unlocked), _owner(nullptr) {};

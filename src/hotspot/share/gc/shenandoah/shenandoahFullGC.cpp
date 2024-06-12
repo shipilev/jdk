@@ -512,7 +512,7 @@ public:
   ShenandoahEnsureHeapActiveClosure() : _heap(ShenandoahHeap::heap()) {}
   void heap_region_do(ShenandoahHeapRegion* r) {
     if (r->is_trash()) {
-      r->recycle();
+      r->recycle(0);
     }
     if (r->is_cset()) {
       r->make_regular_bypass();
@@ -908,10 +908,11 @@ public:
 class ShenandoahPostCompactClosure : public ShenandoahHeapRegionClosure {
 private:
   ShenandoahHeap* const _heap;
+  jlong const _time_ns;
   size_t _live;
 
 public:
-  ShenandoahPostCompactClosure() : _heap(ShenandoahHeap::heap()), _live(0) {
+  ShenandoahPostCompactClosure() : _heap(ShenandoahHeap::heap()), _live(0), _time_ns(os::javaTimeNanos()) {
   }
 
   void heap_region_do(ShenandoahHeapRegion* r) {
@@ -944,7 +945,7 @@ public:
     // Recycle all trash regions
     if (r->is_trash()) {
       live = 0;
-      r->recycle();
+      r->recycle(_time_ns);
     }
 
     r->set_live_data(live);

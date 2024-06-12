@@ -754,7 +754,7 @@ bool ShenandoahHeap::is_in(const void* p) const {
   return p >= heap_base && p < last_region_end;
 }
 
-void ShenandoahHeap::maybe_uncommit(double shrink_before, size_t shrink_until) {
+void ShenandoahHeap::maybe_uncommit(jlong shrink_before_ns, size_t shrink_until) {
   assert (ShenandoahUncommit, "should be enabled");
 
   // Determine if there is work to do. This avoids taking heap lock if there is
@@ -766,7 +766,7 @@ void ShenandoahHeap::maybe_uncommit(double shrink_before, size_t shrink_until) {
   bool has_work = false;
   for (size_t i = 0; i < num_regions(); i++) {
     ShenandoahHeapRegion* r = get_region(i);
-    if (r->is_empty_committed() && (r->empty_time() < shrink_before)) {
+    if (r->is_empty_committed() && (r->empty_time_ns() < shrink_before_ns)) {
       has_work = true;
       break;
     }
@@ -777,11 +777,11 @@ void ShenandoahHeap::maybe_uncommit(double shrink_before, size_t shrink_until) {
     ShenandoahConcurrentPhase gcPhase(msg, ShenandoahPhaseTimings::conc_uncommit, true /* log_heap_usage */);
     EventMark em("%s", msg);
 
-    op_uncommit(shrink_before, shrink_until);
+    op_uncommit(shrink_before_ns, shrink_until);
   }
 }
 
-void ShenandoahHeap::op_uncommit(double shrink_before, size_t shrink_until) {
+void ShenandoahHeap::op_uncommit(jlong shrink_before_ns, size_t shrink_until) {
   assert (ShenandoahUncommit, "should be enabled");
 
   // Application allocates from the beginning of the heap, and GC allocates at
@@ -792,7 +792,7 @@ void ShenandoahHeap::op_uncommit(double shrink_before, size_t shrink_until) {
   size_t count = 0;
   for (size_t i = num_regions(); i > 0; i--) { // care about size_t underflow
     ShenandoahHeapRegion* r = get_region(i - 1);
-    if (r->is_empty_committed() && (r->empty_time() < shrink_before)) {
+    if (r->is_empty_committed() && (r->empty_time_ns() < shrink_before_ns)) {
       ShenandoahHeapLocker locker(lock());
       if (r->is_empty_committed()) {
         if (committed() < shrink_until + ShenandoahHeapRegion::region_size_bytes()) {

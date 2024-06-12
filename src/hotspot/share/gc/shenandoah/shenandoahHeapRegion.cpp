@@ -61,7 +61,7 @@ ShenandoahHeapRegion::ShenandoahHeapRegion(HeapWord* start, size_t index, bool c
   _bottom(start),
   _end(start + RegionSizeWords),
   _new_top(nullptr),
-  _empty_time(os::elapsedTime()),
+  _empty_time_ns(os::javaTimeNanos()),
   _state(committed ? _empty_committed : _empty_uncommitted),
   _top(start),
   _tlab_allocs(0),
@@ -269,7 +269,6 @@ void ShenandoahHeapRegion::make_empty() {
   switch (_state) {
     case _trash:
       set_state(_empty_committed);
-      _empty_time = os::elapsedTime();
       return;
     default:
       report_illegal_transition("emptying");
@@ -426,7 +425,7 @@ ShenandoahHeapRegion* ShenandoahHeapRegion::humongous_start_region() const {
   return r;
 }
 
-void ShenandoahHeapRegion::recycle() {
+void ShenandoahHeapRegion::recycle(jlong time_ns) {
   set_top(bottom());
   clear_live_data();
 
@@ -436,6 +435,7 @@ void ShenandoahHeapRegion::recycle() {
   set_update_watermark(bottom());
 
   make_empty();
+  _empty_time_ns = time_ns;
 
   if (ZapUnusedHeapArea) {
     SpaceMangler::mangle_region(MemRegion(bottom(), end()));

@@ -229,7 +229,7 @@ private:
 
   // Rarely updated fields
   HeapWord* _new_top;
-  double _empty_time;
+  jlong _empty_time_ns;
 
   // Seldom updated fields
   RegionState _state;
@@ -253,8 +253,8 @@ public:
   // Return adjusted max heap size
   static size_t setup_sizes(size_t max_heap_size);
 
-  double empty_time() {
-    return _empty_time;
+  jlong empty_time_ns() {
+    return _empty_time_ns;
   }
 
   inline static size_t required_regions(size_t bytes) {
@@ -353,7 +353,7 @@ public:
 
   void print_on(outputStream* st) const;
 
-  void recycle();
+  void recycle(jlong time_ns);
 
   void oop_iterate(OopIterateClosure* cl);
 

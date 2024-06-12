@@ -32,40 +32,47 @@
 #include "runtime/javaThread.hpp"
 #include "runtime/os.inline.hpp"
 
-// These are inline variants of Thread::SpinAcquire with optional blocking in VM.
-
-class ShenandoahNoBlockOp : public StackObj {
-public:
-  ShenandoahNoBlockOp(JavaThread* java_thread) {
-    assert(java_thread == nullptr, "Should not pass anything");
-  }
-};
-
 void ShenandoahLock::contended_lock(bool allow_block_for_safepoint) {
   Thread* thread = Thread::current();
-  if (allow_block_for_safepoint && thread->is_Java_thread()) {
-    contended_lock_internal<ThreadBlockInVM>(JavaThread::cast(thread));
+  {
+    ResourceMark rm;
+    log_info(gc)("CONTENDED LOCKING by %s started", thread->name());
+  }
+  if (thread->is_Java_thread()) {
+    // Java threads spin a little before yielding and potentially blocking.
+    constexpr uint32_t SPINS = 0x1F;
+    JavaThread* java_thread = JavaThread::cast(thread);
+    if (allow_block_for_safepoint) {
+      contended_lock_internal<true, SPINS>(java_thread);
+    } else {
+      contended_lock_internal<false, SPINS>(java_thread);
+    }
   } else {
-    contended_lock_internal<ShenandoahNoBlockOp>(nullptr);
+    // Non-Java threads are not allowed to block, and they spin hard
+    // to progress quickly. The normal number of GC threads is low enough
+    // for this not to have detrimental effect. This favors GC threads
+    // a little over Java threads, which is good for GC progress under
+    // extreme contention.
+    contended_lock_internal<false, UINT32_MAX>(nullptr);
   }
 }
 
-template<typename BlockOp>
+template<bool ALLOW_BLOCK, uint32_t MAX_SPINS>
 void ShenandoahLock::contended_lock_internal(JavaThread* java_thread) {
-  int ctr = 0;
-  int yields = 0;
-  while (Atomic::load(&_state) == locked ||
-         Atomic::cmpxchg(&_state, unlocked, locked) != unlocked) {
-    if ((++ctr & 0xFFF) == 0) {
-      BlockOp block(java_thread);
-      if (yields > 5) {
-        os::naked_short_sleep(1);
-      } else {
-        os::naked_yield();
-        yields++;
-      }
-    } else {
+  uint32_t ctr = 0;
+  while (!try_lock()) {
+    if (ctr < MAX_SPINS && !SafepointSynchronize::is_synchronizing() && os::is_MP()) {
+      // Lightly contended. Spin a little if there are multiple processors
+      // and no safepoint is pending.
+      ctr++;
       SpinPause();
+    } else if (ALLOW_BLOCK) {
+      // Notify VM we are blocking, and suspend if safepoint was announced
+      // while we were backing off.
+      ThreadBlockInVM block(java_thread, true);
+      os::naked_yield();
+    } else {
+      os::naked_yield();
     }
   }
 }

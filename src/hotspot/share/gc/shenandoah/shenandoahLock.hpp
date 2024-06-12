@@ -40,7 +40,14 @@ private:
   volatile Thread* _owner;
   shenandoah_padding(2);
 
-  template<typename BlockOp>
+  bool try_lock() {
+    if (Atomic::load(&_state) == locked) {
+      return false;
+    }
+    return Atomic::cmpxchg(&_state, unlocked, locked, memory_order_seq_cst) == unlocked;
+  }
+
+  template<bool ALLOW_BLOCK, uint32_t MAX_SPINS>
   void contended_lock_internal(JavaThread* java_thread);
 
 public:
@@ -50,7 +57,7 @@ public:
     assert(Atomic::load(&_owner) != Thread::current(), "reentrant locking attempt, would deadlock");
 
     // Try to lock fast, or dive into contended lock handling.
-    if (Atomic::cmpxchg(&_state, unlocked, locked) != unlocked) {
+    if (!try_lock()) {
       contended_lock(allow_block_for_safepoint);
     }
 

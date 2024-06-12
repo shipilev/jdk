@@ -34,7 +34,7 @@
 
 void ShenandoahLock::contended_lock(bool allow_block_for_safepoint) {
   if (UseNewCode) {
-    int c = Atomic::add(&_contenders, 1);
+    int c = Atomic::add(&_contenders, 1) - 1;
     Thread* thread = Thread::current();
     ResourceMark rm;
 

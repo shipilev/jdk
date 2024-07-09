@@ -2128,7 +2128,7 @@ C2V_VMENTRY_NULL(jobjectArray, getDeclaredConstructors, (JNIEnv* env, jobject, A
   GrowableArray<Method*> constructors_array;
   for (int i = 0; i < iklass->methods()->length(); i++) {
     Method* m = iklass->methods()->at(i);
-    if (m->is_initializer() && !m->is_static()) {
+    if (m->is_object_initializer()) {
       constructors_array.append(m);
     }
   }

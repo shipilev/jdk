@@ -817,7 +817,7 @@ oop Reflection::new_method(const methodHandle& method, bool for_constant_pool_ac
 
 
 oop Reflection::new_constructor(const methodHandle& method, TRAPS) {
-  assert(method()->is_initializer(), "should call new_method instead");
+  assert(method()->is_object_initializer(), "should call new_method instead");
 
   InstanceKlass* holder = method->method_holder();
   int slot = method->method_idnum();

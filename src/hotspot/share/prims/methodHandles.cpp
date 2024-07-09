@@ -315,6 +315,7 @@ oop MethodHandles::init_method_MemberName(Handle mname, CallInfo& info) {
     if (m->is_static()) {
       flags |= IS_METHOD      | (JVM_REF_invokeStatic  << REFERENCE_KIND_SHIFT);
     } else if (m->is_initializer()) {
+      assert(m->is_object_initializer(), "Only object initializers here");
       flags |= IS_CONSTRUCTOR | (JVM_REF_invokeSpecial << REFERENCE_KIND_SHIFT);
     } else {
       // "special" reflects that this is a direct call, not that it

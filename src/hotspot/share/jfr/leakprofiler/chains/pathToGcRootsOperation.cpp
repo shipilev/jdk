@@ -83,8 +83,9 @@ void PathToGcRootsOperation::doit() {
   assert(SafepointSynchronize::is_at_safepoint(), "invariant");
   assert(_cutoff_ticks > 0, "invariant");
 
-  // Return immediately if VM is not in safe state to perform this op.
+  // Return immediately if VM if not safe.
   if (!is_safe()) {
+    log_info(jfr)("JVM is not in safe state to perform heap operations, skipping");
     return;
   }
 
@@ -140,7 +141,8 @@ bool PathToGcRootsOperation::is_safe() {
   if (UseShenandoahGC) {
     // This operation uses mark words to track objects. While the operation
     // would restore the mark words after completion, it would interact with
-    // mark word uses by Shenandoah itself.
+    // mark word uses by Shenandoah itself, if we hit the op during the concurrent
+    // GC cycle.
     return ShenandoahHeap::heap()->is_idle();
   }
 #endif

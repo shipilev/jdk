@@ -51,6 +51,7 @@ public class TestFieldInformation {
     public static void main(String[] args) throws Exception {
         WhiteBox.setWriteAllObjectSamples(true);
 
+        for (int c = 0; c < 100; c++) {
         try (Recording recording = new Recording()) {
             recording.enable(EventNames.OldObjectSample).withoutStackTrace().with("cutoff", "infinity");
             recording.start();
@@ -66,9 +67,12 @@ public class TestFieldInformation {
                     return;
                 }
             }
+
             System.out.println(events);
-            Asserts.fail("Could not find old object with field 'testField'");
         }
+        }
+
+        Asserts.fail("Could not find old object with field 'testField'");
     }
 
     private static boolean hasValidField(RecordedEvent e) throws Exception {

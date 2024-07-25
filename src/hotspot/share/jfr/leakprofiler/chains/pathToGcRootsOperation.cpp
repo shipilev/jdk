@@ -83,9 +83,9 @@ void PathToGcRootsOperation::doit() {
   assert(SafepointSynchronize::is_at_safepoint(), "invariant");
   assert(_cutoff_ticks > 0, "invariant");
 
-  // Return immediately if VM if not safe.
+  // Return immediately if VM is not safe.
   if (!is_safe()) {
-    log_info(jfr)("JVM is not in safe state to perform heap operations, skipping");
+    log_info(jfr)("VM is not in safe state to perform path to GC roots operation, skipping");
     return;
   }
 

@@ -496,8 +496,8 @@ class os: AllStatic {
   static void   pretouch_memory(void* start, void* end, size_t page_size = vm_page_size());
 
   // Same as pretouch_memory, but unsafe: writes into the pretouched memory,
-  // and so could only be used when callers are sure the memory is not used for
-  // anything else.
+  // and so could only be used when callers are sure the memory does not carry
+  // anything useful.
   static void   pretouch_memory_unsafe(void* start, void* end, size_t page_size = vm_page_size());
 
   enum ProtType { MEM_PROT_NONE, MEM_PROT_READ, MEM_PROT_RW, MEM_PROT_RWX };

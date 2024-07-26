@@ -105,7 +105,7 @@ public:
     ShenandoahHeapRegion* r = _regions.next();
     while (r != nullptr) {
       if (r->is_committed()) {
-        os::pretouch_memory(r->bottom(), r->end(), _page_size);
+        os::pretouch_memory_unsafe(r->bottom(), r->end(), _page_size);
       }
       r = _regions.next();
     }
@@ -133,7 +133,7 @@ public:
       assert (end <= _bitmap_size, "end is sane: " SIZE_FORMAT " < " SIZE_FORMAT, end, _bitmap_size);
 
       if (r->is_committed()) {
-        os::pretouch_memory(_bitmap_base + start, _bitmap_base + end, _page_size);
+        os::pretouch_memory_unsafe(_bitmap_base + start, _bitmap_base + end, _page_size);
       }
 
       r = _regions.next();
@@ -2352,7 +2352,7 @@ bool ShenandoahHeap::commit_bitmap_slice(ShenandoahHeapRegion* r) {
   }
 
   if (AlwaysPreTouch) {
-    os::pretouch_memory(start, start + len, _pretouch_bitmap_page_size);
+    os::pretouch_memory_unsafe(start, start + len, _pretouch_bitmap_page_size);
   }
 
   return true;

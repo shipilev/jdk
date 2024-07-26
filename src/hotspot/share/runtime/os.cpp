@@ -2228,6 +2228,21 @@ void os::pretouch_memory(void* start, void* end, size_t page_size) {
   }
 }
 
+void os::pretouch_memory_unsafe(void* start, void* end, size_t page_size) {
+  assert(start <= end, "invalid range: " PTR_FORMAT " -> " PTR_FORMAT, p2i(start), p2i(end));
+  assert(is_power_of_2(page_size), "page size misaligned: %zu", page_size);
+  assert(page_size >= sizeof(int), "page size too small: %zu", page_size);
+  if (start < end) {
+    // This is not a concurrent safe pretouch, so we have to stay within the range.
+    const size_t pd_page_size = pd_pretouch_memory(start, end, page_size);
+    if (pd_page_size > 0) {
+      for (volatile char *p = (char*)start; p < (char*)end; p += page_size) {
+        *p = 0;
+      }
+    }
+  }
+}
+
 char* os::map_memory_to_file(size_t bytes, int file_desc, MEMFLAGS flag) {
   // Could have called pd_reserve_memory() followed by replace_existing_mapping_with_file_mapping(),
   // but AIX may use SHM in which case its more trouble to detach the segment and remap memory to the file.

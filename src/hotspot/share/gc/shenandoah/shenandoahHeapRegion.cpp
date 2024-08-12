@@ -101,7 +101,6 @@ void ShenandoahHeapRegion::make_regular_allocation() {
 void ShenandoahHeapRegion::make_regular_bypass() {
   shenandoah_assert_heaplocked();
   assert (!Universe::is_fully_initialized() ||
-          ShenandoahHeap::heap()->is_full_gc_in_progress() ||
           ShenandoahHeap::heap()->is_degenerated_gc_in_progress(),
           "Only for STW GC or when Universe is initializing (CDS)");
 
@@ -140,7 +139,7 @@ void ShenandoahHeapRegion::make_humongous_start() {
 
 void ShenandoahHeapRegion::make_humongous_start_bypass() {
   shenandoah_assert_heaplocked();
-  assert (ShenandoahHeap::heap()->is_full_gc_in_progress(), "only for full GC");
+//  assert (ShenandoahHeap::heap()->is_full_gc_in_progress(), "only for full GC");
 
   switch (_state) {
     case _empty_committed:
@@ -169,7 +168,7 @@ void ShenandoahHeapRegion::make_humongous_cont() {
 
 void ShenandoahHeapRegion::make_humongous_cont_bypass() {
   shenandoah_assert_heaplocked();
-  assert (ShenandoahHeap::heap()->is_full_gc_in_progress(), "only for full GC");
+//  assert (ShenandoahHeap::heap()->is_full_gc_in_progress(), "only for full GC");
 
   switch (_state) {
     case _empty_committed:
@@ -290,7 +289,7 @@ void ShenandoahHeapRegion::make_uncommitted() {
 
 void ShenandoahHeapRegion::make_committed_bypass() {
   shenandoah_assert_heaplocked();
-  assert (ShenandoahHeap::heap()->is_full_gc_in_progress(), "only for full GC");
+//  assert (ShenandoahHeap::heap()->is_full_gc_in_progress(), "only for full GC");
 
   switch (_state) {
     case _empty_uncommitted:

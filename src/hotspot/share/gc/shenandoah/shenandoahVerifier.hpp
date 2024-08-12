@@ -178,8 +178,6 @@ public:
   void verify_during_evacuation();
   void verify_before_updaterefs();
   void verify_after_updaterefs();
-  void verify_before_fullgc();
-  void verify_after_fullgc();
   void verify_after_degenerated();
   void verify_generic(VerifyOption option);
 

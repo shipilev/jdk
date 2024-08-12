@@ -145,35 +145,6 @@ class outputStream;
   SHENANDOAH_PAR_PHASE_DO(degen_gc_update_,         "    DU: ", f)                     \
   f(degen_gc_cleanup_complete,                      "  Cleanup")                       \
                                                                                        \
-  f(full_gc_gross,                                  "Pause Full GC (G)")               \
-  f(full_gc,                                        "Pause Full GC (N)")               \
-  f(full_gc_heapdump_pre,                           "  Pre Heap Dump")                 \
-  f(full_gc_prepare,                                "  Prepare")                       \
-  f(full_gc_update_roots,                           "    Update Roots")                \
-  SHENANDOAH_PAR_PHASE_DO(full_gc_update_roots_,    "      FU: ", f)                   \
-  f(full_gc_mark,                                   "  Mark")                          \
-  SHENANDOAH_PAR_PHASE_DO(full_gc_mark_,            "    FM: ", f)                     \
-  f(full_gc_purge,                                  "    System Purge")                \
-  f(full_gc_weakrefs,                               "      Weak References")           \
-  SHENANDOAH_PAR_PHASE_DO(full_gc_weakrefs_p_,      "        WRP: ", f)                \
-  f(full_gc_purge_class_unload,                     "      Unload Classes")            \
-  SHENANDOAH_PAR_PHASE_DO(full_gc_purge_cu_par_,    "        CU: ", f)                 \
-  f(full_gc_purge_weak_par,                         "      Weak Roots")                \
-  SHENANDOAH_PAR_PHASE_DO(full_gc_purge_weak_p_,    "        WR: ", f)                 \
-  f(full_gc_purge_cldg,                             "      CLDG")                      \
-  f(full_gc_calculate_addresses,                    "  Calculate Addresses")           \
-  f(full_gc_calculate_addresses_regular,            "    Regular Objects")             \
-  f(full_gc_calculate_addresses_humong,             "    Humongous Objects")           \
-  f(full_gc_adjust_pointers,                        "  Adjust Pointers")               \
-  f(full_gc_adjust_roots,                           "  Adjust Roots")                  \
-  SHENANDOAH_PAR_PHASE_DO(full_gc_adjust_roots_,    "    FA: ", f)                     \
-  f(full_gc_copy_objects,                           "  Copy Objects")                  \
-  f(full_gc_copy_objects_regular,                   "    Regular Objects")             \
-  f(full_gc_copy_objects_humong,                    "    Humongous Objects")           \
-  f(full_gc_copy_objects_reset_complete,            "    Reset Complete Bitmap")       \
-  f(full_gc_copy_objects_rebuild,                   "    Rebuild Region Sets")         \
-  f(full_gc_heapdump_post,                          "  Post Heap Dump")                \
-                                                                                       \
   f(conc_uncommit,                                  "Concurrent Uncommit")             \
   f(pacing,                                         "Pacing")                          \
                                                                                        \

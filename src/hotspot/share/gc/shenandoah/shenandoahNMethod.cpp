@@ -147,7 +147,7 @@ void ShenandoahNMethod::assert_correct() {
     oop *loc = _oops[c];
     assert(_nm->code_contains((address) loc) || _nm->oops_contains(loc), "nmethod should contain the oop*");
     oop o = RawAccess<>::oop_load(loc);
-    shenandoah_assert_correct_except(loc, o, o == nullptr || heap->is_full_gc_move_in_progress());
+    shenandoah_assert_correct_except(loc, o, o == nullptr);
   }
 
   oop* const begin = _nm->oops_begin();
@@ -155,7 +155,7 @@ void ShenandoahNMethod::assert_correct() {
   for (oop* p = begin; p < end; p++) {
     if (*p != Universe::non_oop_word()) {
       oop o = RawAccess<>::oop_load(p);
-      shenandoah_assert_correct_except(p, o, o == nullptr || heap->is_full_gc_move_in_progress());
+      shenandoah_assert_correct_except(p, o, o == nullptr);
     }
   }
 }

@@ -29,7 +29,6 @@
 #include "gc/shenandoah/shenandoahControlThread.hpp"
 #include "gc/shenandoah/shenandoahDegeneratedGC.hpp"
 #include "gc/shenandoah/shenandoahFreeSet.hpp"
-#include "gc/shenandoah/shenandoahFullGC.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahMonitoringSupport.hpp"
 #include "gc/shenandoah/shenandoahPacer.inline.hpp"
@@ -93,27 +92,17 @@ void ShenandoahControlThread::run_service() {
       degen_point = _degen_point;
       _degen_point = ShenandoahGC::_degenerated_outside_cycle;
 
-      if (ShenandoahDegeneratedGC && heuristics->should_degenerate_cycle()) {
-        heuristics->record_allocation_failure_gc();
-        policy->record_alloc_failure_to_degenerated(degen_point);
-        mode = stw_degenerated;
-      } else {
-        heuristics->record_allocation_failure_gc();
-        policy->record_alloc_failure_to_full();
-        mode = stw_full;
-      }
+      heuristics->record_allocation_failure_gc();
+      policy->record_alloc_failure_to_degenerated(degen_point);
+      mode = stw_degenerated;
     } else if (is_gc_requested) {
       cause = requested_gc_cause;
       log_info(gc)("Trigger: GC request (%s)", GCCause::to_string(cause));
       heuristics->record_requested_gc();
 
-      if (ShenandoahCollectorPolicy::should_run_full_gc(cause)) {
-        mode = stw_full;
-      } else {
-        mode = default_mode;
-        // Unload and clean up everything
-        heap->set_unload_classes(heuristics->can_unload_classes());
-      }
+      mode = default_mode;
+      // Unload and clean up everything
+      heap->set_unload_classes(heuristics->can_unload_classes());
     } else {
       // Potential normal cycle: ask heuristics if it wants to act
       if (heuristics->should_start_gc()) {
@@ -155,9 +144,6 @@ void ShenandoahControlThread::run_service() {
           break;
         case stw_degenerated:
           service_stw_degenerated_cycle(cause, degen_point);
-          break;
-        case stw_full:
-          service_stw_full_cycle(cause);
           break;
         default:
           ShouldNotReachHere();
@@ -344,14 +330,6 @@ bool ShenandoahControlThread::check_cancellation_or_degen(ShenandoahGC::Shenando
 
 void ShenandoahControlThread::stop_service() {
   // Nothing to do here.
-}
-
-void ShenandoahControlThread::service_stw_full_cycle(GCCause::Cause cause) {
-  GCIdMark gc_id_mark;
-  ShenandoahGCSession session(cause);
-
-  ShenandoahFullGC gc;
-  gc.collect(cause);
 }
 
 void ShenandoahControlThread::service_stw_degenerated_cycle(GCCause::Cause cause, ShenandoahGC::ShenandoahDegenPoint point) {

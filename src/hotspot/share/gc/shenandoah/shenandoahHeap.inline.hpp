@@ -322,20 +322,12 @@ inline bool ShenandoahHeap::is_degenerated_gc_in_progress() const {
   return _degenerated_gc_in_progress.is_set();
 }
 
-inline bool ShenandoahHeap::is_full_gc_in_progress() const {
-  return _full_gc_in_progress.is_set();
-}
-
-inline bool ShenandoahHeap::is_full_gc_move_in_progress() const {
-  return _full_gc_move_in_progress.is_set();
-}
-
 inline bool ShenandoahHeap::is_update_refs_in_progress() const {
   return _gc_state.is_set(UPDATEREFS);
 }
 
 inline bool ShenandoahHeap::is_stw_gc_in_progress() const {
-  return is_full_gc_in_progress() || is_degenerated_gc_in_progress();
+  return is_degenerated_gc_in_progress();
 }
 
 inline bool ShenandoahHeap::is_concurrent_strong_root_in_progress() const {

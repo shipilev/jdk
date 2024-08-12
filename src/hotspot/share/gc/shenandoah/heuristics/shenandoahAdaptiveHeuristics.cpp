@@ -183,14 +183,6 @@ void ShenandoahAdaptiveHeuristics::record_success_degenerated() {
   adjust_spike_threshold(DEGENERATE_PENALTY_SD);
 }
 
-void ShenandoahAdaptiveHeuristics::record_success_full() {
-  ShenandoahHeuristics::record_success_full();
-  // Adjust both trigger's parameters in the case of a full GC because
-  // either of them should have triggered earlier to avoid this case.
-  adjust_margin_of_error(FULL_PENALTY_SD);
-  adjust_spike_threshold(FULL_PENALTY_SD);
-}
-
 static double saturate(double value, double min, double max) {
   return MAX2(MIN2(value, max), min);
 }

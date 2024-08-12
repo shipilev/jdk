@@ -213,15 +213,6 @@ void ShenandoahAsserts::assert_correct(void* interior_loc, oop obj, const char* 
   oop fwd = ShenandoahForwarding::get_forwardee_raw_unchecked(obj);
 
   if (obj != fwd) {
-    // When Full GC moves the objects, we cannot trust fwdptrs. If we got here, it means something
-    // tries fwdptr manipulation when Full GC is running. The only exception is using the fwdptr
-    // that still points to the object itself.
-    if (heap->is_full_gc_move_in_progress()) {
-      print_failure(_safe_oop, obj, interior_loc, nullptr, "Shenandoah assert_correct failed",
-                    "Non-trivial forwarding pointer during Full GC moves, probable bug.",
-                    file, line);
-    }
-
     // Step 2. Check that forwardee is correct
     if (!heap->is_in(fwd)) {
       print_failure(_safe_oop, obj, interior_loc, nullptr, "Shenandoah assert_correct failed",

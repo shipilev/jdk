@@ -192,34 +192,6 @@ ShenandoahRootUpdater::ShenandoahRootUpdater(uint n_workers, ShenandoahPhaseTimi
   _code_roots(phase) {
 }
 
-ShenandoahRootAdjuster::ShenandoahRootAdjuster(uint n_workers, ShenandoahPhaseTimings::Phase phase) :
-  ShenandoahRootProcessor(phase),
-  _vm_roots(phase),
-  _cld_roots(phase, n_workers, false /*heap iteration*/),
-  _thread_roots(phase, n_workers > 1),
-  _weak_roots(phase),
-  _code_roots(phase) {
-  assert(ShenandoahHeap::heap()->is_full_gc_in_progress(), "Full GC only");
-}
-
-void ShenandoahRootAdjuster::roots_do(uint worker_id, OopClosure* oops) {
-  NMethodToOopClosure code_blob_cl(oops, NMethodToOopClosure::FixRelocations);
-  ShenandoahNMethodAndDisarmClosure nmethods_and_disarm_Cl(oops);
-  NMethodToOopClosure* adjust_code_closure = ShenandoahCodeRoots::use_nmethod_barriers_for_mark() ?
-                                             static_cast<NMethodToOopClosure*>(&nmethods_and_disarm_Cl) :
-                                             static_cast<NMethodToOopClosure*>(&code_blob_cl);
-  CLDToOopClosure adjust_cld_closure(oops, ClassLoaderData::_claim_strong);
-
-  // Process light-weight/limited parallel roots then
-  _vm_roots.oops_do(oops, worker_id);
-  _weak_roots.oops_do<OopClosure>(oops, worker_id);
-  _cld_roots.cld_do(&adjust_cld_closure, worker_id);
-
-  // Process heavy-weight/fully parallel roots the last
-  _code_roots.nmethods_do(adjust_code_closure, worker_id);
-  _thread_roots.oops_do(oops, nullptr, worker_id);
-}
-
 ShenandoahHeapIterationRootScanner::ShenandoahHeapIterationRootScanner(uint n_workers) :
   ShenandoahRootProcessor(ShenandoahPhaseTimings::heap_iteration_roots),
   _thread_roots(ShenandoahPhaseTimings::heap_iteration_roots, false /*is par*/),

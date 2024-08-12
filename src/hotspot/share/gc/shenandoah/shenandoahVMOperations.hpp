@@ -39,7 +39,6 @@ class ShenandoahFullGC;
 //   - VM_ShenandoahInitUpdateRefs: initiate update references
 //   - VM_ShenandoahFinalUpdateRefs: finish up update references
 //   - VM_ShenandoahReferenceOperation:
-//       - VM_ShenandoahFullGC: do full GC
 //       - VM_ShenandoahDegeneratedGC: do STW degenerated GC
 
 class VM_ShenandoahOperation : public VM_Operation {
@@ -94,20 +93,6 @@ public:
   VM_Operation::VMOp_Type type() const { return VMOp_ShenandoahDegeneratedGC; }
   const char* name()             const { return "Shenandoah Degenerated GC"; }
   virtual  void doit();
-};
-
-class VM_ShenandoahFullGC : public VM_ShenandoahReferenceOperation {
-private:
-  GCCause::Cause           _gc_cause;
-  ShenandoahFullGC* const  _full_gc;
-public:
-  VM_ShenandoahFullGC(GCCause::Cause gc_cause, ShenandoahFullGC* full_gc) :
-    VM_ShenandoahReferenceOperation(),
-    _gc_cause(gc_cause),
-    _full_gc(full_gc) {};
-  VM_Operation::VMOp_Type type() const { return VMOp_ShenandoahFullGC; }
-  const char* name()             const { return "Shenandoah Full GC"; }
-  virtual void doit();
 };
 
 class VM_ShenandoahInitUpdateRefs: public VM_ShenandoahOperation {

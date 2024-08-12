@@ -26,7 +26,6 @@
 
 #include "gc/shenandoah/shenandoahConcurrentGC.hpp"
 #include "gc/shenandoah/shenandoahDegeneratedGC.hpp"
-#include "gc/shenandoah/shenandoahFullGC.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahMark.inline.hpp"
 #include "gc/shenandoah/shenandoahOopClosures.inline.hpp"
@@ -70,12 +69,6 @@ void VM_ShenandoahInitMark::doit() {
 void VM_ShenandoahFinalMarkStartEvac::doit() {
   ShenandoahGCPauseMark mark(_gc_id, "Final Mark", SvcGCMarker::CONCURRENT);
   _gc->entry_final_mark();
-  ShenandoahHeap::heap()->propagate_gc_state_to_java_threads();
-}
-
-void VM_ShenandoahFullGC::doit() {
-  ShenandoahGCPauseMark mark(_gc_id, "Full GC", SvcGCMarker::FULL);
-  _full_gc->entry_full(_gc_cause);
   ShenandoahHeap::heap()->propagate_gc_state_to_java_threads();
 }
 

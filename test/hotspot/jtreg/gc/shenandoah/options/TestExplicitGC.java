@@ -50,8 +50,8 @@ public class TestExplicitGC {
             return;
         }
 
-        String[] full = new String[] {
-                "Pause Full"
+        String[] degen = new String[] {
+                "Pause Degenerated"
         };
 
         String[] concNormal = new String[] {
@@ -67,7 +67,7 @@ public class TestExplicitGC {
                     "-Xlog:gc",
                     TestExplicitGC.class.getName(),
                     "test");
-            for (String p : full) {
+            for (String p : degen) {
                 output.shouldNotContain(p);
             }
             for (String p : concNormal) {
@@ -84,7 +84,7 @@ public class TestExplicitGC {
                     "-XX:+DisableExplicitGC",
                     TestExplicitGC.class.getName(),
                     "test");
-            for (String p : full) {
+            for (String p : degen) {
                 output.shouldNotContain(p);
             }
             for (String p : concNormal) {
@@ -101,7 +101,7 @@ public class TestExplicitGC {
                     "-XX:+ExplicitGCInvokesConcurrent",
                     TestExplicitGC.class.getName(),
                     "test");
-            for (String p : full) {
+            for (String p : degen) {
                 output.shouldNotContain(p);
             }
             for (String p : concNormal) {
@@ -118,7 +118,7 @@ public class TestExplicitGC {
                     "-XX:-ExplicitGCInvokesConcurrent",
                     TestExplicitGC.class.getName(),
                     "test");
-            for (String p : full) {
+            for (String p : degen) {
                 output.shouldContain(p);
             }
             for (String p : concNormal) {

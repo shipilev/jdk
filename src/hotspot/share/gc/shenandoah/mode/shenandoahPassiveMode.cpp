@@ -39,11 +39,6 @@ void ShenandoahPassiveMode::initialize_flags() const {
   // Passive runs with max speed for allocation, because GC is always STW
   SHENANDOAH_ERGO_DISABLE_FLAG(ShenandoahPacing);
 
-  // No need for evacuation reserve with Full GC, only for Degenerated GC.
-  if (!ShenandoahDegeneratedGC) {
-    SHENANDOAH_ERGO_OVERRIDE_DEFAULT(ShenandoahEvacReserve, 0);
-  }
-
   // Disable known barriers by default.
   SHENANDOAH_ERGO_DISABLE_FLAG(ShenandoahLoadRefBarrier);
   SHENANDOAH_ERGO_DISABLE_FLAG(ShenandoahSATBBarrier);

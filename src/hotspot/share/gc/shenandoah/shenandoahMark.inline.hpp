@@ -63,7 +63,7 @@ void ShenandoahMark::do_task(ShenandoahObjToScanQueue* q, T* cl, ShenandoahLiveD
 
   shenandoah_assert_not_forwarded(nullptr, obj);
   shenandoah_assert_marked(nullptr, obj);
-  shenandoah_assert_not_in_cset_except(nullptr, obj, ShenandoahHeap::heap()->cancelled_gc());
+  shenandoah_assert_not_in_cset_except(nullptr, obj, ShenandoahHeap::heap()->cancelled_gc() || ShenandoahHeap::heap()->is_degenerated_gc_in_progress());
 
   // Are we in weak subgraph scan?
   bool weak = task->is_weak();
@@ -261,7 +261,7 @@ inline void ShenandoahMark::mark_through_ref(T* p, ShenandoahObjToScanQueue* q, 
     oop obj = CompressedOops::decode_not_null(o);
 
     shenandoah_assert_not_forwarded(p, obj);
-    shenandoah_assert_not_in_cset_except(p, obj, ShenandoahHeap::heap()->cancelled_gc());
+    shenandoah_assert_not_in_cset_except(p, obj, ShenandoahHeap::heap()->cancelled_gc() || ShenandoahHeap::heap()->is_degenerated_gc_in_progress());
 
     bool skip_live = false;
     bool marked;

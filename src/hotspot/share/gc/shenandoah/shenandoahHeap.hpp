@@ -299,8 +299,6 @@ private:
   // tracks if new regions have been allocated or retired since last check
   ShenandoahSharedFlag   _heap_changed;
   ShenandoahSharedFlag   _degenerated_gc_in_progress;
-  ShenandoahSharedFlag   _full_gc_in_progress;
-  ShenandoahSharedFlag   _full_gc_move_in_progress;
   ShenandoahSharedFlag   _concurrent_strong_root_in_progress;
 
   size_t _gc_no_progress_count;
@@ -329,8 +327,6 @@ public:
   void set_evacuation_in_progress(bool in_progress);
   void set_update_refs_in_progress(bool in_progress);
   void set_degenerated_gc_in_progress(bool in_progress);
-  void set_full_gc_in_progress(bool in_progress);
-  void set_full_gc_move_in_progress(bool in_progress);
   void set_has_forwarded_objects(bool cond);
   void set_concurrent_strong_root_in_progress(bool cond);
   void set_concurrent_weak_root_in_progress(bool cond);
@@ -341,8 +337,6 @@ public:
   inline bool is_update_refs_in_progress() const;
   inline bool is_evacuation_in_progress() const;
   inline bool is_degenerated_gc_in_progress() const;
-  inline bool is_full_gc_in_progress() const;
-  inline bool is_full_gc_move_in_progress() const;
   inline bool has_forwarded_objects() const;
 
   inline bool is_stw_gc_in_progress() const;
@@ -473,12 +467,12 @@ public:
   bool unload_classes() const;
 
   // Perform STW class unloading and weak root cleaning
-  void parallel_cleaning(bool full_gc);
+  void parallel_cleaning();
 
 private:
-  void stw_unload_classes(bool full_gc);
-  void stw_process_weak_roots(bool full_gc);
-  void stw_weak_refs(bool full_gc);
+  void stw_unload_classes();
+  void stw_process_weak_roots();
+  void stw_weak_refs();
 
   // Heap iteration support
   void scan_roots_for_iteration(ShenandoahScanObjectStack* oop_stack, ObjectIterateScanRootClosure* oops);

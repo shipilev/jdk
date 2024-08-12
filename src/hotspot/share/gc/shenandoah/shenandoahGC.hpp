@@ -46,9 +46,9 @@
 
 class ShenandoahGC : public StackObj {
 public:
-  // Fail point from concurrent GC
   enum ShenandoahDegenPoint {
     _degenerated_unset,
+    _degenerated_restart,
     _degenerated_outside_cycle,
     _degenerated_mark,
     _degenerated_evac,
@@ -61,7 +61,7 @@ public:
   static const char* degen_point_to_string(ShenandoahDegenPoint point);
 
 protected:
-  static void update_roots(bool full_gc);
+  static void update_roots(bool check_alive);
 };
 
 #endif  // SHARE_GC_SHENANDOAH_SHENANDOAHGC_HPP

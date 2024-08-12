@@ -76,7 +76,6 @@ class GCCause : public AllStatic {
     _shenandoah_stop_vm,
     _shenandoah_allocation_failure_evac,
     _shenandoah_concurrent_gc,
-    _shenandoah_upgrade_to_full_gc,
 
     _z_timer,
     _z_warmup,

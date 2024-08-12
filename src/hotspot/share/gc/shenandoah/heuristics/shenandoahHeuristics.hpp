@@ -67,7 +67,6 @@ class ShenandoahHeapRegion;
 class ShenandoahHeuristics : public CHeapObj<mtGC> {
   static const intx Concurrent_Adjust   = -1; // recover from penalties
   static const intx Degenerated_Penalty = 10; // how much to penalize average GC duration history on Degenerated GC
-  static const intx Full_Penalty        = 20; // how much to penalize average GC duration history on Full GC
 
 protected:
   typedef struct {
@@ -112,13 +111,9 @@ public:
 
   virtual bool should_start_gc();
 
-  virtual bool should_degenerate_cycle();
-
   virtual void record_success_concurrent();
 
   virtual void record_success_degenerated();
-
-  virtual void record_success_full();
 
   virtual void record_allocation_failure_gc();
 

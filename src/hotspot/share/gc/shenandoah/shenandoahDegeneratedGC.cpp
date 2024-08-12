@@ -28,7 +28,6 @@
 #include "gc/shenandoah/shenandoahCollectorPolicy.hpp"
 #include "gc/shenandoah/shenandoahConcurrentMark.hpp"
 #include "gc/shenandoah/shenandoahDegeneratedGC.hpp"
-#include "gc/shenandoah/shenandoahFullGC.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahMetrics.hpp"
 #include "gc/shenandoah/shenandoahMonitoringSupport.hpp"
@@ -43,9 +42,10 @@
 #include "utilities/events.hpp"
 
 ShenandoahDegenGC::ShenandoahDegenGC(ShenandoahDegenPoint degen_point) :
-  ShenandoahGC(),
-  _degen_point(degen_point),
-  _abbreviated(false) {
+        ShenandoahGC(),
+        _degen_point(degen_point),
+        _abbreviated(false),
+        _restart_depth(0) {
 }
 
 bool ShenandoahDegenGC::collect(GCCause::Cause cause) {
@@ -77,18 +77,49 @@ void ShenandoahDegenGC::entry_degenerated() {
 
 void ShenandoahDegenGC::op_degenerated() {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
-  // Degenerated GC is STW, but it can also fail. Current mechanics communicates
-  // GC failure via cancelled_concgc() flag. So, if we detect the failure after
-  // some phase, we have to upgrade the Degenerate GC to Full GC.
-  heap->clear_cancelled_gc();
 
   ShenandoahMetricsSnapshot metrics;
   metrics.snap_before();
+
+  restart:
+
+  // Degenerated GC is STW, but it can also fail. Current mechanics communicates
+  // GC failure via cancelled_concgc() flag. So, if we detect the failure after
+  // some phase, we have to restart the degenerated GC.
+  heap->clear_cancelled_gc();
 
   switch (_degen_point) {
     // The cases below form the Duff's-like device: it describes the actual GC cycle,
     // but enters it at different points, depending on which concurrent phase had
     // degenerated.
+
+    case _degenerated_restart:
+      // We are restarting the degenerated GC from unknown point. Reinitialize GC
+      // state, make heap safe for initiating a new cycle.
+
+      // Record we are restarting.
+      _restart_depth++;
+
+      // Previous worker data should be committed in preparation for new cycle.
+      heap->phase_timings()->flush_par_workers_to_cycle();
+      heap->phase_timings()->flush_cycle_to_global();
+
+      // Make sure heap is parseable.
+      if (UseTLAB) {
+        heap->labs_make_parsable();
+      }
+
+      // Reset the GC state to defaults.
+      heap->set_gc_state(ShenandoahHeap::MARKING |
+                         ShenandoahHeap::EVACUATION |
+                         ShenandoahHeap::WEAK_ROOTS |
+                         ShenandoahHeap::UPDATEREFS,
+                         false);
+
+      if (heap->has_forwarded_objects()) {
+        // Need to fix up the roots, in case they carry forwarded objects.
+        update_roots(false);
+      }
 
     case _degenerated_outside_cycle:
       // We have degenerated from outside the cycle, which means something is bad with
@@ -122,8 +153,41 @@ void ShenandoahDegenGC::op_degenerated() {
       }
       assert(!heap->cancelled_gc(), "STW mark can not OOM");
 
+      if (_restart_depth > 0) {
+        // We are in restart path. The marking should have fixed the heap for us.
+        heap->set_has_forwarded_objects(false);
+
+        // Now need to reset old collection set before selecting a new one.
+        ShenandoahLocker locker(heap->lock());
+        for (size_t i = 0; i < heap->num_regions(); i++) {
+          ShenandoahHeapRegion* r = heap->get_region(i);
+          if (r->is_cset()) {
+            r->make_regular_bypass();
+          }
+        }
+        heap->collection_set()->clear();
+      }
+
+      if (_restart_depth >= 2) {
+        // We are in too deep, the restarts are futile. Exit.
+        // The heap should look like the end of (maybe inefficient) degenerated GC.
+
+        if (ShenandoahVerify) {
+          heap->verifier()->verify_after_degenerated();
+        }
+
+        // TODO: Report this failure.
+        // heap->shenandoah_policy()->record_success_degenerated(_abbreviated);
+        // heap->heuristics()->record_success_degenerated();
+        return;
+      }
+
       /* Degen select Collection Set. etc. */
       op_prepare_evacuation();
+
+      if (_restart_depth >= 1) {
+        // TODO: Put some humongous objects into collection set and compact them.
+      }
 
       op_cleanup_early();
 
@@ -132,7 +196,7 @@ void ShenandoahDegenGC::op_degenerated() {
       // and we can do evacuation. Otherwise, it would be the shortcut cycle.
       if (heap->is_evacuation_in_progress()) {
 
-        if (_degen_point == _degenerated_evac) {
+        if (_degen_point == _degenerated_evac || (_restart_depth > 0)) {
           // Degeneration under oom-evac protocol allows the mutator LRB to expose
           // references to from-space objects. This is okay, in theory, because we
           // will come to the safepoint here to complete the evacuations and update
@@ -165,7 +229,7 @@ void ShenandoahDegenGC::op_degenerated() {
         // the about-to-be-pinned object, oom-evac protocol left the object in
         // the collection set, and then the pin reached the cset region. If we continue
         // the cycle here, we would trash the cset and alive objects in it. To avoid
-        // it, we fail degeneration right away and slide into Full GC to recover.
+        // it, we fail current degeneration op right away, and restart.
 
         {
           heap->sync_pinned_region_status();
@@ -174,9 +238,8 @@ void ShenandoahDegenGC::op_degenerated() {
           ShenandoahHeapRegion* r;
           while ((r = heap->collection_set()->next()) != nullptr) {
             if (r->is_pinned()) {
-              heap->cancel_gc(GCCause::_shenandoah_upgrade_to_full_gc);
-              op_degenerated_fail();
-              return;
+              _degen_point = _degenerated_restart;
+              goto restart;
             }
           }
 
@@ -184,8 +247,9 @@ void ShenandoahDegenGC::op_degenerated() {
         }
         op_evacuate();
         if (heap->cancelled_gc()) {
-          op_degenerated_fail();
-          return;
+          // Drop the GC state to defaults.
+          _degen_point = _degenerated_restart;
+          goto restart;
         }
       }
 
@@ -227,10 +291,7 @@ void ShenandoahDegenGC::op_degenerated() {
 
   // Check for futility and fail. There is no reason to do several back-to-back Degenerated cycles,
   // because that probably means the heap is overloaded and/or fragmented.
-  if (!metrics.is_good_progress()) {
-    heap->cancel_gc(GCCause::_shenandoah_upgrade_to_full_gc);
-    op_degenerated_futile();
-  } else {
+  if (metrics.is_good_progress()) {
     heap->notify_gc_progress();
     heap->shenandoah_policy()->record_success_degenerated(_abbreviated);
     heap->heuristics()->record_success_degenerated();
@@ -244,7 +305,7 @@ void ShenandoahDegenGC::op_reset() {
 void ShenandoahDegenGC::op_mark() {
   assert(!ShenandoahHeap::heap()->is_concurrent_mark_in_progress(), "Should be reset");
   ShenandoahGCPhase phase(ShenandoahPhaseTimings::degen_gc_stw_mark);
-  ShenandoahSTWMark mark(false /*full gc*/);
+  ShenandoahSTWMark mark;
   mark.clear();
   mark.mark();
 }
@@ -261,7 +322,7 @@ void ShenandoahDegenGC::op_prepare_evacuation() {
   }
 
   // STW cleanup weak roots and unload classes
-  heap->parallel_cleaning(false /*full gc*/);
+  heap->parallel_cleaning();
   // Prepare regions and collection set
   heap->prepare_regions_and_collection_set(false /*concurrent*/);
 
@@ -326,7 +387,7 @@ void ShenandoahDegenGC::op_updaterefs() {
 void ShenandoahDegenGC::op_update_roots() {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
 
-  update_roots(false /*full_gc*/);
+  update_roots(true);
 
   heap->update_heap_region_states(false /*concurrent*/);
 
@@ -346,14 +407,6 @@ void ShenandoahDegenGC::op_cleanup_complete() {
   ShenandoahHeap::heap()->recycle_trash();
 }
 
-void ShenandoahDegenGC::op_degenerated_fail() {
-  upgrade_to_full();
-}
-
-void ShenandoahDegenGC::op_degenerated_futile() {
-  upgrade_to_full();
-}
-
 const char* ShenandoahDegenGC::degen_event_message(ShenandoahDegenPoint point) const {
   switch (point) {
     case _degenerated_unset:
@@ -370,11 +423,4 @@ const char* ShenandoahDegenGC::degen_event_message(ShenandoahDegenPoint point) c
       ShouldNotReachHere();
       return "ERROR";
   }
-}
-
-void ShenandoahDegenGC::upgrade_to_full() {
-  log_info(gc)("Degenerated GC upgrading to Full GC");
-  ShenandoahHeap::heap()->shenandoah_policy()->record_degenerated_upgrade_to_full();
-  ShenandoahFullGC full_gc;
-  full_gc.op_full(GCCause::_shenandoah_upgrade_to_full_gc);
 }

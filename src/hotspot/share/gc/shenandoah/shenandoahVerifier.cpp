@@ -884,35 +884,11 @@ void ShenandoahVerifier::verify_after_degenerated() {
   verify_at_safepoint(
           "After Degenerated GC",
           _verify_forwarded_none,      // all objects are non-forwarded
-          _verify_marked_complete,     // all objects are marked in complete bitmap
+          _verify_marked_disable,     // marking data is stale
           _verify_cset_none,           // no cset references
           _verify_liveness_disable,    // no reliable liveness data anymore
           _verify_regions_notrash_nocset, // no trash, no cset
           _verify_gcstate_stable       // degenerated refs had cleaned up forwarded objects
-  );
-}
-
-void ShenandoahVerifier::verify_before_fullgc() {
-  verify_at_safepoint(
-          "Before Full GC",
-          _verify_forwarded_allow,     // can have forwarded objects
-          _verify_marked_disable,      // do not verify marked: lots ot time wasted checking dead allocations
-          _verify_cset_disable,        // cset might be foobared
-          _verify_liveness_disable,    // no reliable liveness data anymore
-          _verify_regions_disable,     // no reliable region data here
-          _verify_gcstate_disable      // no reliable gcstate data
-  );
-}
-
-void ShenandoahVerifier::verify_after_fullgc() {
-  verify_at_safepoint(
-          "After Full GC",
-          _verify_forwarded_none,      // all objects are non-forwarded
-          _verify_marked_complete,     // all objects are marked in complete bitmap
-          _verify_cset_none,           // no cset references
-          _verify_liveness_disable,    // no reliable liveness data anymore
-          _verify_regions_notrash_nocset, // no trash, no cset
-          _verify_gcstate_stable        // full gc cleaned up everything
   );
 }
 

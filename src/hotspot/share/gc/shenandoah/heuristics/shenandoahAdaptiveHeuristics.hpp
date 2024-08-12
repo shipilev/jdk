@@ -75,7 +75,6 @@ public:
   void record_cycle_start();
   void record_success_concurrent();
   void record_success_degenerated();
-  void record_success_full();
 
   virtual bool should_start_gc();
 

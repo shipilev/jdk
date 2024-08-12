@@ -196,10 +196,6 @@ bool ShenandoahHeuristics::should_start_gc() {
   return false;
 }
 
-bool ShenandoahHeuristics::should_degenerate_cycle() {
-  return ShenandoahHeap::heap()->shenandoah_policy()->consecutive_degenerated_gc_count() <= ShenandoahFullGCThreshold;
-}
-
 void ShenandoahHeuristics::adjust_penalty(intx step) {
   assert(0 <= _gc_time_penalties && _gc_time_penalties <= 100,
           "In range before adjustment: " INTX_FORMAT, _gc_time_penalties);
@@ -226,10 +222,6 @@ void ShenandoahHeuristics::record_success_concurrent() {
 
 void ShenandoahHeuristics::record_success_degenerated() {
   adjust_penalty(Degenerated_Penalty);
-}
-
-void ShenandoahHeuristics::record_success_full() {
-  adjust_penalty(Full_Penalty);
 }
 
 void ShenandoahHeuristics::record_allocation_failure_gc() {

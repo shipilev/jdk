@@ -44,16 +44,9 @@ bool ShenandoahPassiveHeuristics::should_unload_classes() {
   return can_unload_classes();
 }
 
-bool ShenandoahPassiveHeuristics::should_degenerate_cycle() {
-  // Always fail to Degenerated GC, if enabled
-  return ShenandoahDegeneratedGC;
-}
-
 void ShenandoahPassiveHeuristics::choose_collection_set_from_regiondata(ShenandoahCollectionSet* cset,
                                                                         RegionData* data, size_t size,
                                                                         size_t actual_free) {
-  assert(ShenandoahDegeneratedGC, "This path is only taken for Degenerated GC");
-
   // Do not select too large CSet that would overflow the available free space.
   // Take at least the entire evacuation reserve, and be free to overflow to free space.
   size_t max_capacity = _space_info->max_capacity();

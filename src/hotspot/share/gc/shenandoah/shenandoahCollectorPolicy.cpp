@@ -34,11 +34,8 @@ ShenandoahCollectorPolicy::ShenandoahCollectorPolicy() :
   _abbreviated_concurrent_gcs(0),
   _success_degenerated_gcs(0),
   _abbreviated_degenerated_gcs(0),
-  _success_full_gcs(0),
   _consecutive_degenerated_gcs(0),
-  _alloc_failure_degenerated(0),
-  _alloc_failure_degenerated_upgrade_to_full(0),
-  _alloc_failure_full(0) {
+  _alloc_failure_degenerated(0) {
 
   Copy::zero_to_bytes(_degen_point_counts, sizeof(size_t) * ShenandoahGC::_DEGENERATED_LIMIT);
   Copy::zero_to_bytes(_collection_cause_counts, sizeof(size_t) * GCCause::_last_gc_cause);
@@ -51,19 +48,10 @@ void ShenandoahCollectorPolicy::record_collection_cause(GCCause::Cause cause) {
   _collection_cause_counts[cause]++;
 }
 
-void ShenandoahCollectorPolicy::record_alloc_failure_to_full() {
-  _alloc_failure_full++;
-}
-
 void ShenandoahCollectorPolicy::record_alloc_failure_to_degenerated(ShenandoahGC::ShenandoahDegenPoint point) {
   assert(point < ShenandoahGC::_DEGENERATED_LIMIT, "sanity");
   _alloc_failure_degenerated++;
   _degen_point_counts[point]++;
-}
-
-void ShenandoahCollectorPolicy::record_degenerated_upgrade_to_full() {
-  _consecutive_degenerated_gcs = 0;
-  _alloc_failure_degenerated_upgrade_to_full++;
 }
 
 void ShenandoahCollectorPolicy::record_success_concurrent(bool is_abbreviated) {
@@ -80,11 +68,6 @@ void ShenandoahCollectorPolicy::record_success_degenerated(bool is_abbreviated) 
   if (is_abbreviated) {
     _abbreviated_degenerated_gcs++;
   }
-}
-
-void ShenandoahCollectorPolicy::record_success_full() {
-  _consecutive_degenerated_gcs = 0;
-  _success_full_gcs++;
 }
 
 void ShenandoahCollectorPolicy::record_shutdown() {
@@ -120,10 +103,6 @@ bool is_valid_request(GCCause::Cause cause) {
 }
 #endif
 
-bool ShenandoahCollectorPolicy::should_run_full_gc(GCCause::Cause cause) {
-  return is_explicit_gc(cause) ? !ExplicitGCInvokesConcurrent : !ShenandoahImplicitGCInvokesConcurrent;
-}
-
 bool ShenandoahCollectorPolicy::should_handle_requested_gc(GCCause::Cause cause) {
   assert(is_valid_request(cause), "only requested GCs here: %s", GCCause::to_string(cause));
 
@@ -141,7 +120,7 @@ void ShenandoahCollectorPolicy::print_gc_stats(outputStream* out) const {
   out->print_cr("enough regions with no live objects to skip evacuation.");
   out->cr();
 
-  size_t completed_gcs = _success_full_gcs + _success_degenerated_gcs + _success_concurrent_gcs;
+  size_t completed_gcs = _success_degenerated_gcs + _success_concurrent_gcs;
   out->print_cr(SIZE_FORMAT_W(5) " Completed GCs", completed_gcs);
 
   size_t explicit_requests = 0;
@@ -171,9 +150,8 @@ void ShenandoahCollectorPolicy::print_gc_stats(outputStream* out) const {
   out->print_cr("  " SIZE_FORMAT_W(5) " abbreviated (%.2f%%)",  _abbreviated_concurrent_gcs, percent_of(_abbreviated_concurrent_gcs, _success_concurrent_gcs));
   out->cr();
 
-  size_t degenerated_gcs = _alloc_failure_degenerated_upgrade_to_full + _success_degenerated_gcs;
+  size_t degenerated_gcs = _success_degenerated_gcs;
   out->print_cr(SIZE_FORMAT_W(5) " Degenerated GCs (%.2f%%)", degenerated_gcs, percent_of(degenerated_gcs, completed_gcs));
-  out->print_cr("  " SIZE_FORMAT_W(5) " upgraded to Full GC (%.2f%%)",          _alloc_failure_degenerated_upgrade_to_full, percent_of(_alloc_failure_degenerated_upgrade_to_full, degenerated_gcs));
   out->print_cr("  " SIZE_FORMAT_W(5) " caused by allocation failure (%.2f%%)", _alloc_failure_degenerated, percent_of(_alloc_failure_degenerated, degenerated_gcs));
   out->print_cr("  " SIZE_FORMAT_W(5) " abbreviated (%.2f%%)",                  _abbreviated_degenerated_gcs, percent_of(_abbreviated_degenerated_gcs, degenerated_gcs));
   for (int c = 0; c < ShenandoahGC::_DEGENERATED_LIMIT; c++) {
@@ -183,14 +161,4 @@ void ShenandoahCollectorPolicy::print_gc_stats(outputStream* out) const {
     }
   }
   out->cr();
-
-  out->print_cr(SIZE_FORMAT_W(5) " Full GCs (%.2f%%)", _success_full_gcs, percent_of(_success_full_gcs, completed_gcs));
-  if (!ExplicitGCInvokesConcurrent) {
-    out->print_cr("  " SIZE_FORMAT_W(5) " invoked explicitly (%.2f%%)", explicit_requests, percent_of(explicit_requests, _success_concurrent_gcs));
-  }
-  if (!ShenandoahImplicitGCInvokesConcurrent) {
-    out->print_cr("  " SIZE_FORMAT_W(5) " invoked implicitly (%.2f%%)", implicit_requests, percent_of(implicit_requests, _success_concurrent_gcs));
-  }
-  out->print_cr("  " SIZE_FORMAT_W(5) " caused by allocation failure (%.2f%%)", _alloc_failure_full, percent_of(_alloc_failure_full, _success_full_gcs));
-  out->print_cr("  " SIZE_FORMAT_W(5) " upgraded from Degenerated GC (%.2f%%)", _alloc_failure_degenerated_upgrade_to_full, percent_of(_alloc_failure_degenerated_upgrade_to_full, _success_full_gcs));
 }

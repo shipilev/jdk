@@ -39,8 +39,7 @@ private:
   typedef enum {
     none,
     concurrent_normal,
-    stw_degenerated,
-    stw_full
+    stw_degenerated
   } GCMode;
 
   ShenandoahSharedFlag _gc_requested;
@@ -59,7 +58,6 @@ private:
 
   bool check_cancellation_or_degen(ShenandoahGC::ShenandoahDegenPoint point);
   void service_concurrent_normal_cycle(GCCause::Cause cause);
-  void service_stw_full_cycle(GCCause::Cause cause);
   void service_stw_degenerated_cycle(GCCause::Cause cause, ShenandoahGC::ShenandoahDegenPoint point);
 
   void notify_gc_waiters();

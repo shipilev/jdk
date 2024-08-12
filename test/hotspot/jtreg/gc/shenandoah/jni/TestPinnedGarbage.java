@@ -30,12 +30,11 @@
  *
  * @run main/othervm/native -XX:+UnlockDiagnosticVMOptions -XX:+UnlockExperimentalVMOptions -Xmx128m
  *      -XX:+UseShenandoahGC -XX:ShenandoahGCMode=passive
- *      -XX:+ShenandoahVerify -XX:+ShenandoahDegeneratedGC
+ *      -XX:+ShenandoahVerify
  *      TestPinnedGarbage
  *
  * @run main/othervm/native -XX:+UnlockDiagnosticVMOptions -XX:+UnlockExperimentalVMOptions -Xmx128m
  *      -XX:+UseShenandoahGC -XX:ShenandoahGCMode=passive
- *      -XX:+ShenandoahVerify -XX:-ShenandoahDegeneratedGC
  *      TestPinnedGarbage
  */
 

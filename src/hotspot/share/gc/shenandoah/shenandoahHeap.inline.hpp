@@ -116,9 +116,9 @@ inline void ShenandoahHeap::update_with_forwarded(T* p) {
       // Corner case: when evacuation fails, there are objects in collection
       // set that are not really forwarded. We can still go and try and update them
       // (uselessly) to simplify the common path.
-      shenandoah_assert_forwarded_except(p, obj, cancelled_gc());
+      shenandoah_assert_forwarded_except(p, obj, cancelled_gc() || is_degenerated_gc_in_progress());
       oop fwd = ShenandoahBarrierSet::resolve_forwarded_not_null(obj);
-      shenandoah_assert_not_in_cset_except(p, fwd, cancelled_gc());
+      shenandoah_assert_not_in_cset_except(p, fwd, cancelled_gc() || is_degenerated_gc_in_progress());
 
       // Unconditionally store the update: no concurrent updates expected.
       RawAccess<IS_NOT_NULL>::oop_store(p, fwd);
@@ -322,20 +322,12 @@ inline bool ShenandoahHeap::is_degenerated_gc_in_progress() const {
   return _degenerated_gc_in_progress.is_set();
 }
 
-inline bool ShenandoahHeap::is_full_gc_in_progress() const {
-  return _full_gc_in_progress.is_set();
-}
-
-inline bool ShenandoahHeap::is_full_gc_move_in_progress() const {
-  return _full_gc_move_in_progress.is_set();
-}
-
 inline bool ShenandoahHeap::is_update_refs_in_progress() const {
   return _gc_state.is_set(UPDATEREFS);
 }
 
 inline bool ShenandoahHeap::is_stw_gc_in_progress() const {
-  return is_full_gc_in_progress() || is_degenerated_gc_in_progress();
+  return is_degenerated_gc_in_progress();
 }
 
 inline bool ShenandoahHeap::is_concurrent_strong_root_in_progress() const {

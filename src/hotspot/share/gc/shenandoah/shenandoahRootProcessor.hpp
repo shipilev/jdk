@@ -209,19 +209,4 @@ public:
   void roots_do(uint worker_id, IsAlive* is_alive, KeepAlive* keep_alive);
 };
 
-// Adjuster all roots at a safepoint during full gc
-class ShenandoahRootAdjuster : public ShenandoahRootProcessor {
-private:
-  ShenandoahVMRoots<false /*concurrent*/>                   _vm_roots;
-  ShenandoahClassLoaderDataRoots<false /*concurrent*/>      _cld_roots;
-  ShenandoahThreadRoots                                     _thread_roots;
-  ShenandoahVMWeakRoots<false /*concurrent*/>               _weak_roots;
-  ShenandoahCodeCacheRoots                                  _code_roots;
-
-public:
-  ShenandoahRootAdjuster(uint n_workers, ShenandoahPhaseTimings::Phase phase);
-
-  void roots_do(uint worker_id, OopClosure* oops);
-};
-
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHROOTPROCESSOR_HPP

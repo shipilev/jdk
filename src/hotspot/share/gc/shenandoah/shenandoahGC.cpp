@@ -59,8 +59,7 @@ public:
   ShenandoahUpdateRootsTask(ShenandoahRootUpdater* root_updater, bool check_alive) :
     WorkerTask("Shenandoah Update Roots"),
     _root_updater(root_updater),
-    _check_alive(check_alive){
-  }
+    _check_alive(check_alive) {}
 
   void work(uint worker_id) {
     assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "Must be at a safepoint");
@@ -71,24 +70,18 @@ public:
       ShenandoahForwardedIsAliveClosure is_alive;
       _root_updater->roots_do<ShenandoahForwardedIsAliveClosure, ShenandoahUpdateRefsClosure>(worker_id, &is_alive, &cl);
     } else {
-      AlwaysTrueClosure always_true;;
+      AlwaysTrueClosure always_true;
       _root_updater->roots_do<AlwaysTrueClosure, ShenandoahUpdateRefsClosure>(worker_id, &always_true, &cl);
     }
   }
 };
 
-void ShenandoahGC::update_roots(bool full_gc) {
+void ShenandoahGC::update_roots(bool check_alive) {
   assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "Must be at a safepoint");
-  assert(ShenandoahHeap::heap()->is_full_gc_in_progress() ||
-         ShenandoahHeap::heap()->is_degenerated_gc_in_progress(),
+  assert(ShenandoahHeap::heap()->is_degenerated_gc_in_progress(),
          "Only for degenerated GC and full GC");
 
-  bool check_alive = !full_gc;
-  ShenandoahPhaseTimings::Phase p = full_gc ?
-                                    ShenandoahPhaseTimings::full_gc_update_roots :
-                                    ShenandoahPhaseTimings::degen_gc_update_roots;
-
-  ShenandoahGCPhase phase(p);
+  ShenandoahGCPhase phase(ShenandoahPhaseTimings::degen_gc_update_roots);
 #if COMPILER2_OR_JVMCI
   DerivedPointerTable::clear();
 #endif
@@ -97,7 +90,7 @@ void ShenandoahGC::update_roots(bool full_gc) {
   WorkerThreads* workers = heap->workers();
   uint nworkers = workers->active_workers();
 
-  ShenandoahRootUpdater root_updater(nworkers, p);
+  ShenandoahRootUpdater root_updater(nworkers, ShenandoahPhaseTimings::degen_gc_update_roots);
   ShenandoahUpdateRootsTask update_roots(&root_updater, check_alive);
   workers->run_task(&update_roots);
 

@@ -328,7 +328,7 @@ jobs:
       - build-windows-x64
       - build-windows-aarch64
       - test-linux-x64
-    - test-macos-x64
+      - test-macos-x64
       - test-windows-x64
 
     steps:

@@ -97,26 +97,30 @@ void ShenandoahDegenGC::op_degenerated() {
   ShenandoahMetricsSnapshot metrics;
   metrics.snap_before();
 
-  root:
+  restart:
+
+  // Degenerated GC is STW, but it can also fail. Current mechanics communicates
+  // GC failure via cancelled_concgc() flag. So, if we detect the failure after
+  // some phase, we have to restart the degenerated GC.
+  heap->clear_cancelled_gc();
+
   switch (_degen_point) {
     // The cases below form the Duff's-like device: it describes the actual GC cycle,
     // but enters it at different points, depending on which concurrent phase had
     // degenerated.
 
     case _degenerated_restart:
-      // Degenerated GC is STW, but it can also fail. Current mechanics communicates
-      // GC failure via cancelled_concgc() flag. So, if we detect the failure after
-      // some phase, we have to upgrade the Degenerate GC to Full GC.
-      heap->clear_cancelled_gc();
-
-      // If there are forwarded objects in the heap, we need to make sure the heap
+    // If there are forwarded objects in the heap, we need to make sure the heap
       // is fixed up before we continue.
 
       if (heap->has_forwarded_objects()) {
         // Drop the CSet status for regions, so that we do not trash the cset after
         // update references.
-        ShenandoahResetCSetClosure cl;
-        heap->parallel_heap_region_iterate(&cl);
+        {
+          ShenandoahLocker locker(heap->lock());
+          ShenandoahResetCSetClosure cl;
+          heap->parallel_heap_region_iterate(&cl);
+        }
 
         // Just do an update refs pass over the heap.
         op_init_updaterefs();
@@ -131,6 +135,11 @@ void ShenandoahDegenGC::op_degenerated() {
         // Not doing the restart. Make sure the heap is still good.
         if (ShenandoahVerify) {
           heap->verifier()->verify_after_degenerated();
+        }
+        // TODO: Report this failure.
+//        heap->shenandoah_policy()->record_success_degenerated(_abbreviated);
+//        heap->heuristics()->record_success_degenerated();
+        return;
       }
 
     case _degenerated_outside_cycle:
@@ -208,7 +217,7 @@ void ShenandoahDegenGC::op_degenerated() {
         // the about-to-be-pinned object, oom-evac protocol left the object in
         // the collection set, and then the pin reached the cset region. If we continue
         // the cycle here, we would trash the cset and alive objects in it. To avoid
-        // it, we fail degeneration right away and slide into Full GC to recover.
+        // it, we fail current degeneration op right away, and restart.
 
         {
           heap->sync_pinned_region_status();
@@ -217,7 +226,8 @@ void ShenandoahDegenGC::op_degenerated() {
           ShenandoahHeapRegion* r;
           while ((r = heap->collection_set()->next()) != nullptr) {
             if (r->is_pinned()) {
-              goto root;
+              _degen_point = _degenerated_restart;
+              goto restart;
             }
           }
 
@@ -226,7 +236,7 @@ void ShenandoahDegenGC::op_degenerated() {
         op_evacuate();
         if (heap->cancelled_gc()) {
           _degen_point = _degenerated_restart;
-          goto root;
+          goto restart;
         }
       }
 
@@ -333,9 +343,6 @@ void ShenandoahDegenGC::op_prepare_evacuation() {
 
 void ShenandoahDegenGC::op_cleanup_early() {
   ShenandoahHeap::heap()->recycle_trash();
-}
-
-void ShenandoahDegenGC::op_degenerated_restart() {
 }
 
 void ShenandoahDegenGC::op_evacuate() {

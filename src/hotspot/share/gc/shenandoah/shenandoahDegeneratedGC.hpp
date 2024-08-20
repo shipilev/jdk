@@ -44,7 +44,6 @@ private:
   void vmop_degenerated();
   void entry_degenerated();
   void op_degenerated();
-  void op_degenerated_restart();
 
     void op_reset();
   void op_mark();

@@ -32,8 +32,9 @@ class VM_ShenandoahDegeneratedGC;
 class ShenandoahDegenGC : public ShenandoahGC {
   friend class VM_ShenandoahDegeneratedGC;
 private:
-  const ShenandoahDegenPoint  _degen_point;
+  ShenandoahDegenPoint _degen_point;
   bool _abbreviated;
+  int  _nesting_depth;
 
 public:
   ShenandoahDegenGC(ShenandoahDegenPoint degen_point);
@@ -43,8 +44,9 @@ private:
   void vmop_degenerated();
   void entry_degenerated();
   void op_degenerated();
+  void op_degenerated_restart();
 
-  void op_reset();
+    void op_reset();
   void op_mark();
   void op_finish_mark();
   void op_prepare_evacuation();

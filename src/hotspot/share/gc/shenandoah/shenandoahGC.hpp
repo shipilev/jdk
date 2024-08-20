@@ -46,9 +46,9 @@
 
 class ShenandoahGC : public StackObj {
 public:
-  // Fail point from concurrent GC
   enum ShenandoahDegenPoint {
     _degenerated_unset,
+    _degenerated_restart,
     _degenerated_outside_cycle,
     _degenerated_mark,
     _degenerated_evac,

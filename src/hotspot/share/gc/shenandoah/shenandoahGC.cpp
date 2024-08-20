@@ -54,22 +54,29 @@ const char* ShenandoahGC::degen_point_to_string(ShenandoahDegenPoint point) {
 class ShenandoahUpdateRootsTask : public WorkerTask {
 private:
   ShenandoahRootUpdater*  _root_updater;
+  bool                    _check_alive;
 public:
-  ShenandoahUpdateRootsTask(ShenandoahRootUpdater* root_updater) :
+  ShenandoahUpdateRootsTask(ShenandoahRootUpdater* root_updater, bool check_alive) :
     WorkerTask("Shenandoah Update Roots"),
-    _root_updater(root_updater) {}
+    _root_updater(root_updater),
+    _check_alive(check_alive) {}
 
   void work(uint worker_id) {
     assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "Must be at a safepoint");
     ShenandoahParallelWorkerSession worker_session(worker_id);
 
     ShenandoahUpdateRefsClosure cl;
-    ShenandoahForwardedIsAliveClosure is_alive;
-    _root_updater->roots_do<ShenandoahForwardedIsAliveClosure, ShenandoahUpdateRefsClosure>(worker_id, &is_alive, &cl);
+    if (_check_alive) {
+      ShenandoahForwardedIsAliveClosure is_alive;
+      _root_updater->roots_do<ShenandoahForwardedIsAliveClosure, ShenandoahUpdateRefsClosure>(worker_id, &is_alive, &cl);
+    } else {
+      AlwaysTrueClosure always_true;
+      _root_updater->roots_do<AlwaysTrueClosure, ShenandoahUpdateRefsClosure>(worker_id, &always_true, &cl);
+    }
   }
 };
 
-void ShenandoahGC::update_roots() {
+void ShenandoahGC::update_roots(bool check_alive) {
   assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "Must be at a safepoint");
   assert(ShenandoahHeap::heap()->is_degenerated_gc_in_progress(),
          "Only for degenerated GC and full GC");
@@ -84,7 +91,7 @@ void ShenandoahGC::update_roots() {
   uint nworkers = workers->active_workers();
 
   ShenandoahRootUpdater root_updater(nworkers, ShenandoahPhaseTimings::degen_gc_update_roots);
-  ShenandoahUpdateRootsTask update_roots(&root_updater);
+  ShenandoahUpdateRootsTask update_roots(&root_updater, check_alive);
   workers->run_task(&update_roots);
 
 #if COMPILER2_OR_JVMCI

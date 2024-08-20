@@ -75,22 +75,6 @@ void ShenandoahDegenGC::entry_degenerated() {
   heap->set_degenerated_gc_in_progress(false);
 }
 
-class ShenandoahResetCSetClosure : public ShenandoahHeapRegionClosure {
-private:
-    ShenandoahHeapLock* const _lock;
-
-public:
-    ShenandoahResetCSetClosure() : _lock(ShenandoahHeap::heap()->lock()) {}
-
-    void heap_region_do(ShenandoahHeapRegion* r) {
-      if (r->is_cset()) {
-        r->make_regular_bypass();
-      }
-    }
-
-    bool is_thread_safe() { return true; }
-};
-
 void ShenandoahDegenGC::op_degenerated() {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
 
@@ -110,36 +94,10 @@ void ShenandoahDegenGC::op_degenerated() {
     // degenerated.
 
     case _degenerated_restart:
-    // If there are forwarded objects in the heap, we need to make sure the heap
-      // is fixed up before we continue.
-
+      _nesting_depth++;
       if (heap->has_forwarded_objects()) {
-        // Drop the CSet status for regions, so that we do not trash the cset after
-        // update references.
-        {
-          ShenandoahLocker locker(heap->lock());
-          ShenandoahResetCSetClosure cl;
-          heap->parallel_heap_region_iterate(&cl);
-        }
-
-        // Just do an update refs pass over the heap.
-        op_init_updaterefs();
-        op_updaterefs();
-        op_update_roots();
-      }
-
-      if (++_nesting_depth > 1) {
-        // Try again from the beginning, hoping the cycle would complete well.
-        op_degenerated();
-      } else {
-        // Not doing the restart. Make sure the heap is still good.
-        if (ShenandoahVerify) {
-          heap->verifier()->verify_after_degenerated();
-        }
-        // TODO: Report this failure.
-//        heap->shenandoah_policy()->record_success_degenerated(_abbreviated);
-//        heap->heuristics()->record_success_degenerated();
-        return;
+        // Need to fix up the roots, in case they carry forwarded objects.
+        update_roots(false);
       }
 
     case _degenerated_outside_cycle:
@@ -174,8 +132,26 @@ void ShenandoahDegenGC::op_degenerated() {
       }
       assert(!heap->cancelled_gc(), "STW mark can not OOM");
 
+      if (_nesting_depth >= 2) {
+        // We are at restart path. The marking have fixed the heap for us.
+        // The heap should look like the end of (maybe inefficient) degenerated GC.
+        heap->set_has_forwarded_objects(false);
+        if (ShenandoahVerify) {
+          heap->verifier()->verify_after_degenerated();
+        }
+
+        // TODO: Report this failure.
+        // heap->shenandoah_policy()->record_success_degenerated(_abbreviated);
+        // heap->heuristics()->record_success_degenerated();
+        return;
+      }
+
       /* Degen select Collection Set. etc. */
       op_prepare_evacuation();
+
+      if (_nesting_depth >= 1) {
+        // TODO: Put some humongous objects into collection set and compact them.
+      }
 
       op_cleanup_early();
 
@@ -374,7 +350,7 @@ void ShenandoahDegenGC::op_updaterefs() {
 void ShenandoahDegenGC::op_update_roots() {
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
 
-  update_roots();
+  update_roots(true);
 
   heap->update_heap_region_states(false /*concurrent*/);
 

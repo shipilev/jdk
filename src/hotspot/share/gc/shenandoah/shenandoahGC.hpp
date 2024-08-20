@@ -61,7 +61,7 @@ public:
   static const char* degen_point_to_string(ShenandoahDegenPoint point);
 
 protected:
-  static void update_roots();
+  static void update_roots(bool check_alive);
 };
 
 #endif  // SHARE_GC_SHENANDOAH_SHENANDOAHGC_HPP

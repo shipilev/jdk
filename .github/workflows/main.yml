@@ -190,7 +190,6 @@ jobs:
     uses: ./.github/workflows/build-linux.yml
     with:
       job-label: linux-x64-hs-zero
-      job-label: linux-x64-hs-minimal
       platform: linux-x64
       make-target: 'hotspot'
       debug-levels: '[ "debug" ]'
@@ -205,6 +204,7 @@ jobs:
     needs: prepare
     uses: ./.github/workflows/build-linux.yml
     with:
+      job-label: linux-x64-hs-minimal
       platform: linux-x64
       make-target: 'hotspot'
       debug-levels: '[ "debug" ]'

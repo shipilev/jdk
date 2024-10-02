@@ -50,12 +50,12 @@ touch "$BUILD_DIR/build-failure"
   echo ':arrow_right: To see the entire test log, click the job in the list to the left. To download logs, see the `failure-logs` [artifact above](#artifacts).'
 ) >> $GITHUB_STEP_SUMMARY
 
-# Collect hs_errs for JDKs failing during the build, e.g. CDS processing
+# Collect hs_errs for failures during the build, e.g. javac, CDS, jmod, jimage builders
+# These usually land in make/
 hs_err_files=$(ls make/hs_err*.log 2> /dev/null || true)
 
-echo "### Test output for failed tests" >> $GITHUB_STEP_SUMMARY
 for hs_err in $hs_err_files; do
-  echo '<details><summary>View HotSpot error log</summary>'
+  echo "<details><summary><b>View HotSpot error log: "$hs_err"</b></summary>"
   echo ''
   echo '```'
   echo "$hs_err:"
@@ -66,7 +66,7 @@ for hs_err in $hs_err_files; do
   echo ''
 done >> $GITHUB_STEP_SUMMARY
 
-# With many failures, the summary can easily exceed 1024 kB, the limit set by Github
+# With large hs_errs, the summary can easily exceed 1024 kB, the limit set by Github
 # Trim it down if so.
 summary_size=$(wc -c < $GITHUB_STEP_SUMMARY)
 if [[ $summary_size -gt 1000000 ]]; then
@@ -80,4 +80,4 @@ if [[ $summary_size -gt 1000000 ]]; then
   )  >> $GITHUB_STEP_SUMMARY
 fi
 
-echo ':arrow_right: To see the entire test log, click the job in the list to the left.'  >> $GITHUB_STEP_SUMMARY
+echo ':arrow_right: To see the entire build log, click the job in the list to the left.'  >> $GITHUB_STEP_SUMMARY

@@ -140,6 +140,7 @@ class Thread: public ThreadShadow {
   // Only GC and GC barrier code should access this data area.
   GCThreadLocalData _gc_data;
 
+protected:
   // Poll data is used in generated code, we want it to be a very short offset from the thread.
   SafepointMechanism::ThreadData _poll_data;
 

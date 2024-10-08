@@ -97,6 +97,9 @@ class JavaThread: public Thread {
   OopHandle      _jvmti_vthread;
   OopHandle      _scopedValueCache;
 
+  // Poll data is used in generated code, we want it to be a very short offset from the thread.
+  SafepointMechanism::ThreadData _poll_data;
+
   static OopStorage* _thread_oop_storage;
 
 #ifdef ASSERT
@@ -238,8 +241,6 @@ class JavaThread: public Thread {
   // Safepoint support
  public:                                                        // Expose _thread_state for SafeFetchInt()
   volatile JavaThreadState _thread_state;
- private:
-  SafepointMechanism::ThreadData _poll_data;
   ThreadSafepointState*          _safepoint_state;              // Holds information about a thread during a safepoint
   address                        _saved_exception_pc;           // Saved pc of instruction where last implicit exception happened
   NOT_PRODUCT(bool               _requires_cross_modify_fence;) // State used by VerifyCrossModifyFence

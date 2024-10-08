@@ -134,15 +134,15 @@ class Thread: public ThreadShadow {
     return offset;
   }
 
+protected:
+    // Poll data is used in generated code, we want it to be a very short offset from the thread.
+    SafepointMechanism::ThreadData _poll_data;
+
  private:
   // Thread local data area available to the GC. The internal
   // structure and contents of this data area is GC-specific.
   // Only GC and GC barrier code should access this data area.
   GCThreadLocalData _gc_data;
-
-protected:
-  // Poll data is used in generated code, we want it to be a very short offset from the thread.
-  SafepointMechanism::ThreadData _poll_data;
 
  public:
   static ByteSize gc_data_offset() {

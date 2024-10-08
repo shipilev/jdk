@@ -97,9 +97,6 @@ class JavaThread: public Thread {
   OopHandle      _jvmti_vthread;
   OopHandle      _scopedValueCache;
 
-  // Poll data is used in generated code, we want it to be a very short offset from the thread.
-  SafepointMechanism::ThreadData _poll_data;
-
   static OopStorage* _thread_oop_storage;
 
 #ifdef ASSERT

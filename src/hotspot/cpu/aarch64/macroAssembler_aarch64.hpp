@@ -212,7 +212,9 @@ class MacroAssembler: public Assembler {
   }
 
   inline void movw(Register Rd, Register Rn) {
-    if (Rd == sp || Rn == sp) {
+    if (Rd == Rn) {
+      // Nothing to do.
+    } else if (Rd == sp || Rn == sp) {
       Assembler::addw(Rd, Rn, 0U);
     } else {
       orrw(Rd, zr, Rn);
@@ -221,6 +223,7 @@ class MacroAssembler: public Assembler {
   inline void mov(Register Rd, Register Rn) {
     assert(Rd != r31_sp && Rn != r31_sp, "should be");
     if (Rd == Rn) {
+      // Nothing to do.
     } else if (Rd == sp || Rn == sp) {
       Assembler::add(Rd, Rn, 0U);
     } else {

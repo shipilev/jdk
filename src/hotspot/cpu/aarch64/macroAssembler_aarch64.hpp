@@ -240,51 +240,51 @@ class MacroAssembler: public Assembler {
   inline void tstw(Register Rd, uint64_t imm) { andsw(zr, Rd, imm); }
   inline void tst(Register Rd, uint64_t imm) { ands(zr, Rd, imm); }
 
-  inline void ubfm(Register Rd, Register Rn, unsigned immr, unsigned imml) {
-    if (immr == 0 && imml == 63) {
+  inline void ubfm(Register Rd, Register Rn, unsigned immr, unsigned imms) {
+    if (immr == 0 && imms == 63) {
       mov(Rd, Rn);
     } else {
-      Assembler::ubfm(Rd, Rn, immr, imml);
+      Assembler::ubfm(Rd, Rn, immr, imms);
     }
   }
 
-  inline void ubfmw(Register Rd, Register Rn, unsigned immr, unsigned imml) {
-    if (immr == 0 && imml == 31) {
+  inline void ubfmw(Register Rd, Register Rn, unsigned immr, unsigned imms) {
+    if (immr == 0 && imms == 31) {
       movw(Rd, Rn);
     } else {
-      Assembler::ubfmw(Rd, Rn, immr, imml);
+      Assembler::ubfmw(Rd, Rn, immr, imms);
     }
   }
 
-  inline void bfm(Register Rd, Register Rn, unsigned immr, unsigned imml) {
-    if (immr == 0 && imml == 63) {
+  inline void bfm(Register Rd, Register Rn, unsigned immr, unsigned imms) {
+    if (immr == 0 && imms == 63) {
       mov(Rd, Rn);
     } else {
-      Assembler::bfm(Rd, Rn, immr, imml);
+      Assembler::bfm(Rd, Rn, immr, imms);
     }
   }
 
-  inline void bfmw(Register Rd, Register Rn, unsigned immr, unsigned imml) {
-    if (immr == 0 && imml == 31) {
+  inline void bfmw(Register Rd, Register Rn, unsigned immr, unsigned imms) {
+    if (immr == 0 && imms == 31) {
       movw(Rd, Rn);
     } else {
-      Assembler::bfmw(Rd, Rn, immr, imml);
+      Assembler::bfmw(Rd, Rn, immr, imms);
     }
   }
 
-  inline void sbfm(Register Rd, Register Rn, unsigned immr, unsigned imml) {
-    if (immr == 0 && imml == 63) {
+  inline void sbfm(Register Rd, Register Rn, unsigned immr, unsigned imms) {
+    if (immr == 0 && imms == 63) {
       mov(Rd, Rn);
     } else {
-      Assembler::sbfm(Rd, Rn, immr, imml);
+      Assembler::sbfm(Rd, Rn, immr, imms);
     }
   }
 
-  inline void sbfmw(Register Rd, Register Rn, unsigned immr, unsigned imml) {
-    if (immr == 0 && imml == 31) {
+  inline void sbfmw(Register Rd, Register Rn, unsigned immr, unsigned imms) {
+    if (immr == 0 && imms == 31) {
       movw(Rd, Rn);
     } else {
-      Assembler::sbfmw(Rd, Rn, immr, imml);
+      Assembler::sbfmw(Rd, Rn, immr, imms);
     }
   }
 

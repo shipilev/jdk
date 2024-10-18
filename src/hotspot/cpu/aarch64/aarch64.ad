@@ -1659,6 +1659,11 @@ int MachCallRuntimeNode::ret_addr_offset() {
   }
 }
 
+int MachSafePointNode::ret_addr_offset() {
+  // Size of polling page load
+  return NativeInstruction::instruction_size;
+}
+
 //=============================================================================
 
 #ifndef PRODUCT
@@ -16077,16 +16082,20 @@ instruct cmpFastUnlockLightweight(rFlagsReg cr, iRegP object, iRegP box, iRegPNo
 // TODO
 // provide a near and far version of this code
 
-instruct safePoint(rFlagsReg cr, iRegP poll)
+// Note: MachSafePointNode::ret_addr_offset() should match this encoding.
+// The return would happen to safepoint poll itself, not to polling page load.
+instruct safePoint(rFlagsReg cr)
 %{
-  match(SafePoint poll);
+  match(SafePoint);
   effect(KILL cr);
 
   format %{
-    "ldrw zr, [$poll]\t# Safepoint: poll for GC"
+    "ldr rscratch1, [rthread, #polling_page_offset]\n\t"
+    "ldrw zr, [rscratch1]\t# Safepoint poll"
   %}
   ins_encode %{
-    __ read_polling_page(as_Register($poll$$reg), relocInfo::poll_type);
+    __ get_polling_page(rscratch1);
+    __ read_polling_page(rscratch1);
   %}
   ins_pipe(pipe_serial); // ins_pipe(iload_reg_mem);
 %}

@@ -609,6 +609,12 @@ int MachCallRuntimeNode::ret_addr_offset() {
   }
   return offset;
 }
+
+int MachSafePointNode::ret_addr_offset() {
+  // Size of mov rscratch1, [thread, #polling_page_offset]
+  return 4;
+}
+
 //
 // Compute padding required for nodes which need alignment
 //
@@ -12403,18 +12409,21 @@ instruct cmpFastUnlockLightweight(rFlagsReg cr, rRegP object, rax_RegP rax_reg, 
 
 // ============================================================================
 // Safepoint Instructions
-instruct safePoint_poll_tls(rFlagsReg cr, rRegP poll)
+// Note: MachSafePointNode::ret_addr_offset() should match this encoding.
+// The return would happen to safepoint poll itself, not to polling page load.
+instruct safePoint_poll_tls(rFlagsReg cr)
 %{
-  match(SafePoint poll);
-  effect(KILL cr, USE poll);
+  match(SafePoint);
+  effect(KILL cr);
 
-  format %{ "testl   rax, [$poll]\t"
-            "# Safepoint: poll for GC" %}
+  format %{ "mov     rscratch1, [thread, #polling_page_offset]\n\t"
+            "testl   rax, [rscratch1]\t# Safepoint poll" %}
   ins_cost(125);
   ins_encode %{
+    __ movptr(rscratch1, Address(r15_thread, JavaThread::polling_page_offset()));
     __ relocate(relocInfo::poll_type);
     address pre_pc = __ pc();
-    __ testl(rax, Address($poll$$Register, 0));
+    __ testl(rax, Address(rscratch1, 0));
     assert(nativeInstruction_at(pre_pc)->is_safepoint_poll(), "must emit test %%eax [reg]");
   %}
   ins_pipe(ialu_reg_mem);

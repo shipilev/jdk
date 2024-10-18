@@ -5652,22 +5652,19 @@ void MacroAssembler::bang_stack_size(Register size, Register tmp) {
 }
 
 // Move the address of the polling page into dest.
-void MacroAssembler::get_polling_page(Register dest, relocInfo::relocType rtype) {
+void MacroAssembler::get_polling_page(Register dest) {
   ldr(dest, Address(rthread, JavaThread::polling_page_offset()));
 }
 
 // Read the polling page.  The address of the polling page must
-// already be in r.
-address MacroAssembler::read_polling_page(Register r, relocInfo::relocType rtype) {
-  address mark;
+// already be in addr.
+void MacroAssembler::read_polling_page(Register addr) {
   {
     InstructionMark im(this);
-    code_section()->relocate(inst_mark(), rtype);
-    ldrw(zr, Address(r, 0));
-    mark = inst_mark();
+    code_section()->relocate(inst_mark(), relocInfo::poll_type);
+    ldrw(zr, Address(addr, 0));
   }
   verify_cross_modify_fence_not_required();
-  return mark;
 }
 
 void MacroAssembler::adrp(Register reg1, const Address &dest, uint64_t &byte_offset) {

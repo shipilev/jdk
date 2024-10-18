@@ -490,10 +490,10 @@ void LIR_Assembler::return_op(LIR_Opr result, C1SafepointPollStub* code_stub) {
 
 int LIR_Assembler::safepoint_poll(LIR_Opr tmp, CodeEmitInfo* info) {
   guarantee(info != nullptr, "Shouldn't be null");
-  __ get_polling_page(rscratch1, relocInfo::poll_type);
+  __ get_polling_page(rscratch1);
   add_debug_info_for_branch(info);  // This isn't just debug info:
                                     // it's the oop map
-  __ read_polling_page(rscratch1, relocInfo::poll_type);
+  __ read_polling_page(rscratch1);
   return __ offset();
 }
 

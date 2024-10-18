@@ -1242,6 +1242,11 @@ int MachCallRuntimeNode::ret_addr_offset() {
   }
 }
 
+int MachSafePointNode::ret_addr_offset() {
+  Unimplemented();
+  return 0;
+}
+
 //
 // Compute padding required for nodes which need alignment
 //

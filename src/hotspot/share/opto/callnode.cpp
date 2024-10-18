@@ -1450,7 +1450,7 @@ Node* SafePointNode::peek_operand(uint off) const {
 
 // Do we Match on this edge index or not?  Match no edges
 uint SafePointNode::match_edge(uint idx) const {
-  return (TypeFunc::Parms == idx);
+  return 0;
 }
 
 void SafePointNode::disconnect_from_root(PhaseIterGVN *igvn) {

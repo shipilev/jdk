@@ -2268,12 +2268,8 @@ void Parse::add_safepoint() {
   sfpnt->init_req(TypeFunc::ReturnAdr, top() );
   sfpnt->init_req(TypeFunc::FramePtr , top() );
 
-  // Create a node for the polling address
-  Node *polladr;
-  Node *thread = _gvn.transform(new ThreadLocalNode());
-  Node *polling_page_load_addr = _gvn.transform(basic_plus_adr(top(), thread, in_bytes(JavaThread::polling_page_offset())));
-  polladr = make_load(control(), polling_page_load_addr, TypeRawPtr::BOTTOM, T_ADDRESS, MemNode::unordered);
-  sfpnt->init_req(TypeFunc::Parms+0, _gvn.transform(polladr));
+  // This seems to be needed for Matcher code that wants call-like param.
+  sfpnt->init_req(TypeFunc::Parms+0, top());
 
   // Fix up the JVM State edges
   add_safepoint_edges(sfpnt);

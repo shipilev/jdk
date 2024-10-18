@@ -694,11 +694,6 @@ const RegMask &MachSafePointNode::in_RegMask( uint idx ) const {
   // _in_rms array of RegMasks.
   if( idx < TypeFunc::Parms ) return _in_rms[idx];
 
-  if (idx == TypeFunc::Parms &&
-      ideal_Opcode() == Op_SafePoint) {
-    return MachNode::in_RegMask(idx);
-  }
-
   // Values outside the domain represent debug info
   assert(in(idx)->ideal_reg() != Op_RegFlags, "flags register is not spillable");
   return *Compile::current()->matcher()->idealreg2spillmask[in(idx)->ideal_reg()];

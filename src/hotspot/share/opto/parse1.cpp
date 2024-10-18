@@ -2235,7 +2235,7 @@ void Parse::return_current(Node* value) {
 
 //------------------------------add_safepoint----------------------------------
 void Parse::add_safepoint() {
-  uint parms = TypeFunc::Parms+1;
+  uint parms = TypeFunc::Parms;
 
   // Clear out dead values from the debug info.
   kill_dead_locals();
@@ -2267,13 +2267,6 @@ void Parse::add_safepoint() {
   sfpnt->init_req(TypeFunc::Memory   , mem   );
   sfpnt->init_req(TypeFunc::ReturnAdr, top() );
   sfpnt->init_req(TypeFunc::FramePtr , top() );
-
-  // Create a node for the polling address
-  Node *polladr;
-  Node *thread = _gvn.transform(new ThreadLocalNode());
-  Node *polling_page_load_addr = _gvn.transform(basic_plus_adr(top(), thread, in_bytes(JavaThread::polling_page_offset())));
-  polladr = make_load(control(), polling_page_load_addr, TypeRawPtr::BOTTOM, T_ADDRESS, Compile::AliasIdxRaw, MemNode::unordered);
-  sfpnt->init_req(TypeFunc::Parms+0, _gvn.transform(polladr));
 
   // Fix up the JVM State edges
   add_safepoint_edges(sfpnt);

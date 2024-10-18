@@ -16020,16 +16020,18 @@ instruct cmpFastUnlockLightweight(rFlagsReg cr, iRegP object, iRegP box, iRegPNo
 // TODO
 // provide a near and far version of this code
 
-instruct safePoint(rFlagsReg cr, iRegP poll)
+instruct safePoint(rFlagsReg cr)
 %{
-  match(SafePoint poll);
+  match(SafePoint);
   effect(KILL cr);
 
   format %{
-    "ldrw zr, [$poll]\t# Safepoint: poll for GC"
+    "ldr rscratch1, [rthread, #polling_page_offset]\n\t"
+    "ldrw zr, [rscratch1]\t# Safepoint: poll for GC"
   %}
   ins_encode %{
-    __ read_polling_page(as_Register($poll$$reg), relocInfo::poll_type);
+    __ get_polling_page(rscratch1);
+    __ read_polling_page(rscratch1);
   %}
   ins_pipe(pipe_serial); // ins_pipe(iload_reg_mem);
 %}

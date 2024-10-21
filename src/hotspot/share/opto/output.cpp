@@ -1010,6 +1010,7 @@ void PhaseOutput::Process_OopMap_Node(MachNode *mach, int current_offset) {
   // Add the safepoint in the DebugInfoRecorder
   if( !mach->is_MachCall() ) {
     mcall = nullptr;
+    safepoint_pc_offset += sfn->ret_addr_offset();
     C->debug_info()->add_safepoint(safepoint_pc_offset, sfn->_oop_map);
   } else {
     mcall = mach->as_MachCall();

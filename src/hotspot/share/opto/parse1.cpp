@@ -2235,7 +2235,7 @@ void Parse::return_current(Node* value) {
 
 //------------------------------add_safepoint----------------------------------
 void Parse::add_safepoint() {
-  uint parms = TypeFunc::Parms;
+  uint parms = TypeFunc::Parms+1;
 
   // Clear out dead values from the debug info.
   kill_dead_locals();
@@ -2267,6 +2267,9 @@ void Parse::add_safepoint() {
   sfpnt->init_req(TypeFunc::Memory   , mem   );
   sfpnt->init_req(TypeFunc::ReturnAdr, top() );
   sfpnt->init_req(TypeFunc::FramePtr , top() );
+
+  // This seems to be needed for Matcher code that wants call-like param.
+  sfpnt->init_req(TypeFunc::Parms+0, top());
 
   // Fix up the JVM State edges
   add_safepoint_edges(sfpnt);

@@ -12391,8 +12391,8 @@ instruct cmpFastUnlockLightweight(rFlagsReg cr, rRegP object, rax_RegP rax_reg, 
 
 // ============================================================================
 // Safepoint Instructions
-// If this encoding changes, MachSafePointNode::ret_addr_offset() should be changed as well:
-// it should point to the actual safepoint poll.
+// Note: MachSafePointNode::ret_addr_offset() should match this encoding.
+// The return would happen to safepoint poll itself, not to polling page load.
 instruct safePoint_poll_tls(rax_RegP rax_reg, rFlagsReg cr)
 %{
   match(SafePoint);

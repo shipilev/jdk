@@ -155,7 +155,8 @@ jobs:
     steps:
       - name: 'Checkout the scripts'
         uses: actions/checkout@v4
-        sparse-checkout: .github
+        with:
+          sparse-checkout: .github
 
       - name: 'Get or build JTReg'
         id: jtreg

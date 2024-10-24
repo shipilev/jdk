@@ -55,7 +55,7 @@ jobs:
   ###
 
   select:
-    name: 'Select platforms'
+    name: 'Prepare the run'
     runs-on: ubuntu-22.04
     env:
       # List of platforms to exclude by default
@@ -73,7 +73,21 @@ jobs:
       docs: ${{ steps.include.outputs.docs }}
 
     steps:
-        # This function must be inlined in main.yml, or we'd be forced to checkout the repo
+      - name: 'Checkout the scripts'
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout:
+            - .github
+            - make/conf/github-actions.conf
+
+      - name: 'Get or build JTReg'
+        id: jtreg
+        uses: ./.github/actions/get-jtreg
+        with:
+          fail-on-cache-miss: false
+
+      # TODO: Now that we are checking out the repo scripts, we can put the following code
+      # into a separate file
       - name: 'Check what jobs to run'
         id: include
         run: |
@@ -144,35 +158,12 @@ jobs:
           echo "docs=$(check_platform docs)" >> $GITHUB_OUTPUT
 
   ###
-  ### Build and cache JTReg
-  ###
-
-  prepare-jtreg:
-    name: 'Prepare JTReg'
-    needs:
-      - select
-    runs-on: ubuntu-22.04
-    steps:
-      - name: 'Checkout the scripts'
-        uses: actions/checkout@v4
-        with:
-          sparse-checkout: .github
-
-      - name: 'Get or build JTReg'
-        id: jtreg
-        uses: ./.github/actions/get-jtreg
-        with:
-          fail-on-cache-miss: false
-
-  ###
   ### Build jobs
   ###
 
   build-linux-x64:
     name: linux-x64
-    needs:
-      - select
-      - prepare-jtreg
+    needs: select
     uses: ./.github/workflows/build-linux.yml
     with:
       platform: linux-x64
@@ -183,9 +174,7 @@ jobs:
 
   build-linux-x86-hs:
     name: linux-x86-hs
-    needs:
-      - select
-      - prepare-jtreg
+    needs: select
     uses: ./.github/workflows/build-linux.yml
     with:
       platform: linux-x86
@@ -203,9 +192,7 @@ jobs:
 
   build-linux-x64-hs-nopch:
     name: linux-x64-hs-nopch
-    needs:
-      - select
-      - prepare-jtreg
+    needs: select
     uses: ./.github/workflows/build-linux.yml
     with:
       platform: linux-x64
@@ -219,9 +206,7 @@ jobs:
 
   build-linux-x64-hs-zero:
     name: linux-x64-hs-zero
-    needs:
-      - select
-      - prepare-jtreg
+    needs: select
     uses: ./.github/workflows/build-linux.yml
     with:
       platform: linux-x64
@@ -235,9 +220,7 @@ jobs:
 
   build-linux-x64-hs-minimal:
     name: linux-x64-hs-minimal
-    needs:
-      - select
-      - prepare-jtreg
+    needs: select
     uses: ./.github/workflows/build-linux.yml
     with:
       platform: linux-x64
@@ -251,9 +234,7 @@ jobs:
 
   build-linux-x64-hs-optimized:
     name: linux-x64-hs-optimized
-    needs:
-      - select
-      - prepare-jtreg
+    needs: select
     uses: ./.github/workflows/build-linux.yml
     with:
       platform: linux-x64
@@ -268,9 +249,7 @@ jobs:
 
   build-linux-cross-compile:
     name: linux-cross-compile
-    needs:
-      - select
-      - prepare-jtreg
+    needs: select
     uses: ./.github/workflows/build-cross-compile.yml
     with:
       gcc-major-version: '10'
@@ -280,9 +259,7 @@ jobs:
 
   build-alpine-linux-x64:
     name: alpine-linux-x64
-    needs:
-      - select
-      - prepare-jtreg
+    needs: select
     uses: ./.github/workflows/build-alpine-linux.yml
     with:
       platform: alpine-linux-x64
@@ -292,9 +269,7 @@ jobs:
 
   build-macos-x64:
     name: macos-x64
-    needs:
-      - select
-      - prepare-jtreg
+    needs: select
     uses: ./.github/workflows/build-macos.yml
     with:
       platform: macos-x64
@@ -306,9 +281,7 @@ jobs:
 
   build-macos-aarch64:
     name: macos-aarch64
-    needs:
-      - select
-      - prepare-jtreg
+    needs: select
     uses: ./.github/workflows/build-macos.yml
     with:
       platform: macos-aarch64
@@ -320,9 +293,7 @@ jobs:
 
   build-windows-x64:
     name: windows-x64
-    needs:
-      - select
-      - prepare-jtreg
+    needs: select
     uses: ./.github/workflows/build-windows.yml
     with:
       platform: windows-x64
@@ -334,9 +305,7 @@ jobs:
 
   build-windows-aarch64:
     name: windows-aarch64
-    needs:
-      - select
-      - prepare-jtreg
+    needs: select
     uses: ./.github/workflows/build-windows.yml
     with:
       platform: windows-aarch64
@@ -350,9 +319,7 @@ jobs:
 
   build-docs:
     name: docs
-    needs:
-      - select
-      - prepare-jtreg
+    needs: select
     uses: ./.github/workflows/build-linux.yml
     with:
       platform: linux-x64
@@ -374,7 +341,6 @@ jobs:
     name: linux-x64
     needs:
       - build-linux-x64
-      - prepare-jtreg
     uses: ./.github/workflows/test.yml
     with:
       platform: linux-x64
@@ -385,7 +351,6 @@ jobs:
     name: macos-x64
     needs:
       - build-macos-x64
-      - prepare-jtreg
     uses: ./.github/workflows/test.yml
     with:
       platform: macos-x64
@@ -396,7 +361,6 @@ jobs:
     name: macos-aarch64
     needs:
       - build-macos-aarch64
-      - prepare-jtreg
     uses: ./.github/workflows/test.yml
     with:
       platform: macos-aarch64
@@ -407,7 +371,6 @@ jobs:
     name: windows-x64
     needs:
       - build-windows-x64
-      - prepare-jtreg
     uses: ./.github/workflows/test.yml
     with:
       platform: windows-x64

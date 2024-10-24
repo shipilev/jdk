@@ -147,7 +147,7 @@ jobs:
   ### Resolve external dependencies once
   ###
   deps:
-    name: deps
+    name: 'Resolve external dependencies'
     needs:
       - select
     runs-on: ubuntu-22.04

@@ -144,26 +144,24 @@ jobs:
           echo "docs=$(check_platform docs)" >> $GITHUB_OUTPUT
 
   ###
-  ### Resolve external dependencies once
+  ### Build and cache JTReg
   ###
-  deps:
-    name: 'Resolve external dependencies'
+
+  prepare-jtreg:
+    name: 'Prepare JTReg'
     needs:
       - select
     runs-on: ubuntu-22.04
     steps:
-      - name: 'Checkout the JDK source'
+      - name: 'Checkout the scripts'
         uses: actions/checkout@v4
+        sparse-checkout: .github
 
-      - name: 'Get JTReg'
+      - name: 'Get or build JTReg'
         id: jtreg
         uses: ./.github/actions/get-jtreg
         with:
           fail-on-cache-miss: false
-
-      - name: 'Get GTest'
-        id: gtest
-        uses: ./.github/actions/get-gtest
 
   ###
   ### Build jobs
@@ -173,7 +171,7 @@ jobs:
     name: linux-x64
     needs:
       - select
-      - deps
+      - prepare-jtreg
     uses: ./.github/workflows/build-linux.yml
     with:
       platform: linux-x64
@@ -186,7 +184,7 @@ jobs:
     name: linux-x86-hs
     needs:
       - select
-      - deps
+      - prepare-jtreg
     uses: ./.github/workflows/build-linux.yml
     with:
       platform: linux-x86
@@ -206,7 +204,7 @@ jobs:
     name: linux-x64-hs-nopch
     needs:
       - select
-      - deps
+      - prepare-jtreg
     uses: ./.github/workflows/build-linux.yml
     with:
       platform: linux-x64
@@ -222,7 +220,7 @@ jobs:
     name: linux-x64-hs-zero
     needs:
       - select
-      - deps
+      - prepare-jtreg
     uses: ./.github/workflows/build-linux.yml
     with:
       platform: linux-x64
@@ -238,7 +236,7 @@ jobs:
     name: linux-x64-hs-minimal
     needs:
       - select
-      - deps
+      - prepare-jtreg
     uses: ./.github/workflows/build-linux.yml
     with:
       platform: linux-x64
@@ -254,7 +252,7 @@ jobs:
     name: linux-x64-hs-optimized
     needs:
       - select
-      - deps
+      - prepare-jtreg
     uses: ./.github/workflows/build-linux.yml
     with:
       platform: linux-x64
@@ -271,7 +269,7 @@ jobs:
     name: linux-cross-compile
     needs:
       - select
-      - deps
+      - prepare-jtreg
     uses: ./.github/workflows/build-cross-compile.yml
     with:
       gcc-major-version: '10'
@@ -283,7 +281,7 @@ jobs:
     name: alpine-linux-x64
     needs:
       - select
-      - deps
+      - prepare-jtreg
     uses: ./.github/workflows/build-alpine-linux.yml
     with:
       platform: alpine-linux-x64
@@ -295,7 +293,7 @@ jobs:
     name: macos-x64
     needs:
       - select
-      - deps
+      - prepare-jtreg
     uses: ./.github/workflows/build-macos.yml
     with:
       platform: macos-x64
@@ -309,7 +307,7 @@ jobs:
     name: macos-aarch64
     needs:
       - select
-      - deps
+      - prepare-jtreg
     uses: ./.github/workflows/build-macos.yml
     with:
       platform: macos-aarch64
@@ -323,7 +321,7 @@ jobs:
     name: windows-x64
     needs:
       - select
-      - deps
+      - prepare-jtreg
     uses: ./.github/workflows/build-windows.yml
     with:
       platform: windows-x64
@@ -337,7 +335,7 @@ jobs:
     name: windows-aarch64
     needs:
       - select
-      - deps
+      - prepare-jtreg
     uses: ./.github/workflows/build-windows.yml
     with:
       platform: windows-aarch64
@@ -353,7 +351,7 @@ jobs:
     name: docs
     needs:
       - select
-      - deps
+      - prepare-jtreg
     uses: ./.github/workflows/build-linux.yml
     with:
       platform: linux-x64
@@ -375,7 +373,7 @@ jobs:
     name: linux-x64
     needs:
       - build-linux-x64
-      - deps
+      - prepare-jtreg
     uses: ./.github/workflows/test.yml
     with:
       platform: linux-x64
@@ -386,7 +384,7 @@ jobs:
     name: macos-x64
     needs:
       - build-macos-x64
-      - deps
+      - prepare-jtreg
     uses: ./.github/workflows/test.yml
     with:
       platform: macos-x64
@@ -397,7 +395,7 @@ jobs:
     name: macos-aarch64
     needs:
       - build-macos-aarch64
-      - deps
+      - prepare-jtreg
     uses: ./.github/workflows/test.yml
     with:
       platform: macos-aarch64
@@ -408,7 +406,7 @@ jobs:
     name: windows-x64
     needs:
       - build-windows-x64
-      - deps
+      - prepare-jtreg
     uses: ./.github/workflows/test.yml
     with:
       platform: windows-x64

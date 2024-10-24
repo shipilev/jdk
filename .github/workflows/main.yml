@@ -150,6 +150,7 @@ jobs:
     name: deps
     needs:
       - select
+    runs-on: ubuntu-22.04
     steps:
       - name: 'Get JTReg'
         id: jtreg

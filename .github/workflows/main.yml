@@ -148,7 +148,9 @@ jobs:
   ###
   deps:
     name: deps
-    step:
+    needs:
+      - select
+    steps:
       - name: 'Get JTReg'
         id: jtreg
         uses: ./.github/actions/get-jtreg

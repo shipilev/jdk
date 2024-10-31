@@ -3394,6 +3394,36 @@ void java_lang_reflect_AccessibleObject::set_override(oop reflect, jboolean valu
   reflect->bool_field_put(_override_offset, (int) value);
 }
 
+oop java_util_ArrayList::new_instance(TRAPS) {
+  JavaCallArguments args(0);
+  Handle h = JavaCalls::construct_new_instance(vmClasses::ArrayList_klass(),
+                                               vmSymbols::void_method_signature(),
+                                               &args,
+                                               THREAD);
+  return h();
+}
+
+oop java_util_concurrent_ConcurrentHashMap::new_instance(TRAPS) {
+  JavaCallArguments args(0);
+  Handle h = JavaCalls::construct_new_instance(vmClasses::ConcurrentHashMap_klass(),
+                                               vmSymbols::void_method_signature(),
+                                               &args,
+                                               THREAD);
+  return h();
+}
+
+void java_util_Map::clear(oop oop, TRAPS) {
+  assert(oop->klass()->is_subtype_of(vmClasses::Map_klass()), "Sanity");
+  Handle map_oop(THREAD, oop);
+  JavaValue result(T_VOID);
+  JavaCalls::call_interface(&result,
+                          map_oop,
+                          vmClasses::Map_klass(),
+                          vmSymbols::clear_name(),
+                          vmSymbols::void_method_signature(),
+                          THREAD);
+}
+
 // java_lang_reflect_Method
 
 int java_lang_reflect_Method::_clazz_offset;
@@ -4744,7 +4774,11 @@ void java_lang_invoke_ConstantCallSite::serialize_offsets(SerializeClosure* f) {
 // Support for java_lang_ClassLoader
 
 int  java_lang_ClassLoader::_loader_data_offset;
-int  java_lang_ClassLoader::_parallelCapable_offset;
+int  java_lang_ClassLoader::_parallelLockMap_offset;
+int  java_lang_ClassLoader::_packages_offset;
+int  java_lang_ClassLoader::_package2certs_offset;
+int  java_lang_ClassLoader::_classes_offset;
+int  java_lang_ClassLoader::_classLoaderValueMap_offset;
 int  java_lang_ClassLoader::_name_offset;
 int  java_lang_ClassLoader::_nameAndId_offset;
 int  java_lang_ClassLoader::_unnamedModule_offset;
@@ -4769,7 +4803,11 @@ void java_lang_ClassLoader::release_set_loader_data(oop loader, ClassLoaderData*
 }
 
 #define CLASSLOADER_FIELDS_DO(macro) \
-  macro(_parallelCapable_offset, k1, "parallelLockMap",      concurrenthashmap_signature, false); \
+  macro(_parallelLockMap_offset, k1, "parallelLockMap",      concurrenthashmap_signature, false); \
+  macro(_packages_offset,        k1, "packages",             concurrenthashmap_signature, false); \
+  macro(_package2certs_offset,   k1, "package2certs",        concurrenthashmap_signature, false); \
+  macro(_classes_offset,         k1, "classes",              arraylist_signature, false); \
+  macro(_classLoaderValueMap_offset, k1, "classLoaderValueMap", concurrenthashmap_signature, false); \
   macro(_name_offset,            k1, vmSymbols::name_name(), string_signature, false); \
   macro(_nameAndId_offset,       k1, "nameAndId",            string_signature, false); \
   macro(_unnamedModule_offset,   k1, "unnamedModule",        module_signature, false); \
@@ -4842,8 +4880,19 @@ bool java_lang_ClassLoader::is_instance(oop obj) {
 // based on non-null field
 // Written to by java.lang.ClassLoader, vm only reads this field, doesn't set it
 bool java_lang_ClassLoader::parallelCapable(oop class_loader) {
-  assert(_parallelCapable_offset != 0, "offsets should have been initialized");
-  return (class_loader->obj_field(_parallelCapable_offset) != nullptr);
+  assert(_parallelLockMap_offset != 0, "offsets should have been initialized");
+  return (class_loader->obj_field(_parallelLockMap_offset) != nullptr);
+}
+
+void java_lang_ClassLoader::reset_shared_states(oop loader) {
+  JavaThread* THREAD = JavaThread::current();
+  if (loader->obj_field(_parallelLockMap_offset) != nullptr) {
+    loader->obj_field_put(_parallelLockMap_offset, java_util_concurrent_ConcurrentHashMap::new_instance(THREAD));
+  }
+  loader->obj_field_put(_packages_offset, java_util_concurrent_ConcurrentHashMap::new_instance(THREAD));
+  loader->obj_field_put(_package2certs_offset, java_util_concurrent_ConcurrentHashMap::new_instance(THREAD));
+  loader->obj_field_put(_classes_offset, java_util_ArrayList::new_instance(THREAD));
+  loader->obj_field_put(_classLoaderValueMap_offset, nullptr);
 }
 
 bool java_lang_ClassLoader::is_trusted_loader(oop loader) {
@@ -4858,6 +4907,57 @@ bool java_lang_ClassLoader::is_trusted_loader(oop loader) {
 oop java_lang_ClassLoader::unnamedModule(oop loader) {
   assert(is_instance(loader), "loader must be oop");
   return loader->obj_field(_unnamedModule_offset);
+}
+
+int  java_security_SecureClassLoader::_pdcache_offset;
+
+#define SECURE_CLASSLOADER_FIELDS_DO(macro) \
+  macro(_pdcache_offset,         k1, "pdcache",      map_signature, false);
+
+void java_security_SecureClassLoader::compute_offsets() {
+  InstanceKlass* k1 = vmClasses::SecureClassLoader_klass();
+  SECURE_CLASSLOADER_FIELDS_DO(FIELD_COMPUTE_OFFSET);
+}
+
+#if INCLUDE_CDS
+void java_security_SecureClassLoader::serialize_offsets(SerializeClosure* f) {
+  SECURE_CLASSLOADER_FIELDS_DO(FIELD_SERIALIZE_OFFSET);
+}
+#endif
+
+void java_security_SecureClassLoader::reset_shared_states(oop loader) {
+  assert(_pdcache_offset != 0, "Must be initialized");
+  JavaThread* THREAD = JavaThread::current();
+  oop oop = loader->obj_field(_pdcache_offset);
+  java_util_Map::clear(oop, THREAD);
+}
+
+int  jdk_internal_loader_BuiltinClassLoader::_ucp_offset;
+int  jdk_internal_loader_BuiltinClassLoader::_resource_cache_offset;
+int  jdk_internal_loader_BuiltinClassLoader::_module_to_reader_offset;
+
+#define BUILTIN_CLASSLOADER_FIELDS_DO(macro) \
+  macro(_ucp_offset,                  k1, "ucp",              jdk_internal_loader_URLClassPath_signature, false); \
+  macro(_resource_cache_offset,       k1, "resourceCache",    java_lang_ref_SoftReference_signature,      false); \
+  macro(_module_to_reader_offset,     k1, "moduleToReader",   map_signature,                              false);
+
+void jdk_internal_loader_BuiltinClassLoader::compute_offsets() {
+  InstanceKlass* k1 = vmClasses::jdk_internal_loader_BuiltinClassLoader_klass();
+  BUILTIN_CLASSLOADER_FIELDS_DO(FIELD_COMPUTE_OFFSET);
+}
+
+#if INCLUDE_CDS
+void jdk_internal_loader_BuiltinClassLoader::serialize_offsets(SerializeClosure* f) {
+  BUILTIN_CLASSLOADER_FIELDS_DO(FIELD_SERIALIZE_OFFSET);
+}
+#endif
+
+void jdk_internal_loader_BuiltinClassLoader::reset_shared_states(oop loader) {
+  assert(_ucp_offset != 0, "Must be initialized");
+  JavaThread* THREAD = JavaThread::current();
+  loader->obj_field_put(_ucp_offset, nullptr);
+  loader->obj_field_put(_resource_cache_offset, nullptr);
+  java_util_Map::clear(loader->obj_field(_module_to_reader_offset), THREAD);
 }
 
 // Support for java_lang_System
@@ -5413,6 +5513,8 @@ void java_lang_InternalError::serialize_offsets(SerializeClosure* f) {
   f(jdk_internal_misc_UnsafeConstants) \
   f(java_lang_boxing_object) \
   f(vector_VectorPayload) \
+  f(java_security_SecureClassLoader) \
+  f(jdk_internal_loader_BuiltinClassLoader) \
   //end
 
 #define BASIC_JAVA_CLASSES_DO(f) \

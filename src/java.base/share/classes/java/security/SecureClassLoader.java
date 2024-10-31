@@ -224,11 +224,4 @@ public class SecureClassLoader extends ClassLoader {
                     && cs.matchCerts(other.cs, true);
         }
     }
-
-    /**
-     * Called by the VM, during -Xshare:dump
-     */
-    private void resetArchivedStates() {
-        pdcache.clear();
-    }
 }

@@ -165,23 +165,16 @@ unsigned HeapShared::oop_hash(oop const& p) {
 
 static void reset_states(oop obj, TRAPS) {
   Handle h_obj(THREAD, obj);
-  InstanceKlass* klass = InstanceKlass::cast(obj->klass());
-  TempNewSymbol method_name = SymbolTable::new_symbol("resetArchivedStates");
-  Symbol* method_sig = vmSymbols::void_method_signature();
+  Klass* klass = obj->klass();
 
-  while (klass != nullptr) {
-    Method* method = klass->find_method(method_name, method_sig);
-    if (method != nullptr) {
-      assert(method->is_private(), "must be");
-      if (log_is_enabled(Debug, cds)) {
-        ResourceMark rm(THREAD);
-        log_debug(cds)("  calling %s", method->name_and_sig_as_C_string());
-      }
-      JavaValue result(T_VOID);
-      JavaCalls::call_special(&result, h_obj, klass,
-                              method_name, method_sig, CHECK);
-    }
-    klass = klass->java_super();
+  if (java_lang_ClassLoader::is_subclass(klass)) {
+    java_lang_ClassLoader::reset_shared_states(obj);
+  }
+  if (java_security_SecureClassLoader::is_subclass(klass)) {
+    java_security_SecureClassLoader::reset_shared_states(obj);
+  }
+  if (jdk_internal_loader_BuiltinClassLoader::is_subclass(klass)) {
+    jdk_internal_loader_BuiltinClassLoader::reset_shared_states(obj);
   }
 }
 

@@ -716,6 +716,20 @@ class java_lang_reflect_AccessibleObject: AllStatic {
   friend class JavaClasses;
 };
 
+class java_util_ArrayList : AllStatic {
+public:
+  static oop new_instance(TRAPS);
+};
+
+class java_util_Map : AllStatic {
+public:
+  static void clear(oop oop, TRAPS);
+};
+
+class java_util_concurrent_ConcurrentHashMap : AllStatic {
+public:
+  static oop new_instance(TRAPS);
+};
 
 // Interface to java.lang.reflect.Method objects
 
@@ -1478,7 +1492,11 @@ class java_lang_ClassLoader : AllStatic {
  private:
   static int _loader_data_offset;
   static int _parent_offset;
-  static int _parallelCapable_offset;
+  static int _parallelLockMap_offset;
+  static int _packages_offset;
+  static int _package2certs_offset;
+  static int _classes_offset;
+  static int _classLoaderValueMap_offset;
   static int _name_offset;
   static int _nameAndId_offset;
   static int _unnamedModule_offset;
@@ -1503,6 +1521,8 @@ class java_lang_ClassLoader : AllStatic {
   // Support for parallelCapable field
   static bool parallelCapable(oop the_class_mirror);
 
+  static void reset_shared_states(oop loader);
+
   static bool is_trusted_loader(oop loader);
 
   // Testers
@@ -1517,6 +1537,35 @@ class java_lang_ClassLoader : AllStatic {
   friend class JavaClasses;
 };
 
+class java_security_SecureClassLoader : AllStatic {
+private:
+  static int _pdcache_offset;
+
+public:
+  static void compute_offsets();
+  static void serialize_offsets(SerializeClosure* f) NOT_CDS_RETURN;
+
+  static bool is_subclass(Klass* klass) {
+    return klass->is_subclass_of(vmClasses::SecureClassLoader_klass());
+  }
+  static void reset_shared_states(oop loader);
+};
+
+class jdk_internal_loader_BuiltinClassLoader : AllStatic {
+private:
+  static int _ucp_offset;
+  static int _resource_cache_offset;
+  static int _module_to_reader_offset;
+
+public:
+  static void compute_offsets();
+  static void serialize_offsets(SerializeClosure* f) NOT_CDS_RETURN;
+
+  static bool is_subclass(Klass* klass) {
+    return klass->is_subclass_of(vmClasses::jdk_internal_loader_BuiltinClassLoader_klass());
+  }
+  static void reset_shared_states(oop loader);
+};
 
 // Interface to java.lang.System objects
 

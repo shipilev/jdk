@@ -976,12 +976,4 @@ public class BuiltinClassLoader
         return false;
     }
 
-    // Called from VM only, during -Xshare:dump
-    private void resetArchivedStates() {
-        ucp = null;
-        resourceCache = null;
-        if (!moduleToReader.isEmpty()) {
-            moduleToReader.clear();
-        }
-    }
 }

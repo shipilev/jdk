@@ -163,6 +163,28 @@ static BasicType runtime_type_from(JavaValue* result) {
   }
 }
 
+// ============ Interface calls ============
+
+void JavaCalls::call_interface(JavaValue* result, Klass* spec_intf, Symbol* name, Symbol* signature, JavaCallArguments* args, TRAPS) {
+  CallInfo callinfo;
+  Handle receiver = args->receiver();
+  Klass* recvrKlass = receiver.is_null() ? (Klass*)nullptr : receiver->klass();
+  LinkInfo link_info(spec_intf, name, signature);
+  LinkResolver::resolve_interface_call(
+          callinfo, receiver, recvrKlass, link_info, true, CHECK);
+  methodHandle method(THREAD, callinfo.selected_method());
+  assert(method.not_null(), "should have thrown exception");
+
+  // Invoke the method
+  JavaCalls::call(result, method, args, CHECK);
+}
+
+void JavaCalls::call_interface(JavaValue* result, Handle receiver, Klass* spec_intf, Symbol* name, Symbol* signature, TRAPS) {
+  JavaCallArguments args(receiver);
+  call_interface(result, spec_intf, name, signature, &args, CHECK);
+}
+
+
 // ============ Virtual calls ============
 
 void JavaCalls::call_virtual(JavaValue* result, Klass* spec_klass, Symbol* name, Symbol* signature, JavaCallArguments* args, TRAPS) {

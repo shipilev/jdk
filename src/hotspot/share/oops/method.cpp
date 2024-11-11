@@ -864,7 +864,16 @@ bool Method::is_object_initializer() const {
 }
 
 bool Method::needs_clinit_barrier() const {
-  return is_static() && !method_holder()->is_initialized();
+  if (!method_holder()->is_initialized()) {
+#ifdef ASSERT
+    ResourceMark rm;
+    assert(is_static(), "Non-static method needs clinit barrier? %s::%s",
+           method_holder()->name()->as_klass_external_name(),
+           name()->as_klass_external_name());
+#endif
+    return true;
+  }
+  return false;
 }
 
 objArrayHandle Method::resolved_checked_exceptions_impl(Method* method, TRAPS) {

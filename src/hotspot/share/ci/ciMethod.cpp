@@ -942,7 +942,7 @@ bool ciMethod::is_ignored_by_security_stack_walk() const {
 //
 bool ciMethod::needs_clinit_barrier() const {
   check_is_loaded();
-  return is_static() && !holder()->is_initialized();
+  return get_Method()->needs_clinit_barrier();
 }
 
 // ------------------------------------------------------------------

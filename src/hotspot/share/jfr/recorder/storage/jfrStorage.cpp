@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2023, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2024, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -291,6 +291,7 @@ void JfrStorage::register_full(BufferPtr buffer, Thread* thread) {
       JavaThread* jt = JavaThread::cast(thread);
       if (jt->thread_state() == _thread_in_native) {
         // Transition java thread to vm so it can issue a notify.
+        MACOS_AARCH64_ONLY(ThreadWXEnable __wx(WXWrite, jt));
         ThreadInVMfromNative transition(jt);
         _post_box.post(MSG_FULLBUFFER);
         return;

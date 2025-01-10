@@ -612,7 +612,7 @@ int MachCallRuntimeNode::ret_addr_offset() {
 
 int MachSafePointNode::ret_addr_offset() {
   // Size of mov rscratch1, [thread, #polling_page_offset]
-  return 4;
+  return 4; // FIXME: Is this correct?
 }
 
 //
@@ -12420,6 +12420,7 @@ instruct safePoint_poll_tls(rFlagsReg cr)
             "testl   rax, [rscratch1]\t# Safepoint poll" %}
   ins_cost(125);
   ins_encode %{
+    // FIXME: Can we really use rscratch1 here?
     __ movptr(rscratch1, Address(r15_thread, JavaThread::polling_page_offset()));
     __ relocate(relocInfo::poll_type);
     address pre_pc = __ pc();

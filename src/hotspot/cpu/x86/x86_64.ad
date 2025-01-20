@@ -611,8 +611,8 @@ int MachCallRuntimeNode::ret_addr_offset() {
 }
 
 int MachSafePointNode::ret_addr_offset() {
-  // Size of mov rscratch1, [thread, #polling_page_offset]
-  return 4; // FIXME: Is this correct?
+  // Size of mov rax, [thread, #polling_page_offset]
+  return 4;
 }
 
 //
@@ -12411,20 +12411,19 @@ instruct cmpFastUnlockLightweight(rFlagsReg cr, rRegP object, rax_RegP rax_reg, 
 // Safepoint Instructions
 // Note: MachSafePointNode::ret_addr_offset() should match this encoding.
 // The return would happen to safepoint poll itself, not to polling page load.
-instruct safePoint_poll_tls(rFlagsReg cr)
+instruct safePoint_poll_tls(rFlagsReg cr, rax_RegP rax_reg)
 %{
   match(SafePoint);
-  effect(KILL cr);
+  effect(KILL cr, KILL rax_reg);
 
-  format %{ "mov     rscratch1, [thread, #polling_page_offset]\n\t"
-            "testl   rax, [rscratch1]\t# Safepoint poll" %}
+  format %{ "mov     rax, [thread, #polling_page_offset]\n\t"
+            "testl   rax, [rax]\t# Safepoint poll" %}
   ins_cost(125);
   ins_encode %{
-    // FIXME: Can we really use rscratch1 here?
-    __ movptr(rscratch1, Address(r15_thread, JavaThread::polling_page_offset()));
+    __ movptr(rax, Address(r15_thread, JavaThread::polling_page_offset()));
     __ relocate(relocInfo::poll_type);
     address pre_pc = __ pc();
-    __ testl(rax, Address(rscratch1, 0));
+    __ testl(rax, Address(rax, 0));
     assert(nativeInstruction_at(pre_pc)->is_safepoint_poll(), "must emit test %%eax [reg]");
   %}
   ins_pipe(ialu_reg_mem);

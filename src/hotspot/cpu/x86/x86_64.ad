@@ -376,6 +376,9 @@ reg_class ptr_rbp_reg(RBP, RBP_H);
 // Singleton class for RDI pointer register
 reg_class ptr_rdi_reg(RDI, RDI_H);
 
+// Singleton class for R10 pointer register
+reg_class ptr_r10_reg(R10, R10_H);
+
 // Singleton class for stack pointer
 reg_class ptr_rsp_reg(RSP, RSP_H);
 
@@ -2584,6 +2587,7 @@ operand any_RegP()
   match(rdi_RegP);
   match(rsi_RegP);
   match(rbp_RegP);
+  match(r10_RegP);
   match(r15_RegP);
   match(rRegP);
 
@@ -2599,6 +2603,7 @@ operand rRegP()
   match(rbx_RegP);
   match(rdi_RegP);
   match(rsi_RegP);
+  match(r10_RegP);
   match(rbp_RegP);  // See Q&A below about
   match(r15_RegP);  // r15_RegP and rbp_RegP.
 
@@ -2698,6 +2703,16 @@ operand rbp_RegP()
 operand rdi_RegP()
 %{
   constraint(ALLOC_IN_RC(ptr_rdi_reg));
+  match(RegP);
+  match(rRegP);
+
+  format %{ %}
+  interface(REG_INTER);
+%}
+
+operand r10_RegP()
+%{
+  constraint(ALLOC_IN_RC(ptr_r10_reg));
   match(RegP);
   match(rRegP);
 
@@ -12411,19 +12426,20 @@ instruct cmpFastUnlockLightweight(rFlagsReg cr, rRegP object, rax_RegP rax_reg, 
 // Safepoint Instructions
 // Note: MachSafePointNode::ret_addr_offset() should match this encoding.
 // The return would happen to safepoint poll itself, not to polling page load.
-instruct safePoint_poll_tls(rFlagsReg cr, rax_RegP rax_reg)
+// r10 is rscratch1.
+instruct safePoint_poll_tls(rFlagsReg cr, r10_RegP scratch_reg)
 %{
   match(SafePoint);
-  effect(KILL cr, KILL rax_reg);
+  effect(KILL cr, KILL scratch_reg);
 
-  format %{ "mov     rax, [thread, #polling_page_offset]\n\t"
-            "testl   rax, [rax]\t# Safepoint poll" %}
+  format %{ "mov     $scratch_reg, [thread, #polling_page_offset]\n\t"
+            "testl   rax, [$scratch_reg]\t# Safepoint poll" %}
   ins_cost(125);
   ins_encode %{
-    __ movptr(rax, Address(r15_thread, JavaThread::polling_page_offset()));
+    __ movptr($scratch_reg$$Register, Address(r15_thread, JavaThread::polling_page_offset()));
     __ relocate(relocInfo::poll_type);
     address pre_pc = __ pc();
-    __ testl(rax, Address(rax, 0));
+    __ testl(rax, Address($scratch_reg$$Register, 0));
     assert(nativeInstruction_at(pre_pc)->is_safepoint_poll(), "must emit test %%eax [reg]");
   %}
   ins_pipe(ialu_reg_mem);

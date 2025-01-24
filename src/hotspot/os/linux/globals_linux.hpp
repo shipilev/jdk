@@ -92,6 +92,9 @@
   product(bool, PrintMemoryMapAtExit, false, DIAGNOSTIC,                \
           "Print an annotated memory map at exit")                      \
                                                                         \
+  product(bool, MlockallMemory, false, EXPERIMENTAL,                    \
+          "Use mlockall(2) to lock all JVM memory in RAM.")             \
+                                                                        \
 // end of RUNTIME_OS_FLAGS
 
 //

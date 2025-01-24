@@ -1315,6 +1315,13 @@ void os::Posix::init(void) {
   }
 
   initial_time_count = javaTimeNanos();
+
+  if (MlockallMemory) {
+    int status = mlockall(MCL_CURRENT | MCL_FUTURE);
+    if (status != 0) {
+      warning("Unable to lock all memory. mlockall returned %d.", status);
+    }
+  }
 }
 
 void os::Posix::init_2(void) {

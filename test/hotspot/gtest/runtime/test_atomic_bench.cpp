@@ -22,7 +22,6 @@
  *
  */
 
-#include "precompiled.hpp"
 #include "runtime/atomic.hpp"
 #include "runtime/os.hpp"
 #include "unittest.hpp"
@@ -31,7 +30,7 @@ static int32_t value = 0;
 
 TEST_VM(AtomicBench, cas4) {
   jlong end_time = os::javaTimeNanos() + 1000000000;
-  while (end_time < os::javaTimeNanos()) {
+  while (os::javaTimeNanos() < end_time) {
     Atomic::cmpxchg(&value, 0, 1);
     Atomic::cmpxchg(&value, 1, 0);
   }

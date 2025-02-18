@@ -470,13 +470,17 @@ void SafepointSynchronize::disarm_safepoint() {
 // Wake up all threads, so they are ready to resume execution after the safepoint
 // operation has been carried out
 void SafepointSynchronize::end() {
+  log_debug(safepoint)("At SafepointSynchronize::end");
+
   assert(Threads_lock->owned_by_self(), "must hold Threads_lock");
   EventSafepointEnd event;
   assert(Thread::current()->is_VM_thread(), "Only VM thread can execute a safepoint");
 
   disarm_safepoint();
+  log_debug(safepoint)("Disarmed safepoint");
 
   Universe::heap()->safepoint_synchronize_end();
+  log_debug(safepoint)("Heap safepoint desynchronized");
 
   SafepointTracing::end();
 

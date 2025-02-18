@@ -2024,10 +2024,8 @@ void ShenandoahHeap::propagate_gc_state_to_all_threads() {
     Threads::threads_do(&propagator);
     _gc_state_changed = false;
   }
-  jlong diff_ms = (os::javaTimeNanos() - time1) / 1000000;
-  if (diff_ms > 5) {
-    log_warning(gc)("Propagating thread states took " JLONG_FORMAT " ms!!!", diff_ms);
-  }
+  jlong diff_us = (os::javaTimeNanos() - time1) / 1000;
+  log_info(gc)("Propagating thread states took " JLONG_FORMAT " us", diff_us);
 }
 
 void ShenandoahHeap::set_gc_state_at_safepoint(uint mask, bool value) {

@@ -472,7 +472,7 @@ void SafepointSynchronize::disarm_safepoint() {
 
   jlong t4 = os::javaTimeNanos();
 
-  log_debug(safepoint)("disarm safepoint: TSS setup: " JLONG_FORMAT ", TL release: " JLONG_FORMAT ", WB disarm " JLONG_FORMAT,
+  log_debug(safepoint)("disarm safepoint: TSS setup: " JLONG_FORMAT ", TL release: " JLONG_FORMAT ", WB disarm: " JLONG_FORMAT,
                        (t2 - t1) / 1000,
                        (t3 - t2) / 1000,
                        (t4 - t3) / 1000

@@ -92,6 +92,9 @@
   product(bool, PrintMemoryMapAtExit, false, DIAGNOSTIC,                \
           "Print an annotated memory map at exit")                      \
                                                                         \
+  product(bool, VMThreadGoesBrrr, false, EXPERIMENTAL,                  \
+          "Put VMThread to SCHED_FIFO scheduling class, if possible.")  \
+                                                                        \
 // end of RUNTIME_OS_FLAGS
 
 //

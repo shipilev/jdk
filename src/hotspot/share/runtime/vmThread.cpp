@@ -164,13 +164,25 @@ void VMThread::run() {
   }
   // Notify_lock is destroyed by Threads::create_vm()
 
-  int prio = (VMThreadPriority == -1)
-    ? os::java_to_os_priority[NearMaxPriority]
-    : VMThreadPriority;
-  // Note that I cannot call os::set_priority because it expects Java
-  // priorities and I am *explicitly* using OS priorities so that it's
-  // possible to set the VM thread priority higher than any Java thread.
-  os::set_native_priority( this, prio );
+#ifdef LINUX
+  if (VMThreadGoesBrrr) {
+    struct sched_param sched_p;
+    sched_p.sched_priority = sched_get_priority_min(SCHED_FIFO);
+    if (sched_setscheduler(osthread()->thread_id(), SCHED_FIFO, &sched_p) == -1) {
+      vm_exit_during_initialization("Unable to make VMThread go brrr! Probably needs superuser privileges/capabilities.");
+    }
+  }
+#endif
+
+  if (!VMThreadGoesBrrr) {
+    int prio = (VMThreadPriority == -1)
+        ? os::java_to_os_priority[NearMaxPriority]
+        : VMThreadPriority;
+    // Note that I cannot call os::set_priority because it expects Java
+    // priorities and I am *explicitly* using OS priorities so that it's
+    // possible to set the VM thread priority higher than any Java thread.
+    os::set_native_priority( this, prio );
+  }
 
   // Wait for VM_Operations until termination
   this->loop();
@@ -429,7 +441,16 @@ void VMThread::inner_execute(VM_Operation* op) {
     if (has_timeout_task) {
       _timeout_task->disarm();
     }
-    SafepointSynchronize::end();
+    if (VMThreadGoesBrrr) {
+      jlong start = os::javaTimeNanos();
+      SafepointSynchronize::end();
+      jlong ms = nanos_to_millis(os::javaTimeNanos() - start);
+      // Not the strong guarantee, because VMThread can still spend quite
+      // a while going through threads. But it helps to stress-test this code.
+      guarantee(ms < 10, "VM thread did not go fully brrr. Took " JLONG_FORMAT " ms to finish safepoint.", ms);
+    } else {
+      SafepointSynchronize::end();
+    }
   }
 
   _cur_vm_operation = prev_vm_operation;

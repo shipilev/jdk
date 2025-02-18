@@ -476,11 +476,17 @@ void SafepointSynchronize::end() {
   EventSafepointEnd event;
   assert(Thread::current()->is_VM_thread(), "Only VM thread can execute a safepoint");
 
-  disarm_safepoint();
-  log_debug(safepoint)("Disarmed safepoint");
+  {
+    jlong t = os::javaTimeNanos();
+    disarm_safepoint();
+    log_debug(safepoint)("Disarmed safepoint in " JLONG_FORMAT " us", (os::javaTimeNanos() - t) / 1000);
+  }
 
-  Universe::heap()->safepoint_synchronize_end();
-  log_debug(safepoint)("Heap safepoint desynchronized");
+  {
+    jlong t = os::javaTimeNanos();
+    Universe::heap()->safepoint_synchronize_end();
+    log_debug(safepoint)("Heap safepoint desynchronized in " JLONG_FORMAT " us",  (os::javaTimeNanos() - t) / 1000);
+  }
 
   SafepointTracing::end();
 

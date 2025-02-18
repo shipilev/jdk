@@ -2018,10 +2018,15 @@ void ShenandoahHeap::prepare_update_heap_references(bool concurrent) {
 
 void ShenandoahHeap::propagate_gc_state_to_all_threads() {
   assert(ShenandoahSafepoint::is_at_shenandoah_safepoint(), "Must be at Shenandoah safepoint");
+  jlong time1 = os::javaTimeNanos();
   if (_gc_state_changed) {
     ShenandoahGCStatePropagator propagator(_gc_state.raw_value());
     Threads::threads_do(&propagator);
     _gc_state_changed = false;
+  }
+  jlong diff_ms = (os::javaTimeNanos() - time1) / 1000000;
+  if (diff_ms > 5) {
+    log_warning(gc)("Propagating thread states took " JLONG_FORMAT " ms!!!", diff_ms);
   }
 }
 

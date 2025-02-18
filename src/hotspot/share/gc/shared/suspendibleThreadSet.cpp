@@ -24,6 +24,7 @@
 
 #include "gc/shared/gc_globals.hpp"
 #include "gc/shared/suspendibleThreadSet.hpp"
+#include "logging/log.hpp"
 #include "runtime/javaThread.hpp"
 #include "runtime/mutexLocker.hpp"
 #include "runtime/semaphore.hpp"
@@ -124,7 +125,10 @@ void SuspendibleThreadSet::synchronize() {
 }
 
 void SuspendibleThreadSet::desynchronize() {
+  jlong time1 = os::javaTimeNanos();
   MonitorLocker ml(STS_lock, Mutex::_no_safepoint_check_flag);
+  jlong diff_us = (os::javaTimeNanos() - time1) / 1000;
+  log_info(gc)("Acquiring STS lock for SuspendibleThreadSet::desynchronize took " JLONG_FORMAT, diff_us);
   assert(should_yield(), "STS not synchronizing");
   assert(is_synchronized(), "STS not synchronized");
   Atomic::store(&_suspend_all, false);

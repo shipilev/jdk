@@ -422,6 +422,7 @@ void SafepointSynchronize::begin() {
 }
 
 void SafepointSynchronize::disarm_safepoint() {
+  jlong t1 = os::javaTimeNanos();
   uint64_t active_safepoint_counter = _safepoint_counter;
   {
     JavaThreadIteratorWithHandle jtiwh;
@@ -459,12 +460,23 @@ void SafepointSynchronize::disarm_safepoint() {
       assert(cur_state->is_running(), "safepoint state has not been reset");
     }
   } // ~JavaThreadIteratorWithHandle
+  jlong t2 = os::javaTimeNanos();
 
   // Release threads lock, so threads can be created/destroyed again.
   Threads_lock->unlock();
 
+  jlong t3 = os::javaTimeNanos();
+
   // Wake threads after local state is correctly set.
   _wait_barrier->disarm();
+
+  jlong t4 = os::javaTimeNanos();
+
+  log_debug(safepoint)("disarm safepoint: TSS setup: " JLONG_FORMAT ", TL release: " JLONG_FORMAT ", WB disarm " JLONG_FORMAT,
+                       (t2 - t1) / 1000,
+                       (t3 - t2) / 1000,
+                       (t4 - t3) / 1000
+          );
 }
 
 // Wake up all threads, so they are ready to resume execution after the safepoint

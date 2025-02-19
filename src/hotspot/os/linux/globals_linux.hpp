@@ -92,6 +92,9 @@
   product(bool, PrintMemoryMapAtExit, false, DIAGNOSTIC,                \
           "Print an annotated memory map at exit")                      \
                                                                         \
+  product(bool, UseRealtimeVMThreadPriority, true, DIAGNOSTIC,          \
+          "Put VMThread into realtime scheduling class, if possible.")  \
+                                                                        \
 // end of RUNTIME_OS_FLAGS
 
 //

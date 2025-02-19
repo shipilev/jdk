@@ -164,13 +164,27 @@ void VMThread::run() {
   }
   // Notify_lock is destroyed by Threads::create_vm()
 
-  int prio = (VMThreadPriority == -1)
-    ? os::java_to_os_priority[NearMaxPriority]
-    : VMThreadPriority;
-  // Note that I cannot call os::set_priority because it expects Java
-  // priorities and I am *explicitly* using OS priorities so that it's
-  // possible to set the VM thread priority higher than any Java thread.
-  os::set_native_priority( this, prio );
+#ifdef LINUX
+  if (UseRealtimeVMThreadPriority) {
+    sched_param sched_p {};
+    sched_p.sched_priority = sched_get_priority_min(SCHED_FIFO);
+    if (sched_setscheduler(osthread()->thread_id(), SCHED_FIFO, &sched_p) == -1) {
+      log_warning(vmthread)("Unable to use real-time VMThread priority");
+      FLAG_SET_DEFAULT(UseRealtimeVMThreadPriority, false);
+    }
+  }
+
+  if (!UseRealtimeVMThreadPriority)
+#endif
+  {
+    int prio = (VMThreadPriority == -1)
+        ? os::java_to_os_priority[NearMaxPriority]
+        : VMThreadPriority;
+    // Note that I cannot call os::set_priority because it expects Java
+    // priorities and I am *explicitly* using OS priorities so that it's
+    // possible to set the VM thread priority higher than any Java thread.
+    os::set_native_priority( this, prio );
+  }
 
   // Wait for VM_Operations until termination
   this->loop();

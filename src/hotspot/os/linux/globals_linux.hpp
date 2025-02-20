@@ -93,9 +93,9 @@
           "Print an annotated memory map at exit")                      \
                                                                         \
   product(int, WaitBarrierAvalancheWakeups, 4, DIAGNOSTIC,              \
-          "Avalanche wakeups in Linux wait barrier instead of "         \
-          "delivering them at once. Number means max number of threads "\
-          "to wake up. 0 means disable.")                               \
+          "Avalanche wakeups in Linux WaitBarrier instead of delivering"\
+          " them all at once. This parameter defines the number threads"\
+          " that are notified by a single thread. Use 0 to disable.")   \
                                                                         \
 // end of RUNTIME_OS_FLAGS
 

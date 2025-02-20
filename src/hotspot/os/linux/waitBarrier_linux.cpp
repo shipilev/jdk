@@ -40,6 +40,14 @@ static long futex(volatile int *addr, int futex_op, int op_arg) {
   return syscall(SYS_futex, addr, futex_op, op_arg, nullptr, nullptr, 0);
 }
 
+long LinuxWaitBarrier::wakeup_impl(int max_threads) {
+  long s = futex(&_futex_barrier,
+                 FUTEX_WAKE_PRIVATE,
+                 max_threads);
+  guarantee_with_errno(s > -1, "futex FUTEX_WAKE failed");
+  return s;
+}
+
 void LinuxWaitBarrier::arm(int barrier_tag) {
   assert(_futex_barrier == 0, "Should not be already armed: "
          "_futex_barrier=%d", _futex_barrier);
@@ -50,10 +58,11 @@ void LinuxWaitBarrier::arm(int barrier_tag) {
 void LinuxWaitBarrier::disarm() {
   assert(_futex_barrier != 0, "Should be armed/non-zero.");
   _futex_barrier = 0;
-  long s = futex(&_futex_barrier,
-                 FUTEX_WAKE_PRIVATE,
-                 WaitBarrierAvalancheWakeups > 0 ? WaitBarrierAvalancheWakeups : INT_MAX /* wake a max of this many threads */);
-  guarantee_with_errno(s > -1, "futex FUTEX_WAKE failed");
+  // If avalanche wakeups are enabled, only wakeup the first group of threads,
+  // and let them handle the rest.
+  int max_threads = (WaitBarrierAvalancheWakeups > 0) ?
+                     WaitBarrierAvalancheWakeups : INT_MAX;
+  wakeup_impl(max_threads);
 }
 
 void LinuxWaitBarrier::wait(int barrier_tag) {
@@ -78,9 +87,6 @@ void LinuxWaitBarrier::wait(int barrier_tag) {
 
   // Avalanche wakeups, if enabled.
   if (WaitBarrierAvalancheWakeups > 0) {
-    long s = futex(&_futex_barrier,
-                     FUTEX_WAKE_PRIVATE,
-                     WaitBarrierAvalancheWakeups /* wake a max of this many threads */);
-    guarantee_with_errno(s > -1, "futex FUTEX_WAKE failed");
+    wakeup_impl(WaitBarrierAvalancheWakeups);
   }
 }

@@ -52,7 +52,7 @@ void LinuxWaitBarrier::disarm() {
   _futex_barrier = 0;
   long s = futex(&_futex_barrier,
                  FUTEX_WAKE_PRIVATE,
-                 INT_MAX /* wake a max of this many threads */);
+                 WaitBarrierAvalancheWakeups > 0 ? WaitBarrierAvalancheWakeups : INT_MAX /* wake a max of this many threads */);
   guarantee_with_errno(s > -1, "futex FUTEX_WAKE failed");
 }
 
@@ -75,4 +75,12 @@ void LinuxWaitBarrier::wait(int barrier_tag) {
     // Error EINTR: woken by signal, so re-check and re-wait if necessary.
     // Error EAGAIN: we are already disarmed and so will pass the check.
   } while (barrier_tag == _futex_barrier);
+
+  // Avalanche wakeups, if enabled.
+  if (WaitBarrierAvalancheWakeups > 0) {
+    long s = futex(&_futex_barrier,
+                     FUTEX_WAKE_PRIVATE,
+                     WaitBarrierAvalancheWakeups /* wake a max of this many threads */);
+    guarantee_with_errno(s > -1, "futex FUTEX_WAKE failed");
+  }
 }

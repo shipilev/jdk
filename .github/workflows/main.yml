@@ -231,7 +231,7 @@ jobs:
     uses: ./.github/workflows/build-linux.yml
     with:
       platform: linux-x64
-      make-target: 'static-libs-bundles'
+      make-target: 'static-libs-bundles static-jdk-image'
       # Only build static-libs-bundles for release builds.
       # For debug builds, building static-libs often exceeds disk space.
       debug-levels: '[ "release" ]'

@@ -141,5 +141,5 @@ jobs:
         uses: ./.github/actions/upload-bundles
         with:
           platform: ${{ inputs.platform }}
-          debug-suffix: ${{ matrix.debug-level == 'debug' && '-debug' || '' }}"
-          bundle-suffix: "${{ inputs.bundle-suffix }}
+          debug-suffix: "${{ matrix.debug-level == 'debug' && '-debug' || '' }}"
+          bundle-suffix: ${{ inputs.bundle-suffix }}

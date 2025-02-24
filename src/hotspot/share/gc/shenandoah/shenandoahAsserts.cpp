@@ -75,6 +75,19 @@ void ShenandoahAsserts::print_obj(ShenandoahMessageBuffer& msg, oop obj) {
   }
   msg.append("  mark:%s\n", mw_ss.freeze());
   msg.append("  region: %s", ss.freeze());
+
+  if (obj->klass() == vmClasses::Class_klass()) {
+    msg.append("  class: %s\n", java_lang_Class::as_external_name(obj));
+    msg.append("    IK: " PTR_FORMAT "\n", p2i(java_lang_Class::as_Klass(obj)));
+    msg.append("    re-mirror: " PTR_FORMAT "\n", p2i(java_lang_Class::as_Klass(obj)->java_mirror()));
+    oop class_loader = java_lang_Class::class_loader(obj);
+    msg.append("    classloader: " PTR_FORMAT "\n", p2i(class_loader));
+    msg.append("    classloader TAMS: %s\n", BOOL_TO_STR(ctx->allocated_after_mark_start(class_loader)));
+    msg.append("    classloader marked: %s\n", BOOL_TO_STR(ctx->is_marked(class_loader)));
+  }
+  if (obj->klass() == vmClasses::Module_klass()) {
+    msg.append("  module: %s\n", java_lang_Module::module_entry(obj)->name_as_C_string());
+  }
 }
 
 void ShenandoahAsserts::print_non_obj(ShenandoahMessageBuffer& msg, void* loc) {

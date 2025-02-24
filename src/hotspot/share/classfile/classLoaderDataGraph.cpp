@@ -418,6 +418,8 @@ bool ClassLoaderDataGraph::do_unloading() {
       loaders_processed++;
     } else {
       // Found dead CLD.
+      log_debug(class, loader, data)("do_unloading: dead loader " PTR_FORMAT, p2i(*data->class_loader_handle().ptr_raw()));
+
       loaders_removed++;
 
       ClassUnloadingContext::context()->register_unloading_class_loader_data(data);

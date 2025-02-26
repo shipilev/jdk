@@ -40,6 +40,14 @@ static long futex(volatile int *addr, int futex_op, int op_arg) {
   return syscall(SYS_futex, addr, futex_op, op_arg, nullptr, nullptr, 0);
 }
 
+long LinuxWaitBarrier::wakeup_impl(int max_threads) {
+  long s = futex(&_futex_barrier,
+                 FUTEX_WAKE_PRIVATE,
+                 max_threads);
+  guarantee_with_errno(s > -1, "futex FUTEX_WAKE failed");
+  return s;
+}
+
 void LinuxWaitBarrier::arm(int barrier_tag) {
   assert(_futex_barrier == 0, "Should not be already armed: "
          "_futex_barrier=%d", _futex_barrier);
@@ -50,10 +58,20 @@ void LinuxWaitBarrier::arm(int barrier_tag) {
 void LinuxWaitBarrier::disarm() {
   assert(_futex_barrier != 0, "Should be armed/non-zero.");
   _futex_barrier = 0;
-  long s = futex(&_futex_barrier,
-                 FUTEX_WAKE_PRIVATE,
-                 INT_MAX /* wake a max of this many threads */);
-  guarantee_with_errno(s > -1, "futex FUTEX_WAKE failed");
+  // When lots of threads are waiting on this barrier, the wakeup may spike many
+  // runnable threads, and disarming thread could be preempted in the middle
+  // of wakeup. This would block from delivering the wakeups to all threads
+  // promptly. We mitigate this by avalanching the wakeups. Disarming thread keeps
+  // waking up until there are no threads remaining, as API requires us to wait
+  // until all threads are woken up. Waking up threads assist with wakeups in case
+  // disarming thread is stalled. Futex implementations acquire a per-futex (per-bucket)
+  // lock, so it is important to do these wakeups in small batches to avoid hoarding
+  // the lock when preempted.
+  if (WaitBarrierAvalancheWakeups > 0) {
+    while (wakeup_impl(WaitBarrierAvalancheWakeups) > 0);
+  } else {
+    wakeup_impl(INT_MAX);
+  }
 }
 
 void LinuxWaitBarrier::wait(int barrier_tag) {
@@ -75,4 +93,9 @@ void LinuxWaitBarrier::wait(int barrier_tag) {
     // Error EINTR: woken by signal, so re-check and re-wait if necessary.
     // Error EAGAIN: we are already disarmed and so will pass the check.
   } while (barrier_tag == _futex_barrier);
+
+  // Assist wakeups, if enabled.
+  if (WaitBarrierAvalancheWakeups > 0) {
+    wakeup_impl(WaitBarrierAvalancheWakeups);
+  }
 }

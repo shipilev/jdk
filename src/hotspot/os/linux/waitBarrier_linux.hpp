@@ -33,6 +33,9 @@ class LinuxWaitBarrier : public CHeapObj<mtInternal> {
 
   NONCOPYABLE(LinuxWaitBarrier);
 
+ private:
+  long wakeup_impl(int max_threads);
+
  public:
   LinuxWaitBarrier() : _futex_barrier(0) {};
   ~LinuxWaitBarrier() {};

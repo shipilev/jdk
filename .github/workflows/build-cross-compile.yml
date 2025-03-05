@@ -59,7 +59,7 @@ jobs:
         include:
           - target-cpu: i686
             gnu-arch: i686
-            debian-arch: i686
+            debian-arch: i386
             configure-arguments: --with-jvm-variants=zero
             debian-repository: https://httpredir.debian.org/debian/
             debian-version: bullseye

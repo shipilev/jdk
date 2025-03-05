@@ -50,14 +50,14 @@ jobs:
       fail-fast: false
       matrix:
         target-cpu:
-          - x86
+          - x86-zero
           - aarch64
           - arm
           - s390x
           - ppc64le
           - riscv64
         include:
-          - target-cpu: i686
+          - target-cpu: x86-zero
             gnu-arch: i686
             debian-arch: i386
             configure-arguments: --with-jvm-variants=zero

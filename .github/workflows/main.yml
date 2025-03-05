@@ -36,7 +36,7 @@ on:
       platforms:
         description: 'Platform(s) to execute on (comma separated, e.g. "linux-x64, macos, aarch64")'
         required: true
-        default: 'linux-x64, linux-x64-variants, linux-cross-compile, alpine-linux-x64, macos-x64, macos-aarch64, windows-x64, windows-aarch64, docs'
+        default: 'linux-cross-compile'
       configure-arguments:
         description: 'Additional configure arguments'
         required: false

@@ -352,22 +352,35 @@ throwIOException(JNIEnv *env, int errnum, const char *defaultDetail)
 
 /**
  * Throws an IOException with a message composed from the result of waitpid status.
+ * Specific to POSIX_SPAWN.
  */
-static void throwExitCause(JNIEnv *env, int pid, int status) {
-    char ebuf[128];
+static void throwPosixSpawnExitCause(JNIEnv *env, int pid, int status) {
+    char ebuf[512];
+    int written = 0;
     if (WIFEXITED(status)) {
-        snprintf(ebuf, sizeof ebuf,
+        written = snprintf(ebuf, sizeof ebuf,
             "Failed to exec spawn helper: pid: %d, exit value: %d",
             pid, WEXITSTATUS(status));
     } else if (WIFSIGNALED(status)) {
-        snprintf(ebuf, sizeof ebuf,
+        written = snprintf(ebuf, sizeof ebuf,
             "Failed to exec spawn helper: pid: %d, signal: %d",
             pid, WTERMSIG(status));
     } else {
-        snprintf(ebuf, sizeof ebuf,
+        written = snprintf(ebuf, sizeof ebuf,
             "Failed to exec spawn helper: pid: %d, status: 0x%08x",
             pid, status);
     }
+    snprintf(ebuf + written, sizeof(ebuf) - written, "%s",
+        "\n"
+        "Possible reasons:\n"
+        "  - Spawn helper ran into JDK version or configuration problems\n"
+        "  - Spawn helper was terminated by another process\n"
+        "Possible solutions:\n"
+        "  - Restart JVM (in clean environment, if possible)\n"
+        "  - Check system logs for JDK-related errors\n"
+        "  - Re-install JDK to fix permission/versioning problems\n"
+        "  - Switch off POSIX_SPAWN with -Djdk.lang.Process.launchMechanism=VFORK\n"
+    );
     throwIOException(env, 0, ebuf);
 }
 
@@ -745,7 +758,7 @@ Java_java_lang_ProcessImpl_forkAndExec(JNIEnv *env,
             {
                 int tmpStatus = 0;
                 int p = waitpid(resultPid, &tmpStatus, 0);
-                throwExitCause(env, p, tmpStatus);
+                throwPosixSpawnExitCause(env, p, tmpStatus);
                 goto Catch;
             }
         case sizeof(errnum):

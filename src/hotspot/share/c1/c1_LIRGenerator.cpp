@@ -3162,23 +3162,17 @@ void LIRGenerator::do_ProfileInvoke(ProfileInvoke* x) {
 }
 
 void LIRGenerator::increment_backedge_counter_conditionally(LIR_Condition cond, LIR_Opr left, LIR_Opr right, CodeEmitInfo* info, int left_bci, int right_bci, int bci) {
+  bool choose_left = (left_bci < bci);
+  bool choose_right = (right_bci < bci);
+  assert(choose_left != choose_right, "Exclusive: %d %d %d", left_bci, right_bci, bci);
+  bool forward_cond = choose_left;
+
   if (compilation()->is_profiling()) {
-#if defined(X86) && !defined(_LP64)
-    // BEWARE! On 32-bit x86 cmp clobbers its left argument so we need a temp copy.
-    LIR_Opr left_copy = new_register(left->type());
-    __ move(left, left_copy);
-    __ cmp(cond, left_copy, right);
-#else
+    LabelObj* L_over = new LabelObj();
     __ cmp(cond, left, right);
-#endif
-    LIR_Opr step = new_register(T_INT);
-    LIR_Opr plus_one = LIR_OprFact::intConst(InvocationCounter::count_increment);
-    LIR_Opr zero = LIR_OprFact::intConst(0);
-    __ cmove(cond,
-        (left_bci < bci) ? plus_one : zero,
-        (right_bci < bci) ? plus_one : zero,
-        step, left->type());
-    increment_backedge_counter(info, step, bci);
+    __ branch(cond, L_over->label());
+    increment_backedge_counter(info, LIR_OprFact::intConst(InvocationCounter::count_increment), bci);
+    __ branch_destination(L_over->label());
   }
 }
 
@@ -3207,6 +3201,7 @@ void LIRGenerator::increment_event_counter_impl(CodeEmitInfo* info,
   assert(frequency == 0 || is_power_of_2(frequency + 1), "Frequency must be x^2 - 1 or 0");
   int level = _compilation->env()->comp_level();
   assert(level > CompLevel_simple, "Shouldn't be here");
+  guarantee(step->is_constant(), "Should be");
 
   int offset = -1;
   LIR_Opr counter_holder;
@@ -3241,22 +3236,10 @@ void LIRGenerator::increment_event_counter_impl(CodeEmitInfo* info,
     CodeStub* overflow = new CounterOverflowStub(info, bci, meth);
     int freq = frequency << InvocationCounter::count_shift;
     if (freq == 0) {
-      if (!step->is_constant()) {
-        __ cmp(lir_cond_notEqual, step, LIR_OprFact::intConst(0));
-        __ branch(lir_cond_notEqual, overflow);
-      } else {
-        __ branch(lir_cond_always, overflow);
-      }
+      __ branch(lir_cond_always, overflow);
     } else {
-      LIR_Opr mask = load_immediate(freq, T_INT);
-      if (!step->is_constant()) {
-        // If step is 0, make sure the overflow check below always fails
-        __ cmp(lir_cond_notEqual, step, LIR_OprFact::intConst(0));
-        __ cmove(lir_cond_notEqual, result, LIR_OprFact::intConst(InvocationCounter::count_increment), result, T_INT);
-      }
-      __ logical_and(result, mask, result);
-      __ cmp(lir_cond_equal, result, LIR_OprFact::intConst(0));
-      __ branch(lir_cond_equal, overflow);
+      __ cmp(lir_cond_less, result, LIR_OprFact::intConst(freq));
+      __ branch(lir_cond_less, overflow);
     }
     __ branch_destination(overflow->continuation());
   }

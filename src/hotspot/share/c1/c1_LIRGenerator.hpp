@@ -398,25 +398,20 @@ class LIRGenerator: public InstructionVisitor, public BlockClosure {
 
   void profile_branch(If* if_instr, If::Condition cond);
   void increment_event_counter_impl(CodeEmitInfo* info,
-                                    ciMethod *method, LIR_Opr step, int frequency,
+                                    ciMethod *method, int frequency,
                                     int bci, bool backedge, bool notify);
-  void increment_event_counter(CodeEmitInfo* info, LIR_Opr step, int bci, bool backedge);
+  void increment_event_counter(CodeEmitInfo* info, int bci, bool backedge);
   void increment_invocation_counter(CodeEmitInfo *info) {
     if (compilation()->is_profiling()) {
-      increment_event_counter(info, LIR_OprFact::intConst(InvocationCounter::count_increment), InvocationEntryBci, false);
+      increment_event_counter(info, InvocationEntryBci, false);
     }
   }
   void increment_backedge_counter(CodeEmitInfo* info, int bci) {
     if (compilation()->is_profiling()) {
-      increment_event_counter(info, LIR_OprFact::intConst(InvocationCounter::count_increment), bci, true);
+      increment_event_counter(info, bci, true);
     }
   }
-  void increment_backedge_counter_conditionally(LIR_Condition cond, LIR_Opr left, LIR_Opr right, CodeEmitInfo* info, int left_bci, int right_bci, int bci);
-  void increment_backedge_counter(CodeEmitInfo* info, LIR_Opr step, int bci) {
-    if (compilation()->is_profiling()) {
-      increment_event_counter(info, step, bci, true);
-    }
-  }
+  void increment_backedge_counter_conditionally(LIR_Condition cond, LIR_Opr left, LIR_Opr right, CodeEmitInfo* info, int true_bci, int false_bci, int bci);
   CodeEmitInfo* state_for(Instruction* x, ValueStack* state, bool ignore_xhandler = false);
   CodeEmitInfo* state_for(Instruction* x);
 
@@ -459,6 +454,20 @@ class LIRGenerator: public InstructionVisitor, public BlockClosure {
     default: fatal("You must pass valid If::Condition");
     };
     return l;
+  }
+
+  static LIR_Condition lir_invert(LIR_Condition cond) {
+    switch (cond) {
+    case lir_cond_equal:        return lir_cond_notEqual;
+    case lir_cond_notEqual:     return lir_cond_equal;
+    case lir_cond_less:         return lir_cond_greaterEqual;
+    case lir_cond_lessEqual:    return lir_cond_greater;
+    case lir_cond_greaterEqual: return lir_cond_less;
+    case lir_cond_greater:      return lir_cond_lessEqual;
+    default:
+      // No great choice.
+      return lir_cond_unknown;
+    };
   }
 
 #ifdef __SOFTFP__

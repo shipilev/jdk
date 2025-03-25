@@ -3162,15 +3162,33 @@ void LIRGenerator::do_ProfileInvoke(ProfileInvoke* x) {
 }
 
 void LIRGenerator::increment_backedge_counter_conditionally(LIR_Condition cond, LIR_Opr left, LIR_Opr right, CodeEmitInfo* info, int left_bci, int right_bci, int bci) {
+  if (!compilation()->is_profiling()) {
+    return;
+  }
+
   bool choose_left = (left_bci < bci);
   bool choose_right = (right_bci < bci);
-  assert(choose_left != choose_right, "Exclusive: %d %d %d", left_bci, right_bci, bci);
-  bool forward_cond = choose_left;
 
-  if (compilation()->is_profiling()) {
+  if (!choose_left && !choose_right) {
+    // No increment at all
+  } else if (choose_left && choose_right) {
+    // Unconditional increment
+    increment_backedge_counter(info, LIR_OprFact::intConst(InvocationCounter::count_increment), bci);
+  } else if (choose_left) {
+    // Decide which way to check the condition
     LabelObj* L_over = new LabelObj();
     __ cmp(cond, left, right);
     __ branch(cond, L_over->label());
+    increment_backedge_counter(info, LIR_OprFact::intConst(InvocationCounter::count_increment), bci);
+    __ branch_destination(L_over->label());
+  } else if (choose_right) {
+    // Awkward...
+    LabelObj* L_to = new LabelObj();
+    LabelObj* L_over = new LabelObj();
+    __ cmp(cond, left, right);
+    __ branch(cond, L_to->label());
+    __ branch(lir_cond_always, L_over->label());
+    __ branch_destination(L_to->label());
     increment_backedge_counter(info, LIR_OprFact::intConst(InvocationCounter::count_increment), bci);
     __ branch_destination(L_over->label());
   }

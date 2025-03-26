@@ -106,12 +106,14 @@ void C1SafepointPollStub::emit_code(LIR_Assembler* ce) {
 
 void CounterOverflowStub::emit_code(LIR_Assembler* ce) {
   __ bind(_entry);
-  Metadata *m = _method->as_constant_ptr()->as_metadata();
-  ce->store_parameter(m, 1);
-  ce->store_parameter(_bci, 0);
-  __ call(RuntimeAddress(Runtime1::entry_for(C1StubId::counter_overflow_id)));
-  ce->add_call_info_here(_info);
-  ce->verify_oop_map(_info);
+  if (TieredStopAtLevel >= 4) {
+    Metadata *m = _method->as_constant_ptr()->as_metadata();
+    ce->store_parameter(m, 1);
+    ce->store_parameter(_bci, 0);
+    __ call(RuntimeAddress(Runtime1::entry_for(C1StubId::counter_overflow_id)));
+    ce->add_call_info_here(_info);
+    ce->verify_oop_map(_info);
+  }
   __ jmp(_continuation);
 }
 

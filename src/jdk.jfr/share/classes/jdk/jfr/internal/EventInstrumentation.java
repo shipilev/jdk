@@ -61,8 +61,8 @@ import jdk.jfr.internal.util.ImplicitFields;
  *
  */
 public final class EventInstrumentation {
-    public static final long MASK_THROTTLE               = 1 << 62;
-    public static final long MASK_THROTTLE_CHECK         = 1 << 63;
+    public static final long MASK_THROTTLE               = 1L << 62;
+    public static final long MASK_THROTTLE_CHECK         = 1L << 63;
     public static final long MASK_THROTTLE_BITS          = MASK_THROTTLE | MASK_THROTTLE_CHECK;
     public static final long MASK_THROTTLE_CHECK_SUCCESS = MASK_THROTTLE_CHECK | MASK_THROTTLE;
     public static final long MASK_THROTTLE_CHECK_FAIL    = MASK_THROTTLE_CHECK | 0;

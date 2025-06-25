@@ -192,13 +192,13 @@ private:
 
   static inline CompiledDirectCall* before(address return_addr) {
     CompiledDirectCall* st = new CompiledDirectCall(nativeCall_before(return_addr));
-    if (VerifyInlineCaches) st->verify();
+    st->verify();
     return st;
   }
 
   static inline CompiledDirectCall* at(address native_call) {
     CompiledDirectCall* st = new CompiledDirectCall(nativeCall_at(native_call));
-    if (VerifyInlineCaches) st->verify();
+    st->verify();
     return st;
   }
 

@@ -263,6 +263,11 @@ bool InlineTree::should_not_inline(ciMethod* callee_method, ciMethod* caller_met
     return false;
   }
 
+  if (UseNewCode) {
+    set_msg("force inline by CTW");
+    return false;
+  }
+
   // Now perform checks which are heuristic
 
   if (is_unboxing_method(callee_method, C)) {
@@ -408,6 +413,8 @@ bool InlineTree::try_to_inline(ciMethod* callee_method, ciMethod* caller_method,
       // inline constructors even if they are not reached.
     } else if (forced_inline()) {
       // Inlining was forced by CompilerOracle, ciReplay or annotation
+    } else if (UseNewCode2) {
+      // CTW testing has no reachable code.
     } else if (is_not_reached(callee_method, caller_method, caller_bci, profile)) {
       // don't inline unreached call sites
        set_msg("call site not reached");

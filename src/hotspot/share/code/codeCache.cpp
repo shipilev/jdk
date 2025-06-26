@@ -1479,6 +1479,18 @@ void CodeCache::mark_for_deoptimization(DeoptimizationScope* deopt_scope, Method
   }
 }
 
+void CodeCache::mark_for_deoptimization(DeoptimizationScope* deopt_scope, GrowableArray<Method*> dependees) {
+  MutexLocker mu(CodeCache_lock, Mutex::_no_safepoint_check_flag);
+
+  NMethodIterator iter(NMethodIterator::not_unloading);
+  while(iter.next()) {
+    nmethod* nm = iter.method();
+    if (nm->is_dependent_on_methods(dependees)) {
+      deopt_scope->mark(nm);
+    }
+  }
+}
+
 void CodeCache::make_marked_nmethods_deoptimized() {
   RelaxedNMethodIterator iter(RelaxedNMethodIterator::not_unloading);
   while(iter.next()) {

@@ -393,6 +393,10 @@ public class WhiteBox {
   private native boolean isIntrinsicAvailable0(Executable method,
                                                Executable compilationContext,
                                                int compLevel);
+  private native int    deoptimizeMethods0(Executable[] methods);
+  public         int    deoptimizeMethods(Executable[] methods) {
+    return deoptimizeMethods0(methods);
+  }
   public        int     deoptimizeMethod(Executable method) {
     return deoptimizeMethod(method, false /*not osr*/);
   }

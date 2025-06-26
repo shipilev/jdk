@@ -3087,6 +3087,17 @@ bool nmethod::is_dependent_on_method(Method* dependee) {
   return false;
 }
 
+// Called from mark_for_deoptimization, when dependee is invalidated.
+bool nmethod::is_dependent_on_methods(GrowableArray<Method*> dependees) {
+  for (Dependencies::DepStream deps(this); deps.next(); ) {
+    if (deps.type() != Dependencies::evol_method)
+      continue;
+    Method* method = deps.method_argument(0);
+    if (dependees.contains(method)) return true;
+  }
+  return false;
+}
+
 void nmethod_init() {
   // make sure you didn't forget to adjust the filler fields
   assert(sizeof(nmethod) % oopSize == 0, "nmethod size must be multiple of a word");

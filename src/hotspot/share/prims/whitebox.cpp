@@ -846,6 +846,52 @@ WB_ENTRY(jint, WB_DeoptimizeMethod(JNIEnv* env, jobject o, jobject method, jbool
   return result;
 WB_END
 
+WB_ENTRY(jint, WB_DeoptimizeMethods(JNIEnv* env, jobject o, jobjectArray methods))
+  int result = 0;
+  CHECK_JNI_EXCEPTION_(env, result);
+
+  ResourceMark rm(THREAD);
+
+  // Convert all Method to relevant MethodHandles
+  GrowableArray<jmethodID> jmids;
+  {
+    ThreadToNativeFromVM ttn(thread);
+    for (int i = 0; i < env->GetArrayLength(methods); i++) {
+      jobject method = env->GetObjectArrayElement(methods, i);
+      jmethodID jmid = env->FromReflectedMethod(method);
+      jmids.push(jmid);
+    }
+  }
+
+  GrowableArray<Method*> mhs;
+  for (int i = 0; i < jmids.length(); i++) {
+    Method* m = Method::checked_resolve_jmethod_id(jmids.at(i));
+    mhs.push(m);
+  }
+
+  // Register methods for deopts.
+  DeoptimizationScope deopt_scope;
+  {
+    MutexLocker mu(Compile_lock);
+    {
+      MutexLocker ml(NMethodState_lock, Mutex::_no_safepoint_check_flag);
+      for (int i = 0; i < mhs.length(); i++) {
+        Method* m = mhs.at(i);
+        nmethod* nm = m->code();
+        if (nm != nullptr) {
+          deopt_scope.mark(nm);
+          ++result;
+        }
+      }
+    }
+    CodeCache::mark_for_deoptimization(&deopt_scope, mhs);
+  }
+
+  deopt_scope.deoptimize_marked();
+
+  return result;
+WB_END
+
 WB_ENTRY(jboolean, WB_IsMethodCompiled(JNIEnv* env, jobject o, jobject method, jboolean is_osr))
   jmethodID jmid = reflected_method_to_jmid(thread, env, method);
   CHECK_JNI_EXCEPTION_(env, JNI_FALSE);
@@ -2857,6 +2903,8 @@ static JNINativeMethod methods[] = {
   {CC"deoptimizeAll",      CC"()V",                   (void*)&WB_DeoptimizeAll     },
   {CC"deoptimizeMethod0",   CC"(Ljava/lang/reflect/Executable;Z)I",
                                                       (void*)&WB_DeoptimizeMethod  },
+  {CC"deoptimizeMethods0",   CC"([Ljava/lang/reflect/Executable;)I",
+                                                      (void*)&WB_DeoptimizeMethods  },
   {CC"isMethodCompiled0",   CC"(Ljava/lang/reflect/Executable;Z)Z",
                                                       (void*)&WB_IsMethodCompiled  },
   {CC"isMethodCompilable0", CC"(Ljava/lang/reflect/Executable;IZ)Z",

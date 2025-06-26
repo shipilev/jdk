@@ -1026,6 +1026,7 @@ public:
   // dependent on the given method. Returns true if this nmethod
   // corresponds to the given method as well.
   bool is_dependent_on_method(Method* dependee);
+  bool is_dependent_on_methods(GrowableArray<Method*> dependees);
 
   // JVMTI's GetLocalInstance() support
   ByteSize native_receiver_sp_offset() {

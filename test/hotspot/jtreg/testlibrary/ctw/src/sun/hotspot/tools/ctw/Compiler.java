@@ -32,8 +32,15 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Executable;
 import java.lang.reflect.Method;
 import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.Executor;
+import java.util.concurrent.ForkJoinTask;
+import java.util.concurrent.RecursiveAction;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
@@ -46,7 +53,7 @@ public class Compiler {
     // Call GC after compiling as many methods. This would remove the stale methods.
     // This threshold should balance the GC overhead and the cost of keeping lots
     // of stale methods around.
-    private static final long GC_METHOD_THRESHOLD = Long.getLong("gcMethodThreshold", 100);
+    private static final long GC_METHOD_THRESHOLD = Long.getLong("gcMethodThreshold", 500);
 
     private static final Unsafe UNSAFE = Unsafe.getUnsafe();
     private static final WhiteBox WHITE_BOX = WhiteBox.getWhiteBox();
@@ -67,84 +74,178 @@ public class Compiler {
      *
      * @param aClass class to compile
      * @param id an id of the class
-     * @param executor executor used for compile task invocation
-     * @throws NullPointerException if {@code class} or {@code executor}
-     *                              is {@code null}
+     * @throws NullPointerException if {@code class}
      */
-    public static void compileClass(Class<?> aClass, long id, Executor executor) {
+    public static void compileClass(Class<?> aClass, long id) {
         Objects.requireNonNull(aClass);
-        Objects.requireNonNull(executor);
+
+        String className = aClass.getName();
 
         // Initialize all constant pool entries, if requested.
         if (Utils.COMPILE_THE_WORLD_PRELOAD_CLASSES) {
             ConstantPool constantPool = SharedSecrets.getJavaLangAccess().getConstantPool(aClass);
-            preloadClasses(aClass.getName(), id, constantPool);
+            preloadClasses(className, id, constantPool);
         }
 
-        // Attempt to initialize the class. If initialization is not possible
-        // due to NCDFE, accept this, and try compile anyway.
+        // Attempt to initialize the class. Avoid class init deadlocks: only one class init at a time.
+        // If initialization is not possible due to NCDFE, accept this, and try compile anyway.
         try {
-            UNSAFE.ensureClassInitialized(aClass);
+            synchronized (Compiler.class) {
+                UNSAFE.ensureClassInitialized(aClass);
+            }
         } catch (NoClassDefFoundError e) {
             CompileTheWorld.OUT.printf("[%d]\t%s\tNOTE unable to init class : %s%n",
-                id, aClass.getName(), e);
+                id, className, e);
         }
-        compileClinit(aClass, id);
 
         // Getting constructor/methods with unresolvable signatures would fail with NCDFE.
         // Try to get as much as possible, and compile everything else.
         // TODO: Would be good to have a Whitebox method that returns the subset of resolvable
         // constructors/methods without throwing NCDFE. This would extend the testing scope.
-        Constructor[] constructors = new Constructor[0];
-        Method[] methods = new Method[0];
+        Executable[] constructors = new Executable[0];
+        Executable[] methods = new Executable[0];
 
         try {
             constructors = aClass.getDeclaredConstructors();
         } catch (NoClassDefFoundError e) {
             CompileTheWorld.OUT.printf("[%d]\t%s\tNOTE unable to get constructors : %s%n",
-                id, aClass.getName(), e);
+                id, className, e);
         }
 
         try {
             methods = aClass.getDeclaredMethods();
         } catch (NoClassDefFoundError e) {
             CompileTheWorld.OUT.printf("[%d]\t%s\tNOTE unable to get methods : %s%n",
-                id, aClass.getName(), e);
+                id, className, e);
         }
+
+        Executable[] all = new Executable[constructors.length + methods.length];
+        System.arraycopy(constructors, 0, all, 0, constructors.length);
+        System.arraycopy(methods, 0, all, constructors.length, methods.length);
 
         // Populate profile for all methods to expand the scope of
         // compiler optimizations. Do this before compilations start.
-        for (Executable e : constructors) {
+        for (Executable e : all) {
             WHITE_BOX.markMethodProfiled(e);
         }
-        for (Executable e : methods) {
-            WHITE_BOX.markMethodProfiled(e);
-        }
+
+        // Make sure methods is not compiled at any level before starting
+        // progressive compilations. No deopt in-between tiers is needed,
+        // as long as we increase the compilation levels one by one.
+        WHITE_BOX.deoptimizeMethods(all);
 
         // Now schedule the compilations.
-        long methodCount = 0;
-        for (Executable e : constructors) {
-            ++methodCount;
-            executor.execute(new CompileMethodCommand(id, e));
+        List<RecursiveAction> tasks = new ArrayList<>();
+        tasks.add(new CompileInitTask(aClass, id));
+        for (Executable method : all) {
+            tasks.add(new CompileTask(className, method));
         }
-        for (Executable e : methods) {
-            ++methodCount;
-            executor.execute(new CompileMethodCommand(id, e));
-        }
-        METHOD_COUNT.addAndGet(methodCount);
+        ForkJoinTask.invokeAll(tasks);
+        METHOD_COUNT.addAndGet(all.length);
 
-        // See if we need to schedule a GC
-        while (true) {
-            long current = METHODS_SINCE_LAST_GC.get();
-            long update = current + methodCount;
-            if (update >= GC_METHOD_THRESHOLD) {
-                update = 0;
-            }
-            if (METHODS_SINCE_LAST_GC.compareAndSet(current, update)) {
-                if (update == 0) {
-                    executor.execute(() -> System.gc());
+        // Compilations are done. Ditch all the compiled versions of the code,
+        // make the methods eligible for sweeping sooner.
+        new DeoptimizeMethods(all).fork();
+    }
+
+    static class DeoptimizeMethods extends RecursiveAction {
+        final Executable[] methods;
+
+        public DeoptimizeMethods(Executable[] methods) {
+            this.methods = methods;
+        }
+
+        @Override
+        public void compute() {
+            WHITE_BOX.deoptimizeMethods(methods);
+
+            // See if we need to run GC
+            METHODS_SINCE_LAST_GC.addAndGet(methods.length);
+            while (true) {
+                long current = METHODS_SINCE_LAST_GC.get();
+                if (current < GC_METHOD_THRESHOLD) {
+                    return;
                 }
-                break;
+                if (METHODS_SINCE_LAST_GC.compareAndSet(current, 0)) {
+                    System.out.println(current + " methods deopted, forcing GC to cleanup");
+                    System.gc();
+                    return;
+                }
+            }
+        }
+    }
+
+    static class CompileTask extends RecursiveAction {
+        final String className;
+        final Executable method;
+
+        public CompileTask(String className, Executable method) {
+            this.className = className;
+            this.method = method;
+        }
+
+        @Override
+        public void compute() {
+            int startLevel = Utils.INITIAL_COMP_LEVEL;
+            int endLevel = Utils.TIERED_COMPILATION ? Utils.TIERED_STOP_AT_LEVEL : startLevel;
+            for (int compLevel = startLevel; compLevel <= endLevel; ++compLevel) {
+                if (!WHITE_BOX.isMethodCompilable(method, compLevel)) {
+                    if (Utils.IS_VERBOSE) {
+                        log(className, method, "not compilable at " + compLevel);
+                    }
+                    continue;
+                }
+
+                try {
+                    WHITE_BOX.enqueueMethodForCompilation(method, compLevel);
+
+                    if (!Utils.BACKGROUND_COMPILATION) {
+                        for (int i = 0;
+                             i < 10 && WHITE_BOX.isMethodQueuedForCompilation(method);
+                             ++i) {
+                           try {
+                                Thread.sleep(1000);
+                            } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                            }
+                        }
+                    }
+
+                    int tmp = WHITE_BOX.getMethodCompilationLevel(method);
+                    if (tmp != compLevel) {
+                        log(className, method, "WARNING compilation level = " + tmp + ", but not " + compLevel);
+                    } else if (Utils.IS_VERBOSE) {
+                        log(className, method, "compilation level = " + tmp + ". OK");
+                    }
+                } catch (Throwable t) {
+                    log(className, method, "ERROR at level " + compLevel);
+                    t.printStackTrace(CompileTheWorld.ERR);
+                }
+            }
+        }
+    }
+
+    static class CompileInitTask extends RecursiveAction {
+        final Class<?> klass;
+        final long id;
+
+        public CompileInitTask(Class<?> klass, long id) {
+            this.klass = klass;
+            this.id = id;
+        }
+
+        @Override
+        public void compute() {
+            int startLevel = Utils.INITIAL_COMP_LEVEL;
+            int endLevel = Utils.TIERED_COMPILATION ? Utils.TIERED_STOP_AT_LEVEL : startLevel;
+            for (int i = startLevel; i <= endLevel; ++i) {
+                try {
+                    WHITE_BOX.enqueueInitializerForCompilation(klass, i);
+                } catch (Throwable t) {
+                    CompileTheWorld.OUT.println(String.format("[%d]\t%s::<clinit>\tERROR at level %d : %s",
+                        id, klass.getName(), i, t));
+                    t.printStackTrace(CompileTheWorld.ERR);
+                }
             }
         }
     }
@@ -167,100 +268,8 @@ public class Compiler {
         }
     }
 
-    private static void compileClinit(Class<?> aClass, long id) {
-        int startLevel = Utils.INITIAL_COMP_LEVEL;
-        int endLevel = Utils.TIERED_COMPILATION ? Utils.TIERED_STOP_AT_LEVEL : startLevel;
-        for (int i = startLevel; i <= endLevel; ++i) {
-            try {
-                WHITE_BOX.enqueueInitializerForCompilation(aClass, i);
-            } catch (Throwable t) {
-                CompileTheWorld.OUT.println(String.format("[%d]\t%s::<clinit>\tERROR at level %d : %s",
-                        id, aClass.getName(), i, t));
-                t.printStackTrace(CompileTheWorld.ERR);
-            }
-        }
-    }
 
-    /**
-     * Compilation of method.
-     * Will compile method on all available comp levels.
-     */
-    private static class CompileMethodCommand implements Runnable {
-        private final long classId;
-        private final String className;
-        private final Executable method;
-
-        /**
-         * @param classId   id of class
-         * @param method    compiled for compilation
-         */
-        public CompileMethodCommand(long classId, Executable method) {
-            this.classId = classId;
-            this.className = method.getDeclaringClass().getName();
-            this.method = method;
-        }
-
-        @Override
-        public final void run() {
-            // Make sure method is not compiled at any level before starting
-            // progressive compilations. No deopt in-between tiers is needed,
-            // as long as we increase the compilation levels one by one.
-            WHITE_BOX.deoptimizeMethod(method);
-
-            int compLevel = Utils.INITIAL_COMP_LEVEL;
-            if (Utils.TIERED_COMPILATION) {
-                for (int i = compLevel; i <= Utils.TIERED_STOP_AT_LEVEL; ++i) {
-                    compileAtLevel(i);
-                }
-            } else {
-                compileAtLevel(compLevel);
-            }
-
-            // Ditch all the compiled versions of the code, make the method
-            // eligible for sweeping sooner.
-            WHITE_BOX.deoptimizeMethod(method);
-        }
-
-        private void waitCompilation() {
-            if (!Utils.BACKGROUND_COMPILATION) {
-                return;
-            }
-            final Object obj = new Object();
-            synchronized (obj) {
-                for (int i = 0;
-                     i < 10 && WHITE_BOX.isMethodQueuedForCompilation(method);
-                     ++i) {
-                    try {
-                        obj.wait(1000);
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                    }
-                }
-            }
-        }
-
-        private void compileAtLevel(int compLevel) {
-            if (WHITE_BOX.isMethodCompilable(method, compLevel)) {
-                try {
-                    WHITE_BOX.enqueueMethodForCompilation(method, compLevel);
-                    waitCompilation();
-                    int tmp = WHITE_BOX.getMethodCompilationLevel(method);
-                    if (tmp != compLevel) {
-                        log("WARNING compilation level = " + tmp
-                                + ", but not " + compLevel);
-                    } else if (Utils.IS_VERBOSE) {
-                        log("compilation level = " + tmp + ". OK");
-                    }
-                } catch (Throwable t) {
-                    log("ERROR at level " + compLevel);
-                    t.printStackTrace(CompileTheWorld.ERR);
-                }
-            } else if (Utils.IS_VERBOSE) {
-                log("not compilable at " + compLevel);
-            }
-        }
-
-        private String methodName() {
+        private static String methodName(String className, Executable method) {
             return String.format("%s::%s(%s)",
                     className,
                     method.getName(),
@@ -269,17 +278,17 @@ public class Compiler {
                           .collect(Collectors.joining(", ")));
         }
 
-        private void log(String message) {
+        private static void log(String className, Executable method, String message) {
             StringBuilder builder = new StringBuilder("[")
-                    .append(classId)
+                    .append(0) // TODO FIXME
                     .append("]\t")
-                    .append(methodName());
+                    .append(methodName(className, method));
             if (message != null) {
                 builder.append('\t')
                        .append(message);
             }
             CompileTheWorld.ERR.println(builder);
         }
-    }
+
 
 }

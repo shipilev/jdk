@@ -125,7 +125,6 @@ public class PathHandler implements Closeable {
     }
 
     private static final AtomicLong CLASS_COUNT = new AtomicLong(0L);
-    private static volatile boolean CLASSES_LIMIT_REACHED = false;
     private static final Pattern JAR_IN_DIR_PATTERN
             = Pattern.compile("^(.*[/\\\\])?\\*$");
 
@@ -207,13 +206,16 @@ public class PathHandler implements Closeable {
 
     /**
      * Processes all classes in the specified path.
-     * @param executor executor used for process task invocation
      */
-    public final void process(Executor executor) {
+    public final void process() {
         CompileTheWorld.OUT.println(entry.description());
         entry.classes()
              .distinct()
-             .forEach(s -> processClass(s, executor));
+             .sorted()
+             .skip(Utils.COMPILE_THE_WORLD_START_AT)
+             .limit(Utils.COMPILE_THE_WORLD_STOP_AT - Utils.COMPILE_THE_WORLD_START_AT)
+             .parallel()
+             .forEach(s -> processClass(s));
     }
 
     /**
@@ -228,53 +230,32 @@ public class PathHandler implements Closeable {
      * Processes specified class.
      * @param name fully qualified name of class to process
      */
-    protected final void processClass(String name, Executor executor) {
+    protected final void processClass(String name) {
         Objects.requireNonNull(name);
-        if (isFinished()) {
-            return;
-        }
         long id = CLASS_COUNT.incrementAndGet();
-        if (id > Utils.COMPILE_THE_WORLD_STOP_AT) {
-            CLASSES_LIMIT_REACHED = true;
-            return;
+
+        ClassLoader cl = Thread.currentThread().getContextClassLoader();
+        Thread.currentThread().setContextClassLoader(entry.loader());
+        try {
+            CompileTheWorld.OUT.println(String.format("[%d]\t%s", id, name));
+            Class<?> aClass = entry.loader().loadClass(name);
+            Compiler.compileClass(aClass, id);
+        } catch (NoClassDefFoundError e) {
+            CompileTheWorld.OUT.printf("[%d]\t%s\tNOTE unable to load/compile, skipped: %s%n",
+                id, name, e);
+        } catch (Throwable e) {
+            CompileTheWorld.OUT.printf("[%d]\t%s\tWARNING skipped: %s%n",
+                id, name, e);
+            e.printStackTrace(CompileTheWorld.ERR);
         }
-        if (id >= Utils.COMPILE_THE_WORLD_START_AT) {
-            Class<?> aClass;
-            Thread.currentThread().setContextClassLoader(entry.loader());
-            try {
-                CompileTheWorld.OUT.println(String.format("[%d]\t%s", id, name));
-                aClass = entry.loader().loadClass(name);
-                Compiler.compileClass(aClass, id, executor);
-            } catch (NoClassDefFoundError e) {
-                CompileTheWorld.OUT.printf("[%d]\t%s\tNOTE unable to load/compile, skipped: %s%n",
-                    id, name, e);
-            } catch (Throwable e) {
-                CompileTheWorld.OUT.printf("[%d]\t%s\tWARNING skipped: %s%n",
-                    id, name, e);
-                e.printStackTrace(CompileTheWorld.ERR);
-            }
-        }
+        Thread.currentThread().setContextClassLoader(cl);
     }
 
     /**
      * @return count of processed classes
      */
     public static long getProcessedClassCount() {
-        long id = CLASS_COUNT.get();
-        if (id < Utils.COMPILE_THE_WORLD_START_AT) {
-            return 0;
-        }
-        if (id > Utils.COMPILE_THE_WORLD_STOP_AT) {
-            return Utils.COMPILE_THE_WORLD_STOP_AT - Utils.COMPILE_THE_WORLD_START_AT + 1;
-        }
-        return id - Utils.COMPILE_THE_WORLD_START_AT + 1;
-    }
-
-    /**
-     * @return {@code true} if classes limit is reached and processing should be stopped
-     */
-    public static boolean isFinished() {
-        return CLASSES_LIMIT_REACHED;
+        return CLASS_COUNT.get();
     }
 
 }

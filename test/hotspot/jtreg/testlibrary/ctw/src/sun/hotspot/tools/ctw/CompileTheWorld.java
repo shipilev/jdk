@@ -75,22 +75,18 @@ public class CompileTheWorld {
             } catch (java.lang.NoClassDefFoundError e) {
                 // compact1, compact2 support
             }
-            ExecutorService executor = createExecutor();
+
             long start = System.currentTimeMillis();
-            try {
                 Arrays.stream(targets)
                       .map(PathHandler::create)
                       .flatMap(List::stream)
                       .forEach(p -> {
                           try {
-                              p.process(executor);
+                              p.process();
                           } finally {
                               p.close();
                           }
                         });
-            } finally {
-                await(executor);
-            }
             CompileTheWorld.OUT.println(String.format("Done (%d classes, %d methods, %d ms)",
                     PathHandler.getProcessedClassCount(),
                     Compiler.getMethodCount(),
@@ -110,67 +106,5 @@ public class CompileTheWorld {
         }
     }
 
-    private static ExecutorService createExecutor() {
-        final int threadsCount = Math.min(
-                Runtime.getRuntime().availableProcessors(),
-                Utils.CI_COMPILER_COUNT);
-        ExecutorService result;
-        if (threadsCount > 1) {
-            result = new ThreadPoolExecutor(threadsCount, threadsCount,
-                    /* keepAliveTime */ 0L, TimeUnit.MILLISECONDS,
-                    new ArrayBlockingQueue<>(threadsCount),
-                    new ThreadPoolExecutor.CallerRunsPolicy());
-        } else {
-            result = new CurrentThreadExecutor();
-        }
-        return result;
-    }
-
-    private static void await(ExecutorService executor) {
-        executor.shutdown();
-        while (!executor.isTerminated()) {
-            try {
-                executor.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
-            } catch (InterruptedException ie) {
-                Thread.currentThread().interrupt();
-                break;
-            }
-        }
-    }
-
-    private static class CurrentThreadExecutor extends AbstractExecutorService {
-        private boolean isShutdown;
-
-        @Override
-        public void shutdown() {
-            this.isShutdown = true;
-        }
-
-        @Override
-        public List<Runnable> shutdownNow() {
-            return null;
-        }
-
-        @Override
-        public boolean isShutdown() {
-            return isShutdown;
-        }
-
-        @Override
-        public boolean isTerminated() {
-            return isShutdown;
-        }
-
-        @Override
-        public boolean awaitTermination(long timeout, TimeUnit unit)
-                throws InterruptedException {
-            return isShutdown;
-        }
-
-        @Override
-        public void execute(Runnable command) {
-            command.run();
-        }
-    }
 }
 

@@ -263,11 +263,6 @@ bool InlineTree::should_not_inline(ciMethod* callee_method, ciMethod* caller_met
     return false;
   }
 
-  if (UseNewCode) {
-    set_msg("force inline by CTW");
-    return false;
-  }
-
   // Now perform checks which are heuristic
 
   if (is_unboxing_method(callee_method, C)) {
@@ -296,6 +291,11 @@ bool InlineTree::should_not_inline(ciMethod* callee_method, ciMethod* caller_met
 
   // use frequency-based objections only for non-trivial methods
   if (callee_method->code_size() <= MaxTrivialSize) {
+    return false;
+  }
+
+  // accept cold methods if requested
+  if (InlineColdMethods) {
     return false;
   }
 
@@ -334,6 +334,9 @@ bool InlineTree::should_not_inline(ciMethod* callee_method, ciMethod* caller_met
 bool InlineTree::is_not_reached(ciMethod* callee_method, ciMethod* caller_method, int caller_bci, ciCallProfile& profile) {
   if (!UseInterpreter) {
     return false; // -Xcomp
+  }
+  if (InlineColdMethods) {
+    return false; // CTW
   }
   if (profile.count() > 0) {
     return false; // reachable according to profile
@@ -413,8 +416,6 @@ bool InlineTree::try_to_inline(ciMethod* callee_method, ciMethod* caller_method,
       // inline constructors even if they are not reached.
     } else if (forced_inline()) {
       // Inlining was forced by CompilerOracle, ciReplay or annotation
-    } else if (UseNewCode2) {
-      // CTW testing has no reachable code.
     } else if (is_not_reached(callee_method, caller_method, caller_bci, profile)) {
       // don't inline unreached call sites
        set_msg("call site not reached");

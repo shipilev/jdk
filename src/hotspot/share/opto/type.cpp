@@ -31,6 +31,7 @@
 #include "libadt/dict.hpp"
 #include "memory/oopFactory.hpp"
 #include "memory/resourceArea.hpp"
+#include "oops/compressedKlass.inline.hpp"
 #include "oops/instanceKlass.hpp"
 #include "oops/instanceMirrorKlass.hpp"
 #include "oops/objArrayKlass.hpp"
@@ -5316,6 +5317,15 @@ void TypeNarrowOop::dump2( Dict & d, uint depth, outputStream *st ) const {
 #endif
 
 const TypeNarrowKlass *TypeNarrowKlass::NULL_PTR;
+
+TypeNarrowKlass::TypeNarrowKlass(const TypePtr* ptrtype): TypeNarrowPtr(NarrowKlass, ptrtype) {
+#ifdef ASSERT
+  // Make sure only correctly encodeable klass constants are ever created.
+  if (ptrtype->ptr() == TypePtr::Constant) {
+    CompressedKlassPointers::check_encodable((void*)ptrtype->get_con());
+  }
+#endif
+}
 
 const TypeNarrowKlass* TypeNarrowKlass::make(const TypePtr* type) {
   return (const TypeNarrowKlass*)(new TypeNarrowKlass(type))->hashcons();

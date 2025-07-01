@@ -307,8 +307,6 @@ public class CtwRunner {
                 "-XX:PerMethodSpecTrapLimit=0",
                 // Artificially expand the scope of inlining in the absence of reasonable profile.
                 "-XX:+InlineColdMethods",
-                "-XX:MaxInlineSize=50",
-                "-XX:C1MaxInlineSize=50",
                 // Do not pay extra stack trace generation cost for normally thrown exceptions
                 "-XX:-StackTraceInThrowable",
                 "-XX:+IgnoreUnrecognizedVMOptions",

@@ -31,6 +31,7 @@
 #include "libadt/dict.hpp"
 #include "memory/oopFactory.hpp"
 #include "memory/resourceArea.hpp"
+#include "oops/compressedKlass.inline.hpp"
 #include "oops/instanceKlass.hpp"
 #include "oops/instanceMirrorKlass.hpp"
 #include "oops/objArrayKlass.hpp"
@@ -5319,6 +5320,15 @@ const TypeNarrowKlass *TypeNarrowKlass::NULL_PTR;
 
 const TypeNarrowKlass* TypeNarrowKlass::make(const TypePtr* type) {
   return (const TypeNarrowKlass*)(new TypeNarrowKlass(type))->hashcons();
+}
+
+TypeNarrowKlass::TypeNarrowKlass(const TypePtr* ptrtype): TypeNarrowPtr(NarrowKlass, ptrtype) {
+#ifdef ASSERT
+  if (ptrtype->ptr() == TypePtr::Constant) {
+    Klass* addr = (Klass*) ptrtype->get_con();
+    CompressedKlassPointers::check_encodable(addr);
+  }
+#endif
 }
 
 #ifndef PRODUCT

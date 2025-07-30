@@ -100,7 +100,7 @@ public:
 // Simple narrow klass constants
 class ConNKlassNode : public ConNode {
 public:
-  ConNKlassNode( const TypeNarrowKlass *t ) : ConNode(t) {}
+  ConNKlassNode( const TypeNarrowKlass *t );
   virtual int Opcode() const;
 };
 

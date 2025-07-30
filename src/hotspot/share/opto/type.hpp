@@ -2078,8 +2078,7 @@ public:
 // the underlying type.
 class TypeNarrowKlass : public TypeNarrowPtr {
 protected:
-  TypeNarrowKlass( const TypePtr* ptrtype): TypeNarrowPtr(NarrowKlass, ptrtype) {
-  }
+  TypeNarrowKlass(const TypePtr* ptrtype);
 
   virtual const TypeNarrowPtr *isa_same_narrowptr(const Type *t) const {
     return t->isa_narrowklass();

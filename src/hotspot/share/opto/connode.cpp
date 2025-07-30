@@ -23,6 +23,7 @@
  */
 
 #include "memory/allocation.inline.hpp"
+#include "oops/compressedKlass.inline.hpp"
 #include "opto/addnode.hpp"
 #include "opto/compile.hpp"
 #include "opto/connode.hpp"
@@ -66,4 +67,11 @@ ConNode *ConNode::make(const Type *t) {
     ShouldNotReachHere();
     return nullptr;
   }
+}
+
+ConNKlassNode::ConNKlassNode(const TypeNarrowKlass *t) : ConNode(t) {
+#ifdef ASSERT
+  void* addr = (void*)t->get_con();
+  CompressedKlassPointers::check_encodable(addr);
+#endif
 }

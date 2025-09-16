@@ -84,15 +84,19 @@ jobs:
         include:
           - test-name: 'jdk/tier1 part 1'
             test-suite: 'test/jdk/:tier1_part1'
+            debug-suffix: ${{ inputs.debug-suffix }}
 
           - test-name: 'jdk/tier1 part 2'
             test-suite: 'test/jdk/:tier1_part2'
+            debug-suffix: ${{ inputs.debug-suffix }}
 
           - test-name: 'jdk/tier1 part 3'
             test-suite: 'test/jdk/:tier1_part3'
+            debug-suffix: ${{ inputs.debug-suffix }}
 
           - test-name: 'langtools/tier1'
             test-suite: 'test/langtools/:tier1'
+            debug-suffix: ${{ inputs.debug-suffix }}
 
           - test-name: 'hs/tier1 common'
             test-suite: 'test/hotspot/jtreg/:tier1_common'

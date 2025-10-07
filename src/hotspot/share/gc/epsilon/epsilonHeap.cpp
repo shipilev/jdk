@@ -23,20 +23,38 @@
  *
  */
 
+#include "classfile/classLoaderDataGraph.hpp"
 #include "gc/epsilon/epsilonHeap.hpp"
 #include "gc/epsilon/epsilonInitLogger.hpp"
 #include "gc/epsilon/epsilonMemoryPool.hpp"
 #include "gc/epsilon/epsilonThreadLocalData.hpp"
+#include "gc/shared/fullGCForwarding.inline.hpp"
 #include "gc/shared/gcArguments.hpp"
+#include "gc/shared/gcLocker.inline.hpp"
+#include "gc/shared/gcTraceTime.inline.hpp"
 #include "gc/shared/locationPrinter.inline.hpp"
+#include "gc/shared/markBitMap.inline.hpp"
+#include "gc/shared/oopStorageSet.inline.hpp"
+#include "gc/shared/preservedMarks.inline.hpp"
 #include "logging/log.hpp"
-#include "memory/allocation.inline.hpp"
+#include "memory/allocation.hpp"
+#include "memory/iterator.inline.hpp"
+#include "memory/memoryReserver.hpp"
 #include "memory/metaspaceUtils.hpp"
 #include "memory/resourceArea.hpp"
 #include "memory/universe.hpp"
+#include "nmt/memTracker.hpp"
+#include "oops/compressedOops.inline.hpp"
 #include "runtime/atomicAccess.hpp"
 #include "runtime/globals.hpp"
+#include "runtime/thread.hpp"
+#include "runtime/threads.hpp"
+#include "runtime/vmOperations.hpp"
+#include "runtime/vmThread.hpp"
+#include "services/management.hpp"
+#include "utilities/macros.hpp"
 #include "utilities/ostream.hpp"
+#include "utilities/stack.inline.hpp"
 
 jint EpsilonHeap::initialize() {
   size_t align = HeapAlignment;
@@ -67,6 +85,30 @@ jint EpsilonHeap::initialize() {
 
   // Install barrier set
   BarrierSet::set_barrier_set(new EpsilonBarrierSet());
+
+  if (EpsilonSlidingGC) {
+    // Initialize marking bitmap, but not commit it yet
+    size_t bitmap_page_size = UseLargePages ? os::large_page_size() : os::vm_page_size();
+    size_t alignment = MAX2(os::vm_page_size(), os::vm_allocation_granularity());
+
+    size_t _bitmap_size = MarkBitMap::compute_size(heap_rs.size());
+    _bitmap_size = align_up(_bitmap_size, bitmap_page_size);
+    _bitmap_size = align_up(_bitmap_size, alignment);
+
+    const ReservedSpace bitmap = MemoryReserver::reserve(_bitmap_size, alignment, bitmap_page_size, mtGC);
+    if (!bitmap.is_reserved()) {
+      vm_exit_during_initialization("Could not reserve space for bitmap");
+    }
+    _bitmap_region = MemRegion((HeapWord *) bitmap.base(), bitmap.size() / HeapWordSize);
+    MemRegion heap_region = MemRegion((HeapWord *) heap_rs.base(), heap_rs.size() / HeapWordSize);
+    _bitmap.initialize(heap_region, _bitmap_region);
+
+    // Initialize full GC forwarding for compact object headers
+    FullGCForwarding::initialize(_reserved);
+
+    // Initialize GC Locker
+    GCLocker::initialize();
+  }
 
   // All done, print out the configuration
   EpsilonInitLogger::print();
@@ -238,7 +280,7 @@ HeapWord* EpsilonHeap::allocate_new_tlab(size_t min_size,
   }
 
   // All prepared, let's do it!
-  HeapWord* res = allocate_work(size);
+  HeapWord* res = allocate_or_collect_work(size);
 
   if (res != nullptr) {
     // Allocation successful
@@ -261,7 +303,7 @@ HeapWord* EpsilonHeap::allocate_new_tlab(size_t min_size,
 }
 
 HeapWord* EpsilonHeap::mem_allocate(size_t size) {
-  return allocate_work(size);
+  return allocate_or_collect_work(size);
 }
 
 HeapWord* EpsilonHeap::allocate_loaded_archive_space(size_t size) {
@@ -283,7 +325,15 @@ void EpsilonHeap::collect(GCCause::Cause cause) {
       print_metaspace_info();
       break;
     default:
-      log_info(gc)("GC request for \"%s\" is ignored", GCCause::to_string(cause));
+      if (EpsilonSlidingGC) {
+        if (SafepointSynchronize::is_at_safepoint()) {
+          entry_collect(cause);
+        } else {
+          vmentry_collect(cause);
+        }
+      } else {
+        log_info(gc)("GC request for \"%s\" is ignored", GCCause::to_string(cause));
+      }
   }
   _monitoring_support->update_counters();
 }
@@ -329,9 +379,10 @@ void EpsilonHeap::print_heap_info(size_t used) const {
                  "%zu%s (%.2f%%) used",
             byte_size_in_proper_unit(reserved),  proper_unit_for_byte_size(reserved),
             byte_size_in_proper_unit(committed), proper_unit_for_byte_size(committed),
-            committed * 100.0 / reserved,
+            percent_of(committed, reserved),
             byte_size_in_proper_unit(used),      proper_unit_for_byte_size(used),
-            used * 100.0 / reserved);
+            percent_of(used, reserved)
+    );
   } else {
     log_info(gc)("Heap: no reliable data");
   }
@@ -348,10 +399,501 @@ void EpsilonHeap::print_metaspace_info() const {
                             "%zu%s (%.2f%%) used",
             byte_size_in_proper_unit(reserved),  proper_unit_for_byte_size(reserved),
             byte_size_in_proper_unit(committed), proper_unit_for_byte_size(committed),
-            committed * 100.0 / reserved,
+            percent_of(committed, reserved),
             byte_size_in_proper_unit(used),      proper_unit_for_byte_size(used),
-            used * 100.0 / reserved);
+            percent_of(used, reserved)
+    );
   } else {
     log_info(gc, metaspace)("Metaspace: no reliable data");
+  }
+}
+
+// ------------------ EXPERIMENTAL MARK-COMPACT -------------------------------
+//
+// This implements a trivial Lisp2-style sliding collector:
+//     https://en.wikipedia.org/wiki/Mark-compact_algorithm#LISP2_algorithm
+//
+// The goal for this implementation is to be as simple as possible, ignoring
+// non-trivial performance optimizations. This collector does not implement
+// reference processing: no soft/weak/phantom/finalizeable references are ever
+// cleared. It also does not implement class unloading and other runtime
+// cleanups.
+//
+
+// VM operation that executes collection cycle under safepoint
+class VM_EpsilonCollect: public VM_Operation {
+private:
+  const GCCause::Cause _cause;
+  EpsilonHeap* const _heap;
+  static size_t _req_id;
+public:
+  VM_EpsilonCollect(GCCause::Cause cause) : VM_Operation(),
+                                            _cause(cause),
+                                            _heap(EpsilonHeap::heap()) {};
+
+  VM_Operation::VMOp_Type type() const { return VMOp_EpsilonCollect; }
+  const char* name()             const { return "Epsilon Collection"; }
+
+  virtual bool doit_prologue() {
+    size_t id = AtomicAccess::load_acquire(&_req_id);
+
+    // Need to take the Heap lock before managing backing storage.
+    Heap_lock->lock();
+
+    // Heap lock also naturally serializes GC requests, and allows us to coalesce
+    // back-to-back GC requests from many threads. Avoid the consecutive GCs
+    // if we started waiting when other GC request was being handled.
+    if (id < AtomicAccess::load_acquire(&_req_id)) {
+      Heap_lock->unlock();
+      return false;
+    }
+
+    // No contenders. Start handling a new GC request.
+    AtomicAccess::inc(&_req_id);
+    return true;
+  }
+
+  virtual void doit() {
+    _heap->entry_collect(_cause);
+  }
+
+  virtual void doit_epilogue() {
+    Heap_lock->unlock();
+  }
+};
+
+size_t VM_EpsilonCollect::_req_id = 0;
+
+void EpsilonHeap::vmentry_collect(GCCause::Cause cause) {
+  VM_EpsilonCollect vmop(cause);
+  VMThread::execute(&vmop);
+}
+
+HeapWord* EpsilonHeap::allocate_or_collect_work(size_t size, bool verbose) {
+  HeapWord* res = allocate_work(size);
+  if (res == nullptr && EpsilonSlidingGC && EpsilonImplicitGC) {
+    vmentry_collect(GCCause::_allocation_failure);
+    GCLocker::block();
+    res = allocate_work(size, verbose);
+    GCLocker::unblock();
+  }
+  return res;
+}
+
+typedef Stack<oop, mtGC> EpsilonMarkStack;
+
+void EpsilonHeap::process_roots(OopClosure* cl, bool update) {
+  // Need to tell runtime we are about to walk the roots with 1 thread
+  ThreadsClaimTokenScope scope;
+
+  // Need to adapt oop closure for some special root types.
+  CLDToOopClosure clds(cl, ClassLoaderData::_claim_none);
+  NMethodToOopClosure code_roots(cl, update);
+
+  // Strong roots: always reachable roots
+
+  // General strong roots that are registered in OopStorages
+  OopStorageSet::strong_oops_do(cl);
+
+  // Subsystems that still have their own root handling
+  ClassLoaderDataGraph::cld_do(&clds);
+  Threads::possibly_parallel_oops_do(false, cl, nullptr);
+
+  {
+    MutexLocker lock(CodeCache_lock, Mutex::_no_safepoint_check_flag);
+    CodeCache::nmethods_do(&code_roots);
+  }
+
+  // Weak roots: in an advanced GC these roots would be skipped during
+  // the initial scan, and walked again after the marking is complete.
+  // Then, we could discover which roots are not actually pointing
+  // to surviving Java objects, and either clean the roots, or mark them.
+  // Current simple implementation does not handle weak roots specially,
+  // and therefore, we mark through them as if they are strong roots.
+  for (auto id : EnumRange<OopStorageSet::WeakId>()) {
+    OopStorageSet::storage(id)->oops_do(cl);
+  }
+}
+
+// Walk the marking bitmap and call object closure on every marked object.
+// This is much faster that walking a (very sparse) parsable heap, but it
+// takes up to 1/64-th of heap size for the bitmap.
+void EpsilonHeap::walk_bitmap(ObjectClosure* cl) {
+   HeapWord* limit = _space->top();
+   HeapWord* addr = _bitmap.get_next_marked_addr(_space->bottom(), limit);
+   while (addr < limit) {
+     oop obj = cast_to_oop(addr);
+     assert(_bitmap.is_marked(obj), "sanity");
+     cl->do_object(obj);
+     addr += 1;
+     if (addr < limit) {
+       addr = _bitmap.get_next_marked_addr(addr, limit);
+     }
+   }
+}
+
+class EpsilonScanOopClosure : public BasicOopIterateClosure {
+private:
+  EpsilonMarkStack* const _stack;
+  MarkBitMap* const _bitmap;
+
+  template <class T>
+  void do_oop_work(T* p) {
+    // p is the pointer to memory location where oop is, load the value
+    // from it, unpack the compressed reference, if needed:
+    T o = RawAccess<>::oop_load(p);
+    if (!CompressedOops::is_null(o)) {
+      oop obj = CompressedOops::decode_not_null(o);
+
+      // Object is discovered. See if it is marked already. If not,
+      // mark and push it on mark stack for further traversal. Non-atomic
+      // check and set would do, as this closure is called by single thread.
+      if (!_bitmap->is_marked(obj)) {
+        // Support Virtual Threads: transform the stack chunks as we visit them.
+        ContinuationGCSupport::transform_stack_chunk(obj);
+
+        _bitmap->mark(obj);
+        _stack->push(obj);
+      }
+    }
+  }
+
+public:
+  EpsilonScanOopClosure(EpsilonMarkStack* stack, MarkBitMap* bitmap) :
+                        _stack(stack), _bitmap(bitmap) {}
+  virtual void do_oop(oop* p)       { do_oop_work(p); }
+  virtual void do_oop(narrowOop* p) { do_oop_work(p); }
+};
+
+class EpsilonCalcNewLocationObjectClosure : public ObjectClosure {
+private:
+  HeapWord* _compact_point;
+  PreservedMarks* const _preserved_marks;
+
+public:
+  EpsilonCalcNewLocationObjectClosure(HeapWord* start, PreservedMarks* pm) :
+                                      _compact_point(start),
+                                      _preserved_marks(pm) {}
+
+  void do_object(oop obj) {
+    // Record the new location of the object: it is current compaction point.
+    // If object stays at the same location (which is true for objects in
+    // dense prefix, that we would normally get), do not bother recording the
+    // move, letting downstream code ignore it.
+    if (obj != cast_to_oop(_compact_point)) {
+      markWord mark = obj->mark();
+      _preserved_marks->push_if_necessary(obj, mark);
+      FullGCForwarding::forward_to(obj, cast_to_oop(_compact_point));
+    }
+    _compact_point += obj->size();
+  }
+
+  HeapWord* compact_point() {
+    return _compact_point;
+  }
+};
+
+class EpsilonAdjustPointersOopClosure : public BasicOopIterateClosure {
+private:
+  template <class T>
+  void do_oop_work(T* p) {
+    // p is the pointer to memory location where oop is, load the value
+    // from it, unpack the compressed reference, if needed:
+    T o = RawAccess<>::oop_load(p);
+    if (!CompressedOops::is_null(o)) {
+      oop obj = CompressedOops::decode_not_null(o);
+
+      // Rewrite the current pointer to the object with its forwardee.
+      // Skip the write if update is not needed.
+      if (FullGCForwarding::is_forwarded(obj)) {
+        oop fwd = FullGCForwarding::forwardee(obj);
+        assert(fwd != nullptr, "just checking");
+        RawAccess<>::oop_store(p, fwd);
+      }
+    }
+  }
+
+public:
+  virtual void do_oop(oop* p)       { do_oop_work(p); }
+  virtual void do_oop(narrowOop* p) { do_oop_work(p); }
+};
+
+class EpsilonAdjustPointersObjectClosure : public ObjectClosure {
+private:
+  EpsilonAdjustPointersOopClosure _cl;
+public:
+  void do_object(oop obj) {
+    // Apply the updates to all references reachable from current object:
+    obj->oop_iterate(&_cl);
+  }
+};
+
+class EpsilonMoveObjectsObjectClosure : public ObjectClosure {
+private:
+  size_t _moved;
+public:
+  EpsilonMoveObjectsObjectClosure() : ObjectClosure(), _moved(0) {}
+
+  void do_object(oop obj) {
+    // Copy the object to its new location, if needed. This is final step,
+    // so we have to re-initialize its new mark word, dropping the forwardee
+    // data from it.
+    if (FullGCForwarding::is_forwarded(obj)) {
+      oop fwd = FullGCForwarding::forwardee(obj);
+      assert(fwd != nullptr, "just checking");
+      Copy::aligned_conjoint_words(cast_from_oop<HeapWord*>(obj), cast_from_oop<HeapWord*>(fwd), obj->size());
+      fwd->init_mark();
+      _moved++;
+    }
+  }
+
+  size_t moved() {
+    return _moved;
+  }
+};
+
+class EpsilonVerifyOopClosure : public BasicOopIterateClosure {
+private:
+  EpsilonHeap* const _heap;
+  EpsilonMarkStack* const _stack;
+  MarkBitMap* const _bitmap;
+
+  template <class T>
+  void do_oop_work(T* p) {
+    T o = RawAccess<>::oop_load(p);
+    if (!CompressedOops::is_null(o)) {
+      oop obj = CompressedOops::decode_not_null(o);
+      if (!_bitmap->is_marked(obj)) {
+        _bitmap->mark(obj);
+
+        guarantee(_heap->is_in(obj),      "Is in heap: "   PTR_FORMAT, p2i(obj));
+        guarantee(oopDesc::is_oop(obj),   "Is an object: " PTR_FORMAT, p2i(obj));
+        guarantee(!obj->mark().is_marked(), "Mark is gone: " PTR_FORMAT, p2i(obj));
+
+        _stack->push(obj);
+      }
+    }
+  }
+
+public:
+  EpsilonVerifyOopClosure(EpsilonMarkStack* stack, MarkBitMap* bitmap) :
+    _heap(EpsilonHeap::heap()), _stack(stack), _bitmap(bitmap) {}
+  virtual void do_oop(oop* p)       { do_oop_work(p); }
+  virtual void do_oop(narrowOop* p) { do_oop_work(p); }
+};
+
+void EpsilonHeap::entry_collect(GCCause::Cause cause) {
+  if (GCLocker::is_active()) {
+    return;
+  }
+
+  GCIdMark mark;
+  GCTraceTime(Info, gc) time("Lisp2-style Mark-Compact", nullptr, cause, true);
+
+  // Some statistics, for fun and profit:
+  size_t stat_reachable_roots = 0;
+  size_t stat_reachable_heap = 0;
+  size_t stat_moved = 0;
+  size_t stat_preserved_marks = 0;
+
+  {
+    GCTraceTime(Info, gc) time("Step 0: Prologue", nullptr);
+
+    // Commit marking bitmap memory. There are several upsides of doing this
+    // before the cycle: no memory is taken if GC is not happening, the memory
+    // is "cleared" on first touch, and untouched parts of bitmap are mapped
+    // to zero page, boosting performance on sparse heaps.
+    if (!os::commit_memory((char*)_bitmap_region.start(), _bitmap_region.byte_size(), false)) {
+      log_warning(gc)("Could not commit native memory for marking bitmap, GC failed");
+      return;
+    }
+
+    // We do not need parsable heap for this algorithm to work, but we want
+    // threads to give up their TLABs.
+    ensure_parsability(true);
+  }
+
+  {
+    GCTraceTime(Info, gc) time("Step 1: Mark", nullptr);
+
+#if COMPILER2_OR_JVMCI
+    // Derived pointers would be re-discovered during the mark.
+    // Clear and activate the table for them.
+    DerivedPointerTable::clear();
+#endif
+
+    // TODO: Do we need this if we do not do class unloading?
+    CodeCache::on_gc_marking_cycle_start();
+
+    // Marking stack and the closure that does most of the work. The closure
+    // would scan the outgoing references, mark them, and push newly-marked
+    // objects to stack for further processing.
+    EpsilonMarkStack stack;
+    EpsilonScanOopClosure cl(&stack, &_bitmap);
+
+    // Seed the marking with roots.
+    process_roots(&cl, false);
+    stat_reachable_roots = stack.size();
+
+    // Scan the rest of the heap until we run out of objects. Termination is
+    // guaranteed, because all reachable objects would be marked eventually.
+    while (!stack.is_empty()) {
+      oop obj = stack.pop();
+      obj->oop_iterate(&cl);
+      stat_reachable_heap++;
+    }
+
+    // TODO: Do we need this if we do not do class unloading?
+    CodeCache::on_gc_marking_cycle_finish();
+    CodeCache::arm_all_nmethods();
+
+#if COMPILER2_OR_JVMCI
+    // No more derived pointers discovered after marking is done.
+    DerivedPointerTable::set_active(false);
+#endif
+  }
+
+  // We are going to store forwarding information (where the new copy resides)
+  // in mark words. Some of those mark words need to be carefully preserved.
+  // This is an utility that maintains the list of those special mark words.
+  PreservedMarks preserved_marks;
+
+  // New top of the allocated space.
+  HeapWord* new_top;
+
+  {
+    GCTraceTime(Info, gc) time("Step 2: Calculate new locations", nullptr);
+
+    // Walk all alive objects, compute their new addresses and store those
+    // addresses in mark words. Optionally preserve some marks.
+    EpsilonCalcNewLocationObjectClosure cl(_space->bottom(), &preserved_marks);
+    walk_bitmap(&cl);
+
+    // After addresses are calculated, we know the new top for the allocated
+    // space. We cannot set it just yet, because some asserts check that objects
+    // are "in heap" based on current "top".
+    new_top = cl.compact_point();
+
+    stat_preserved_marks = preserved_marks.size();
+  }
+
+  {
+    GCTraceTime(Info, gc) time("Step 3: Adjust pointers", nullptr);
+
+    // Walk all alive objects _and their reference fields_, and put "new
+    // addresses" there. We know the new addresses from the forwarding data
+    // in mark words. Take care of the heap objects first.
+    EpsilonAdjustPointersObjectClosure cl;
+    walk_bitmap(&cl);
+
+    // Now do the same, but for all VM roots, which reference the objects on
+    // their own: their references should also be updated.
+    EpsilonAdjustPointersOopClosure cli;
+    process_roots(&cli, true);
+
+    // Finally, make sure preserved marks know the objects are about to move.
+    preserved_marks.adjust_during_full_gc();
+  }
+
+  {
+    GCTraceTime(Info, gc) time("Step 4: Move objects", nullptr);
+
+    // Move all alive objects to their new locations. All the references are
+    // already adjusted at previous step.
+    EpsilonMoveObjectsObjectClosure cl;
+    walk_bitmap(&cl);
+    stat_moved = cl.moved();
+
+    // Now we moved all objects to their relevant locations, we can retract
+    // the "top" of the allocation space to the end of the compacted prefix.
+    _space->set_top(new_top);
+  }
+
+  {
+    GCTraceTime(Info, gc) time("Step 5: Epilogue", nullptr);
+
+    // Restore all special mark words.
+    preserved_marks.restore();
+
+#if COMPILER2_OR_JVMCI
+    // Tell the rest of runtime we have finished the GC.
+    DerivedPointerTable::update_pointers();
+#endif
+
+    // Verification code walks entire heap and verifies nothing is broken.
+    if (EpsilonVerify) {
+      // The basic implementation turns heap into entirely parsable one with
+      // only alive objects, which mean we could just walked the heap object
+      // by object and verify it. But, it would be inconvenient for verification
+      // to assume heap has only alive objects. Any future change that leaves
+      // at least one dead object with dead outgoing references would fail the
+      // verification. Therefore, it makes more sense to mark through the heap
+      // again, not assuming objects are all alive.
+      EpsilonMarkStack stack;
+      EpsilonVerifyOopClosure cl(&stack, &_bitmap);
+
+      _bitmap.clear();
+
+      // Verify all roots are correct, and that we have the same number of
+      // object reachable from roots.
+      process_roots(&cl, false);
+
+      size_t verified_roots = stack.size();
+      guarantee(verified_roots == stat_reachable_roots,
+                "Verification discovered %zu roots out of %zu",
+                verified_roots, stat_reachable_roots);
+
+      // Verify the rest of the heap is correct, and that we have the same
+      // number of objects reachable from heap.
+      size_t verified_heap = 0;
+      while (!stack.is_empty()) {
+        oop obj = stack.pop();
+        obj->oop_iterate(&cl);
+        verified_heap++;
+      }
+
+      guarantee(verified_heap == stat_reachable_heap,
+                "Verification discovered %zu heap objects out of %zu",
+                verified_heap, stat_reachable_heap);
+
+      // Ask parts of runtime to verify themselves too
+      Universe::verify("Epsilon");
+    }
+
+    // Marking bitmap is not needed anymore
+    if (!os::uncommit_memory((char*)_bitmap_region.start(), _bitmap_region.byte_size())) {
+      log_warning(gc)("Could not uncommit native memory for marking bitmap");
+    }
+
+    // Return all memory back if so requested. On large heaps, this would
+    // take a while.
+    if (EpsilonUncommit) {
+      _virtual_space.shrink_by((_space->end() - new_top) * HeapWordSize);
+      _space->set_end((HeapWord*)_virtual_space.high());
+    }
+  }
+
+  size_t stat_reachable = stat_reachable_roots + stat_reachable_heap;
+  log_info(gc)("GC Stats: %zu (%.2f%%) reachable from roots, %zu (%.2f%%) reachable from heap, "
+               "%zu (%.2f%%) moved, %zu (%.2f%%) markwords preserved",
+               stat_reachable_roots, percent_of(stat_reachable_roots, stat_reachable),
+               stat_reachable_heap,  percent_of(stat_reachable_heap,  stat_reachable),
+               stat_moved,           percent_of(stat_moved,           stat_reachable),
+               stat_preserved_marks, percent_of(stat_preserved_marks, stat_reachable)
+  );
+
+  print_heap_info(used());
+  print_metaspace_info();
+}
+
+void EpsilonHeap::pin_object(JavaThread* thread, oop obj) {
+  if (EpsilonSlidingGC) {
+    GCLocker::enter(thread);
+  }
+}
+
+void EpsilonHeap::unpin_object(JavaThread* thread, oop obj) {
+  if (EpsilonSlidingGC) {
+    GCLocker::exit(thread);
   }
 }

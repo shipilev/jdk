@@ -24,6 +24,7 @@
 
 #include "gc/epsilon/epsilonArguments.hpp"
 #include "gc/epsilon/epsilonHeap.hpp"
+#include "gc/shared/fullGCForwarding.hpp"
 #include "gc/shared/gcArguments.hpp"
 #include "gc/shared/tlab_globals.hpp"
 #include "logging/log.hpp"
@@ -36,6 +37,7 @@ size_t EpsilonArguments::conservative_max_heap_alignment() {
 
 void EpsilonArguments::initialize() {
   GCArguments::initialize();
+  FullGCForwarding::initialize_flags(MaxHeapSize);
 
   assert(UseEpsilonGC, "Sanity");
 

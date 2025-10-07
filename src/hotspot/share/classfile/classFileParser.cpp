@@ -1466,8 +1466,12 @@ void ClassFileParser::parse_fields(const ClassFileStream* const cfs,
     const BasicType type = cp->basic_type_for_signature_at(signature_index);
 
     // Update number of static oop fields.
-    if (is_static && is_reference_type(type)) {
-      _static_oop_count++;
+    if (is_reference_type(type)) {
+      if (is_static) {
+        _static_oop_count++;
+      } else {
+        _nonstatic_oop_count++;
+      }
     }
 
     FieldInfo fi(access_flags, name_index, signature_index, constantvalue_index, fieldFlags);
@@ -5093,6 +5097,7 @@ void ClassFileParser::fill_instance_klass(InstanceKlass* ik,
   ik->set_nonstatic_field_size(_field_info->_nonstatic_field_size);
   ik->set_has_nonstatic_fields(_field_info->_has_nonstatic_fields);
   ik->set_static_oop_field_count(_static_oop_count);
+  ik->set_nonstatic_oop_field_count(_nonstatic_oop_count);
 
   // this transfers ownership of a lot of arrays from
   // the parser onto the InstanceKlass*
@@ -5323,6 +5328,7 @@ ClassFileParser::ClassFileParser(ClassFileStream* stream,
   _can_access_vm_annotations(cl_info->can_access_vm_annotations()),
   _orig_cp_size(0),
   _static_oop_count(0),
+  _nonstatic_oop_count(0),
   _super_klass(),
   _cp(nullptr),
   _fieldinfo_stream(nullptr),

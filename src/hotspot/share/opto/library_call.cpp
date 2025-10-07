@@ -780,6 +780,15 @@ bool LibraryCallKit::try_to_inline(int predicate) {
   case vmIntrinsics::_blackhole:
     return inline_blackhole();
 
+  case vmIntrinsics::_shipilev_magic_timestamp:
+    return inline_timestamp(false);
+  case vmIntrinsics::_shipilev_magic_timestamp_serial:
+    return inline_timestamp(true);
+  case vmIntrinsics::_shipilev_magic_sizeOf:
+    return inline_sizeOf();
+  case vmIntrinsics::_shipilev_magic_addressOf:
+    return inline_addressOf();
+
   default:
     // If you get here, it may be that someone has added a new intrinsic
     // to the list in vmIntrinsics.hpp without implementing it here.
@@ -8915,13 +8924,24 @@ bool LibraryCallKit::inline_isCompileConstant() {
   return true;
 }
 
-//------------------------------- inline_getObjectSize --------------------------------------
+//------------------------------- inline_getObjectSize/sizeOf --------------------------------------
 //
 // Calculate the runtime size of the object/array.
+//
+//   long java.lang.Runtime.sizeOf(Object obj)
 //   native long sun.instrument.InstrumentationImpl.getObjectSize0(long nativeAgent, Object objectToSize);
 //
+bool LibraryCallKit::inline_sizeOf() {
+  Node* obj = argument(0);
+  return inline_sizeOf_impl(obj);
+}
+
 bool LibraryCallKit::inline_getObjectSize() {
   Node* obj = argument(3);
+  return inline_sizeOf_impl(obj);
+}
+
+bool LibraryCallKit::inline_sizeOf_impl(Node* obj) {
   Node* klass_node = load_object_klass(obj);
 
   jint  layout_con = Klass::_lh_neutral_value;
@@ -9166,3 +9186,20 @@ bool LibraryCallKit::inline_fp16_operations(vmIntrinsics::ID id, int num_args) {
   return true;
 }
 
+bool LibraryCallKit::inline_timestamp(bool serial) {
+  insert_mem_bar(Op_MemBarCPUOrder);
+  Node* node = serial ?
+          _gvn.transform(new TimestampSerialNode(control())) :
+          _gvn.transform(new TimestampNode(control()));
+  set_result(node);
+  insert_mem_bar(Op_MemBarCPUOrder);
+  return true;
+}
+
+bool LibraryCallKit::inline_addressOf() {
+  Node* obj = argument(0);
+  Node* raw_val = _gvn.transform(new CastP2XNode(nullptr, obj));
+  Node* long_val = ConvX2L(raw_val);
+  set_result(long_val);
+  return true;
+}

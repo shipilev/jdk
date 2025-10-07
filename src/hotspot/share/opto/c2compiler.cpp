@@ -828,6 +828,8 @@ bool C2Compiler::is_intrinsic_supported(vmIntrinsics::ID id) {
   case vmIntrinsics::_Preconditions_checkIndex:
   case vmIntrinsics::_Preconditions_checkLongIndex:
   case vmIntrinsics::_getObjectSize:
+  case vmIntrinsics::_shipilev_magic_sizeOf:
+  case vmIntrinsics::_shipilev_magic_addressOf:
     break;
   case vmIntrinsics::_VectorCompressExpand:
   case vmIntrinsics::_VectorUnaryOp:
@@ -867,7 +869,10 @@ bool C2Compiler::is_intrinsic_supported(vmIntrinsics::ID id) {
   case vmIntrinsics::_notifyJvmtiVThreadDisableSuspend:
 #endif
     break;
-
+  case vmIntrinsics::_shipilev_magic_timestamp:
+    return Matcher::match_rule_supported(Op_Timestamp);
+  case vmIntrinsics::_shipilev_magic_timestamp_serial:
+    return Matcher::match_rule_supported(Op_TimestampSerial);
   default:
     return false;
   }

@@ -2111,6 +2111,7 @@ private:
   void rcpss(XMMRegister dst, XMMRegister src);
 
   void rdtsc();
+  void rdtscp();
 
   void ret(int imm16);
 

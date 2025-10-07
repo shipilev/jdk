@@ -6328,6 +6328,10 @@ void Assembler::rdtsc() {
   emit_int16(0x0F, 0x31);
 }
 
+void Assembler::rdtscp() {
+  emit_int24(0x0F, 0x01, (unsigned char)0xF9);
+}
+
 // copies data from [esi] to [edi] using rcx pointer sized words
 // generic
 void Assembler::rep_mov() {

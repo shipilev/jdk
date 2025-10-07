@@ -85,7 +85,20 @@
   product(size_t, EpsilonMinHeapExpand, 128 * M, EXPERIMENTAL,              \
           "Min expansion step for heap. Larger value improves performance " \
           "at the potential expense of memory waste.")                      \
-          range(1, max_intx)
+          range(1, max_intx)                                                \
+                                                                            \
+  product(bool, EpsilonSlidingGC, false, EXPERIMENTAL,                      \
+          "Actually does sliding mark-compact GC.")                         \
+                                                                            \
+  product(bool, EpsilonImplicitGC, true, EXPERIMENTAL,                      \
+          "Does GC on implicit GC requests, e.g. for allocation failure.")  \
+                                                                            \
+  product(bool, EpsilonUncommit, false, EXPERIMENTAL,                       \
+          "Uncommits all unneeded memory after GC.")                        \
+                                                                            \
+  product(bool, EpsilonVerify, false, EXPERIMENTAL,                         \
+          "Does the additional GC verification step.")                      \
+                                                                            \
 
 // end of GC_EPSILON_FLAGS
 

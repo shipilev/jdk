@@ -116,6 +116,7 @@ class ClassFileParser {
   const bool _can_access_vm_annotations;
   int _orig_cp_size;
   unsigned int _static_oop_count;
+  unsigned int _nonstatic_oop_count;
 
   // Metadata created before the instance klass is created.  Must be deallocated
   // if not transferred to the InstanceKlass upon successful class loading

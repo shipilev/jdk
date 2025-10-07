@@ -97,6 +97,7 @@
   template(ShenandoahFinalUpdateRefs)             \
   template(ShenandoahFinalRoots)                  \
   template(ShenandoahDegeneratedGC)               \
+  template(EpsilonCollect)                        \
   template(Exit)                                  \
   template(LinuxDllLoad)                          \
   template(WhiteBoxOperation)                     \

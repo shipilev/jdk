@@ -244,6 +244,9 @@ bool Compiler::is_intrinsic_supported(vmIntrinsics::ID id) {
     break;
   case vmIntrinsics::_blackhole:
     break;
+  case vmIntrinsics::_shipilev_magic_sizeOf:
+  case vmIntrinsics::_shipilev_magic_addressOf:
+    break;
   default:
     return false; // Intrinsics not on the previous list are not available.
   }

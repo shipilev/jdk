@@ -170,6 +170,20 @@ public:
     virtual uint ideal_reg() const { return Op_RegP; }
 };
 
+class TimestampNode : public Node {
+public:
+  TimestampNode(Node* ctrl) : Node(ctrl) {}
+    virtual int Opcode() const;
+    virtual const Type *bottom_type() const { return TypeLong::LONG;}
+    virtual uint ideal_reg() const { return Op_RegL; }
+};
 
+class TimestampSerialNode : public Node {
+public:
+  TimestampSerialNode(Node* ctrl) : Node(ctrl) {}
+    virtual int Opcode() const;
+    virtual const Type *bottom_type() const { return TypeLong::LONG;}
+    virtual uint ideal_reg() const { return Op_RegL; }
+};
 
 #endif // SHARE_OPTO_CONNODE_HPP

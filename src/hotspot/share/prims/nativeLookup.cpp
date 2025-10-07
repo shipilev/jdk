@@ -41,6 +41,7 @@
 #include "prims/jvmtiExport.hpp"
 #include "prims/nativeLookup.hpp"
 #include "prims/scopedMemoryAccess.hpp"
+#include "prims/shipilevMagic.hpp"
 #include "prims/unsafe.hpp"
 #include "runtime/arguments.hpp"
 #include "runtime/handles.inline.hpp"
@@ -236,6 +237,7 @@ static JNINativeMethod lookup_special_native_methods[] = {
   { CC"Java_jdk_jfr_internal_JVM_registerNatives",                 nullptr, FN_PTR(jfr_register_natives)            },
 #endif
   { CC"Java_jdk_internal_misc_ScopedMemoryAccess_registerNatives", nullptr, FN_PTR(JVM_RegisterJDKInternalMiscScopedMemoryAccessMethods) },
+  { CC"Java_net_shipilev_Magic_registerNatives",                   nullptr, FN_PTR(JVM_RegisterNetShipilevMagicMethods) },
 };
 
 static address lookup_special_native(const char* jni_name) {

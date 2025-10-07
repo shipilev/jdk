@@ -14407,6 +14407,32 @@ instruct tlsLoadP(r15_RegP dst) %{
   ins_pipe(ialu_reg_reg);
 %}
 
+instruct rdtsc(rax_RegL dst, rdx_RegL tmp) %{
+  match(Set dst (Timestamp));
+  effect(DEF dst, KILL tmp);
+
+  format %{ "RDTSC" %}
+  ins_encode %{
+    __ rdtsc();
+    __ shlptr(rdx, 32);
+    __ orptr(rax, rdx);
+  %}
+  ins_pipe(ialu_reg_reg);
+%}
+
+instruct rdtscp(rax_RegL dst, rdx_RegL tmp, rcx_RegL dead) %{
+  match(Set dst (TimestampSerial));
+  effect(DEF dst, KILL tmp, KILL dead);
+
+  format %{ "RDTSCP" %}
+  ins_encode %{
+    __ rdtscp();
+    __ shlptr(rdx, 32);
+    __ orptr(rax, rdx);
+  %}
+  ins_pipe(ialu_reg_reg);
+%}
+
 
 //----------PEEPHOLE RULES-----------------------------------------------------
 // These must follow all instruction definitions as they use the names

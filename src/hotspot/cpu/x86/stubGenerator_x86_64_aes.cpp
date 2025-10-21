@@ -1781,8 +1781,9 @@ void StubGenerator::ev_load_key(XMMRegister xmmdst, Register key, int offset, Re
 #ifdef ASSERT
   Label L_good_offset;
   __ movl(rscratch, Address(key, arrayOopDesc::length_offset_in_bytes() - arrayOopDesc::base_offset_in_bytes(T_INT)));
+  __ shll(rscratch, 2); // int -> byte length
   __ cmpl(rscratch, offset + 16);
-  __ jcc(Assembler::below, L_good_offset);
+  __ jcc(Assembler::greaterEqual, L_good_offset);
   __ stop("Incorrect offset");
   __ bind(L_good_offset);
 #endif

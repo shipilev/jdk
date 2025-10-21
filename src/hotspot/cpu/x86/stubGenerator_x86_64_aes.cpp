@@ -1124,7 +1124,7 @@ address StubGenerator::generate_aescrypt_encryptBlock() {
   load_key(xmm_temp2, key, 0xa0, xmm_key_shuf_mask);
 
   __ cmpl(keylen, 44);
-  __ jccb(Assembler::equal, L_doLast);
+  __ jcc(Assembler::equal, L_doLast);
 
   __ aesenc(xmm_result, xmm_temp1);
   __ aesenc(xmm_result, xmm_temp2);
@@ -1133,7 +1133,7 @@ address StubGenerator::generate_aescrypt_encryptBlock() {
   load_key(xmm_temp2, key, 0xc0, xmm_key_shuf_mask);
 
   __ cmpl(keylen, 52);
-  __ jccb(Assembler::equal, L_doLast);
+  __ jcc(Assembler::equal, L_doLast);
 
   __ aesenc(xmm_result, xmm_temp1);
   __ aesenc(xmm_result, xmm_temp2);
@@ -1759,6 +1759,7 @@ void StubGenerator::roundDeclast(XMMRegister xmm_reg) {
   __ vaesdeclast(xmm8, xmm8, xmm_reg, Assembler::AVX_512bit);
 }
 
+// Check incoming byte offset against the int[] len. key is the pointer to the int[0].
 void StubGenerator::check_key_offset(Register key, int offset, int load_size) {
 #ifdef ASSERT
   Register tmp = (key != rscratch1) ? rscratch1 : rscratch2;

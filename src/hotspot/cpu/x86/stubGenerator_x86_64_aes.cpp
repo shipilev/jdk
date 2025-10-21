@@ -1778,6 +1778,14 @@ void StubGenerator::ev_load_key(XMMRegister xmmdst, Register key, int offset, XM
 }
 
 void StubGenerator::ev_load_key(XMMRegister xmmdst, Register key, int offset, Register rscratch) {
+#ifdef ASSERT
+  Label L_good_offset;
+  __ movl(rscratch, Address(key, arrayOopDesc::length_offset_in_bytes() - arrayOopDesc::base_offset_in_bytes(T_INT)));
+  __ cmp(rscratch, offset + 16);
+  __ jcc(Assembler::lessOrEqual, L_good_offset);
+  __ stop("Incorrect offset");
+  __ bind(L_good_offset);
+#endif
   __ movdqu(xmmdst, Address(key, offset));
   __ pshufb(xmmdst, ExternalAddress(key_shuffle_mask_addr()), rscratch);
   __ evshufi64x2(xmmdst, xmmdst, xmmdst, 0x0, Assembler::AVX_512bit);

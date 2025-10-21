@@ -3438,6 +3438,10 @@ void StubGenerator::aesgcm_avx512(Register in, Register len, Register ct, Regist
 
   // Compute #rounds for AES based on the length of the key array
   __ movl(rounds, Address(key, arrayOopDesc::length_offset_in_bytes() - arrayOopDesc::base_offset_in_bytes(T_INT)));
+  Label L_len_check;
+  __ cmpl(rounds, 52);
+  __ jcc(Assembler::greaterEqual, L_len_check);
+  __ bind(L_len_check);
 
   __ evmovdquq(ADDBE_4x4, ExternalAddress(counter_mask_addbe_4444_addr()), Assembler::AVX_512bit, rbx /*rscratch*/);
   __ evmovdquq(ADDBE_1234, ExternalAddress(counter_mask_addbe_1234_addr()), Assembler::AVX_512bit, rbx /*rscratch*/);

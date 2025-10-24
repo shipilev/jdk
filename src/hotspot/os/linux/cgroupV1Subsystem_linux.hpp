@@ -76,6 +76,10 @@ class CgroupV1MemoryController final : public CgroupMemoryController {
   public:
     void set_subsystem_path(const char *cgroup_path) override {
       reader()->set_subsystem_path(cgroup_path);
+      jlong hierarchy = uses_mem_hierarchy();
+      if (hierarchy > 0) {
+        set_hierarchical(true);
+      }
     }
     jlong read_memory_limit_in_bytes(julong upper_bound) override;
     jlong memory_usage_in_bytes() override;
@@ -96,16 +100,25 @@ class CgroupV1MemoryController final : public CgroupMemoryController {
     bool is_read_only() override {
       return reader()->is_read_only();
     }
+    bool is_hierarchical() { return _uses_mem_hierarchy; }
     const char* subsystem_path() override { return reader()->subsystem_path(); }
     const char* mount_point() override { return reader()->mount_point(); }
     const char* cgroup_path() override { return reader()->cgroup_path(); }
   private:
+
+    /* Some container runtimes set limits via cgroup
+     * hierarchy. If set to true consider also memory.stat
+     * file if everything else seems unlimited */
+    bool _uses_mem_hierarchy;
+    jlong uses_mem_hierarchy();
+    void set_hierarchical(bool value) { _uses_mem_hierarchy = value; }
     jlong read_mem_swappiness();
     jlong read_mem_swap(julong upper_memsw_bound);
 
   public:
     CgroupV1MemoryController(const CgroupV1Controller& reader)
-      : _reader(reader) {
+      : _reader(reader),
+        _uses_mem_hierarchy(false) {
     }
 
 };

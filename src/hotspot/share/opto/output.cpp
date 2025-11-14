@@ -1435,6 +1435,8 @@ void PhaseOutput::fill_buffer(C2_MacroAssembler* masm, uint* blk_starts) {
 
   NonSafepointEmitter non_safepoints(C);  // emit non-safepoints lazily
 
+  int size_start = masm->offset();
+
   // Emit the constant table.
   if (C->has_mach_constant_base_node()) {
     if (!constant_table().emit(masm)) {
@@ -1442,6 +1444,8 @@ void PhaseOutput::fill_buffer(C2_MacroAssembler* masm, uint* blk_starts) {
       return;
     }
   }
+
+  int size_const = masm->offset();
 
   // Create an array of labels, one for each basic block
   Label* blk_labels = NEW_RESOURCE_ARRAY(Label, nblocks+1);
@@ -1768,19 +1772,36 @@ void PhaseOutput::fill_buffer(C2_MacroAssembler* masm, uint* blk_starts) {
     return;
   }
 
+  int size_blocks = masm->offset();
+
   BarrierSetC2* bs = BarrierSet::barrier_set()->barrier_set_c2();
   bs->emit_stubs(*masm->code());
   if (C->failing())  return;
+
+  int size_gc = masm->offset();
 
   // Fill in stubs.
   assert(masm->inst_mark() == nullptr, "should be.");
   _stub_list.emit(*masm);
   if (C->failing())  return;
 
+  int size_stubs = masm->offset();
+
 #ifndef PRODUCT
   // Information on the size of the method, without the extraneous code
   Scheduling::increment_method_size(masm->offset());
 #endif
+
+  if (UseNewCode) {
+    ResourceMark rm;
+    stringStream method_metadata_str;
+    tty->print_cr("nmethod bytes === %d consts, %d instructions, %d GC stubs, %d C2 stubs",
+      (size_const - size_start),
+      (size_blocks - size_const),
+      (size_gc - size_blocks),
+      (size_stubs - size_gc)
+    );
+  }
 
   // ------------------
   // Fill in exception table entries.

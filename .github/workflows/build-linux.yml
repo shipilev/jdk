@@ -108,6 +108,9 @@ jobs:
             echo 'suffix=:${{ inputs.apt-architecture }}' >> $GITHUB_OUTPUT
           fi
 
+      - name: 'Disk Space (1)'
+        run: df -h
+
       # Upgrading apt to solve libc6 installation bugs, see JDK-8260460.
       - name: 'Install toolchain and dependencies'
         run: |
@@ -132,6 +135,9 @@ jobs:
             ${{ inputs.apt-extra-packages }}
           sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-${{ inputs.gcc-major-version }} 100 --slave /usr/bin/g++ g++ /usr/bin/g++-${{ inputs.gcc-major-version }}
 
+      - name: 'Disk Space (2)'
+        run: df -h
+
       - name: 'Configure'
         run: >
           bash configure
@@ -147,6 +153,9 @@ jobs:
           echo "Dumping config.log:" &&
           cat config.log &&
           exit 1)
+
+      - name: 'Disk Space (3)'
+        run: df -h
 
       - name: 'Build'
         id: build
@@ -165,3 +174,7 @@ jobs:
           bundle-suffix: ${{ inputs.bundle-suffix }}
           static-suffix: ${{ inputs.static-suffix }}
         if: ${{ inputs.dry-run == false }}
+
+      - name: 'Disk Space (4)'
+        run: df -h
+

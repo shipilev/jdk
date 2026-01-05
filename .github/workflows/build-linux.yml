@@ -108,7 +108,26 @@ jobs:
             echo 'suffix=:${{ inputs.apt-architecture }}' >> $GITHUB_OUTPUT
           fi
 
-      - name: 'Disk Space (1)'
+      - name: 'Disk Space (1A)'
+        run: df -h
+
+      - name: 'Cleanup'
+        run: |
+          docker system prune -af || true
+          docker builder prune -af || true
+
+      - name: 'Disk Space (1B)'
+        run: df -h
+
+      - name: 'Cleanup'
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/share/swift
+          sudo rm -rf /usr/local/.ghcup
+          sudo rm -rf /usr/local/julia*
+          sudo rm -rf /usr/local/lib/android
+
+      - name: 'Disk Space (1C)'
         run: df -h
 
       # Upgrading apt to solve libc6 installation bugs, see JDK-8260460.

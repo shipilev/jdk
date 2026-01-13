@@ -1,6 +1,31 @@
-/* @test
+/* @test id=serial
  * @library /test/lib
- * @run main/othervm/native -Xmx128m -XX:+UseParallelGC TestPinnedDeadlock
+ * @run main/othervm/native/timeout=10 -Xmx128m -XX:+UseSerialGC TestPinnedDeadlock
+ */
+
+/* @test id=parallel
+ * @library /test/lib
+ * @run main/othervm/native/timeout=10 -Xmx128m -XX:+UseParallelGC TestPinnedDeadlock
+ */
+
+/* @test id=g1
+ * @library /test/lib
+ * @run main/othervm/native/timeout=10 -Xmx128m -XX:+UseG1GC TestPinnedDeadlock
+ */
+
+/* @test id=shenandoah
+ * @library /test/lib
+ * @run main/othervm/native/timeout=10 -Xmx128m -XX:+UseShenandoahGC TestPinnedDeadlock
+ */
+
+/* @test id=z
+ * @library /test/lib
+ * @run main/othervm/native/timeout=10 -Xmx128m -XX:+UseZGC TestPinnedDeadlock
+ */
+
+/* @test id=epsilon
+ * @library /test/lib
+ * @run main/othervm/native/timeout=10 -Xmx128m -XX:+UnlockExperimentalVMOptions -XX:+UseEpsilonGC TestPinnedDeadlock
  */
 
 public class TestPinnedDeadlock {

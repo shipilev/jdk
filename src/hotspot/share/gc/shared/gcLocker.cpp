@@ -99,6 +99,7 @@ void GCLocker::block() {
   ThreadBlockInVM tbivm(java_thread);
 
   // Wait for threads leaving critical section
+  assert(!java_thread->in_critical_atomic(), "About to deadlock...");
   SpinYield spin_yield;
   for (JavaThreadIteratorWithHandle jtiwh; JavaThread *cur = jtiwh.next(); /* empty */) {
     while (cur->in_critical_atomic()) {

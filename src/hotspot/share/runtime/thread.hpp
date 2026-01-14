@@ -627,6 +627,25 @@ protected:
 
  private:
   VMErrorCallback* _vm_error_callbacks;
+
+#ifdef ASSERT
+private:
+  bool _no_barrierset_access_marked;
+  bool _no_barrierset_access_armed;
+  const char* _no_barrierset_access_desc;
+
+public:
+  void arm_no_barrierset_access()         { _no_barrierset_access_armed = true;   }
+  void disarm_no_barrierset_access()      { _no_barrierset_access_armed = false;  }
+  bool is_no_barrierset_access_armed()    { return _no_barrierset_access_armed;   }
+
+  void mark_no_barrierset_access()        { _no_barrierset_access_marked = true;  }
+  void unmark_no_barrierset_access()      { _no_barrierset_access_marked = false; }
+  bool is_no_barrierset_access_verified() { return _no_barrierset_access_marked;  }
+
+  void set_no_barrierset_access_desc(const char* desc) { _no_barrierset_access_desc = desc; }
+  const char* no_barrierset_access_desc() { return _no_barrierset_access_desc; }
+#endif // ASSERT
 };
 
 class ThreadInAsgct {

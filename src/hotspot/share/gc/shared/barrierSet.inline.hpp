@@ -59,4 +59,45 @@ inline OopCopyResult BarrierSet::AccessBarrier<decorators, BarrierSetT>::oop_arr
   return OopCopyResult::ok;
 }
 
+BarrierSetAssembler* BarrierSet::barrier_set_assembler() {
+  assert(_barrier_set_assembler != nullptr, "should be set");
+  check_access();
+  return _barrier_set_assembler;
+}
+
+BarrierSetC1* BarrierSet::barrier_set_c1() {
+  assert(_barrier_set_c1 != nullptr, "should be set");
+  check_access();
+  return _barrier_set_c1;
+}
+
+BarrierSetC2* BarrierSet::barrier_set_c2() {
+  assert(_barrier_set_c2 != nullptr, "should be set");
+  // C2 barrier set accesses are very intrusive and checked at critical uses
+  return _barrier_set_c2;
+}
+
+BarrierSetNMethod* BarrierSet::barrier_set_nmethod() {
+  check_access();
+  return _barrier_set_nmethod;
+}
+
+BarrierSetStackChunk* BarrierSet::barrier_set_stack_chunk() {
+  assert(_barrier_set_stack_chunk != nullptr, "should be set");
+  check_access();
+  return _barrier_set_stack_chunk;
+}
+
+void BarrierSet::check_access() {
+#ifdef ASSERT
+  Thread* thread = Thread::current_or_null();
+  assert(thread == nullptr || !thread->is_no_barrierset_access_armed(),
+         "No barrier set access allowed: %s", thread->no_barrierset_access_desc());
+#endif
+}
+
+bool NoBarrierSetAccessVerifier::is_in_scope() {
+  return Thread::current()->is_no_barrierset_access_verified();
+}
+
 #endif // SHARE_GC_SHARED_BARRIERSET_INLINE_HPP

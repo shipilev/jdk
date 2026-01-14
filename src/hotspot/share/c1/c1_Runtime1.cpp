@@ -192,6 +192,10 @@ class C1StubAssemblerCodeGenClosure: public StubAssemblerCodeGenClosure {
   virtual OopMapSet* generate_code(StubAssembler* sasm) {
     return Runtime1::generate_code_for(_id, sasm);
   }
+
+  virtual bool is_gc_specific() {
+    return true;
+  }
 };
 
 CodeBlob* Runtime1::generate_blob(BufferBlob* buffer_blob, StubId id, const char* name, bool expect_oop_map, StubAssemblerCodeGenClosure* cl) {
@@ -201,6 +205,9 @@ CodeBlob* Runtime1::generate_blob(BufferBlob* buffer_blob, StubId id, const char
       return blob;
     }
   }
+
+  // Check that AOT saved blob is GC agnostic, unless it is done specifically for handling GC slowpath
+  NoBarrierSetAccessVerifier nbsav(!cl->is_gc_specific() && AOTCodeCache::is_on_for_dump(), name);
 
   ResourceMark rm;
   // create code buffer for code storage

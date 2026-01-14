@@ -377,10 +377,12 @@
 #define DEBUG_ONLY(code) code
 #define NOT_DEBUG(code)
 #define NOT_DEBUG_RETURN  /*next token must be ;*/
+#define NOT_DEBUG_RETURN_(code)
 #else // ASSERT
 #define DEBUG_ONLY(code)
 #define NOT_DEBUG(code) code
 #define NOT_DEBUG_RETURN {}
+#define NOT_DEBUG_RETURN_(code) { code }
 #endif // ASSERT
 
 #ifdef  _LP64

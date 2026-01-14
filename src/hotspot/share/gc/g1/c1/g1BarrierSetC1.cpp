@@ -266,6 +266,10 @@ class C1G1PreBarrierCodeGenClosure : public StubAssemblerCodeGenClosure {
     bs->generate_c1_pre_barrier_runtime_stub(sasm);
     return nullptr;
   }
+
+  virtual bool is_gc_specific() {
+    return true;
+  }
 };
 
 bool G1BarrierSetC1::generate_c1_runtime_stubs(BufferBlob* buffer_blob) {

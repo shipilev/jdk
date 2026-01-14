@@ -359,6 +359,7 @@ Node* BarrierSetC2::store_at(C2Access& access, C2AccessValue& val) const {
 }
 
 Node* BarrierSetC2::load_at(C2Access& access, const Type* val_type) const {
+  BarrierSet::check_access();
   C2AccessFence fence(access);
   resolve_address(access);
   return load_at_resolved(access, val_type);
@@ -1154,7 +1155,6 @@ void BarrierSetC2::compute_liveness_at_stubs() const {
   PhaseCFG* const cfg = C->cfg();
   PhaseRegAlloc* const regalloc = C->regalloc();
   RegMask* const live = NEW_ARENA_ARRAY(A, RegMask, cfg->number_of_blocks() * sizeof(RegMask));
-  BarrierSetAssembler* const bs = BarrierSet::barrier_set()->barrier_set_assembler();
   BarrierSetC2State* bs_state = barrier_set_state();
   Block_List worklist;
 
@@ -1187,8 +1187,8 @@ void BarrierSetC2::compute_liveness_at_stubs() const {
       }
 
       // Remove def bits
-      const OptoReg::Name first = bs->refine_register(node, regalloc->get_reg_first(node));
-      const OptoReg::Name second = bs->refine_register(node, regalloc->get_reg_second(node));
+      const OptoReg::Name first = BarrierSetAssembler::refine_register(node, regalloc->get_reg_first(node));
+      const OptoReg::Name second = BarrierSetAssembler::refine_register(node, regalloc->get_reg_second(node));
       if (first != OptoReg::Bad) {
         new_live.remove(first);
       }
@@ -1199,8 +1199,8 @@ void BarrierSetC2::compute_liveness_at_stubs() const {
       // Add use bits
       for (uint j = 1; j < node->req(); ++j) {
         const Node* const use = node->in(j);
-        const OptoReg::Name first = bs->refine_register(use, regalloc->get_reg_first(use));
-        const OptoReg::Name second = bs->refine_register(use, regalloc->get_reg_second(use));
+        const OptoReg::Name first = BarrierSetAssembler::refine_register(use, regalloc->get_reg_first(use));
+        const OptoReg::Name second = BarrierSetAssembler::refine_register(use, regalloc->get_reg_second(use));
         if (first != OptoReg::Bad) {
           new_live.insert(first);
         }

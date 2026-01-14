@@ -119,7 +119,9 @@ public:
     _raw_access(nullptr),
     _type(type),
     _barrier_data(0)
-  {}
+  {
+    BarrierSet::check_access();
+  }
 
   DecoratorSet decorators() const { return _decorators; }
   Node* base() const              { return _base; }

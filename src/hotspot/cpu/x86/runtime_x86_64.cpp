@@ -34,6 +34,7 @@
 #include "runtime/vframeArray.hpp"
 #include "utilities/globalDefinitions.hpp"
 #include "vmreg_x86.inline.hpp"
+#include "gc/shared/barrierSet.hpp"
 
 class SimpleRuntimeFrame {
 
@@ -62,6 +63,9 @@ UncommonTrapBlob* OptoRuntime::generate_uncommon_trap_blob() {
   if (blob != nullptr) {
     return blob->as_uncommon_trap_blob();
   }
+
+  // Check that AOT saved blob is GC agnostic
+  NoBarrierSetAccessVerifier nbsav(AOTCodeCache::is_on_for_dump(), "uncommon trap blob");
 
   // Allocate space for the code
   ResourceMark rm;
@@ -276,6 +280,8 @@ ExceptionBlob* OptoRuntime::generate_exception_blob() {
   if (blob != nullptr) {
     return blob->as_exception_blob();
   }
+
+  NoBarrierSetAccessVerifier nbsav(AOTCodeCache::is_on_for_dump(), "exception blob");
 
   // Allocate space for the code
   ResourceMark rm;

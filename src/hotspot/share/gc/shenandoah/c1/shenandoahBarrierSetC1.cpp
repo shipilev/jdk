@@ -256,6 +256,10 @@ class C1ShenandoahPreBarrierCodeGenClosure : public StubAssemblerCodeGenClosure 
     bs->generate_c1_pre_barrier_runtime_stub(sasm);
     return nullptr;
   }
+
+  virtual bool is_gc_specific() {
+    return true;
+  }
 };
 
 class C1ShenandoahLoadReferenceBarrierCodeGenClosure : public StubAssemblerCodeGenClosure {
@@ -269,6 +273,10 @@ public:
     ShenandoahBarrierSetAssembler* bs = (ShenandoahBarrierSetAssembler*)BarrierSet::barrier_set()->barrier_set_assembler();
     bs->generate_c1_load_reference_barrier_runtime_stub(sasm, _decorators);
     return nullptr;
+  }
+
+  virtual bool is_gc_specific() {
+    return true;
   }
 };
 

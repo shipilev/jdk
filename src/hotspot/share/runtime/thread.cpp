@@ -135,6 +135,12 @@ Thread::Thread(MemTag mem_tag) {
   }
 
   MACOS_AARCH64_ONLY(DEBUG_ONLY(_wx_init = false));
+
+#ifdef ASSERT
+  _no_barrierset_access_armed = false;
+  _no_barrierset_access_marked = false;
+  _no_barrierset_access_desc = "";
+#endif
 }
 
 #ifdef ASSERT

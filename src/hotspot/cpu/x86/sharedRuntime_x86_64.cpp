@@ -2505,6 +2505,9 @@ void SharedRuntime::generate_deopt_blob() {
     return;
   }
 
+  // Check that AOT saved blob is GC agnostic
+  NoBarrierSetAccessVerifier nbsav(AOTCodeCache::is_on_for_dump(), "deopt blob");
+
   CodeBuffer buffer(name, 2560+pad, 1024);
   MacroAssembler* masm = new MacroAssembler(&buffer);
   int frame_size_in_words;
@@ -2877,6 +2880,9 @@ SafepointBlob* SharedRuntime::generate_handler_blob(StubId id, address call_ptr)
     return blob->as_safepoint_blob();
   }
 
+  // Check that AOT saved blob is GC agnostic
+  NoBarrierSetAccessVerifier nbsav(AOTCodeCache::is_on_for_dump(), "handler blob");
+
   ResourceMark rm;
   OopMapSet *oop_maps = new OopMapSet();
   OopMap* map;
@@ -3063,6 +3069,9 @@ RuntimeStub* SharedRuntime::generate_resolve_blob(StubId id, address destination
     return blob->as_runtime_stub();
   }
 
+  // Check that AOT saved blob is GC agnostic
+  NoBarrierSetAccessVerifier nbsav(AOTCodeCache::is_on_for_dump(), "resolve blob");
+
   // allocate space for the code
   ResourceMark rm;
   CodeBuffer buffer(name, 1552, 512);
@@ -3181,6 +3190,9 @@ RuntimeStub* SharedRuntime::generate_throw_exception(StubId id, address runtime_
   if (blob != nullptr) {
     return blob->as_runtime_stub();
   }
+
+  // Check that AOT saved blob is GC agnostic
+  NoBarrierSetAccessVerifier nbsav(AOTCodeCache::is_on_for_dump(), "throw exception blob");
 
   ResourceMark rm;
   CodeBuffer code(name, insts_size, locs_size);

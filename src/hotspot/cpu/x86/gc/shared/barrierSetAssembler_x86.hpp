@@ -107,8 +107,9 @@ public:
   virtual void check_oop(MacroAssembler* masm, Register obj, Register tmp1, Register tmp2, Label& error);
 
 #ifdef COMPILER2
-  OptoReg::Name refine_register(const Node* node,
-                                OptoReg::Name opto_reg);
+  // TODO: This helper method does not depend on any GC specifics, so BarrierSet
+  // is not a great place for it. It should likely be in C2_MacroAssembler or somewhere else.
+  static OptoReg::Name refine_register(const Node* node, OptoReg::Name opto_reg);
 #endif // COMPILER2
 };
 

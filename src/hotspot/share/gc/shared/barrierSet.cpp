@@ -97,3 +97,28 @@ void gc_barrier_stubs_init() {
   bs_assembler->barrier_stubs_init();
 #endif
 }
+
+NoBarrierSetAccessVerifier::NoBarrierSetAccessVerifier(bool active, const char* desc)
+  : _thread(Thread::current_or_null()),
+    _active(active) {
+  if (_thread == nullptr) {
+    return;
+  }
+  assert(!_thread->is_no_barrierset_access_verified(), "Recursive verification is not supported");
+  _thread->mark_no_barrierset_access();
+  if (active) {
+    _thread->set_no_barrierset_access_desc(desc);
+    _thread->arm_no_barrierset_access();
+  }
+}
+
+NoBarrierSetAccessVerifier::~NoBarrierSetAccessVerifier() {
+  if (_thread == nullptr) {
+    return;
+  }
+  if (_active) {
+    _thread->disarm_no_barrierset_access();
+    _thread->set_no_barrierset_access_desc("");
+  }
+  _thread->unmark_no_barrierset_access();
+}

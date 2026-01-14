@@ -41,6 +41,9 @@ class StubAssembler;
 class StubAssemblerCodeGenClosure: public Closure {
  public:
   virtual OopMapSet* generate_code(StubAssembler* sasm) = 0;
+
+  // Returns "true" if the stub is only used by a particular GC
+  virtual bool is_gc_specific() = 0;
 };
 
 class Runtime1: public AllStatic {

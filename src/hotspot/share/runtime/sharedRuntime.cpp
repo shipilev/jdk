@@ -2826,6 +2826,10 @@ bool AdapterHandlerLibrary::generate_adapter_code(AdapterHandlerEntry* handler,
                                                   int total_args_passed,
                                                   BasicType* sig_bt,
                                                   bool is_transient) {
+  // Check that AOT saved adapter is GC agnostic
+  bool save_aot = !is_transient && AOTCodeCache::is_dumping_adapter();
+  NoBarrierSetAccessVerifier nbsav(save_aot, "adapter");
+
   if (log_is_enabled(Info, perf, class, link)) {
     ClassLoader::perf_method_adapters_count()->inc();
   }
@@ -2869,7 +2873,7 @@ bool AdapterHandlerLibrary::generate_adapter_code(AdapterHandlerEntry* handler,
     return false;
   }
   handler->set_adapter_blob(adapter_blob);
-  if (!is_transient && AOTCodeCache::is_dumping_adapter()) {
+  if (save_aot) {
     // try to save generated code
     const char* name = AdapterHandlerLibrary::name(handler);
     const uint32_t id = AdapterHandlerLibrary::id(handler);

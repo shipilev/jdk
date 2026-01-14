@@ -59,6 +59,8 @@
 #include "opto/mulnode.hpp"
 #include "opto/output.hpp"
 #include "opto/runtime.hpp"
+
+#include "code/aotCodeCache.hpp"
 #include "opto/subnode.hpp"
 #include "prims/jvmtiExport.hpp"
 #include "runtime/atomicAccess.hpp"
@@ -257,6 +259,8 @@ address OptoRuntime::generate_stub(ciEnv* env,
   DirectiveSet* directive = DirectivesStack::getDefaultDirective(CompileBroker::compiler(CompLevel_full_optimization));
   CompilationMemoryStatisticMark cmsm(directive);
   ResourceMark rm;
+  // Check that AOT saved stub is GC agnostic
+  NoBarrierSetAccessVerifier nbsav(AOTCodeCache::is_on_for_dump(), name);
   Compile C(env, gen, C_function, name, stub_id, is_fancy_jump, pass_tls, return_pc, directive);
   DirectivesStack::release(directive);
   return  C.stub_entry_point();

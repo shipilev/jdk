@@ -39,6 +39,7 @@ class BarrierSetC2;
 class BarrierSetNMethod;
 class BarrierSetStackChunk;
 class JavaThread;
+class Thread;
 
 // This class provides the interface between a barrier implementation and
 // the rest of the system.
@@ -148,29 +149,13 @@ public:
   static BarrierSet* barrier_set() { return _barrier_set; }
   static void set_barrier_set(BarrierSet* barrier_set);
 
-  BarrierSetAssembler* barrier_set_assembler() {
-    assert(_barrier_set_assembler != nullptr, "should be set");
-    return _barrier_set_assembler;
-  }
+  inline static void check_access();
 
-  BarrierSetC1* barrier_set_c1() {
-    assert(_barrier_set_c1 != nullptr, "should be set");
-    return _barrier_set_c1;
-  }
-
-  BarrierSetC2* barrier_set_c2() {
-    assert(_barrier_set_c2 != nullptr, "should be set");
-    return _barrier_set_c2;
-  }
-
-  BarrierSetNMethod* barrier_set_nmethod() {
-    return _barrier_set_nmethod;
-  }
-
-  BarrierSetStackChunk* barrier_set_stack_chunk() {
-    assert(_barrier_set_stack_chunk != nullptr, "should be set");
-    return _barrier_set_stack_chunk;
-  }
+  inline BarrierSetAssembler* barrier_set_assembler();
+  inline BarrierSetC1* barrier_set_c1();
+  inline BarrierSetC2* barrier_set_c2();
+  inline BarrierSetNMethod* barrier_set_nmethod();
+  inline BarrierSetStackChunk* barrier_set_stack_chunk();
 
   // The AccessBarrier of a BarrierSet subclass is called by the Access API
   // (cf. oops/access.hpp) to perform decorated accesses. GC implementations
@@ -320,5 +305,26 @@ inline T* barrier_set_cast(BarrierSet* bs) {
   assert(bs->is_a(BarrierSet::GetName<T>::value), "wrong type of barrier set");
   return static_cast<T*>(bs);
 }
+
+// A NoBarrierSetAccessVerifier is used to check that no BarrierSet accesses
+// are performed in the scope. This is useful to mechanically check that code
+// generation or runtime decisions are not based on GC specifics.
+//
+// Since we cannot easily intercept overriden BarrierSet invocations, this
+// verifier checks the accesses to BarrierSet instance objects, e.g. calls to
+// BarrierSet::barrier_set()->barrier_set_c1().
+//
+class NoBarrierSetAccessVerifier : public StackObj {
+private:
+  Thread *_thread;
+  bool _active;
+  const char* _desc;
+public:
+  static inline bool is_in_scope() NOT_DEBUG_RETURN_(false);
+
+  explicit NoBarrierSetAccessVerifier(bool active = true, const char* desc = "") NOT_DEBUG_RETURN;
+  ~NoBarrierSetAccessVerifier() NOT_DEBUG_RETURN;
+  const char* desc() { return _desc; }
+};
 
 #endif // SHARE_GC_SHARED_BARRIERSET_HPP

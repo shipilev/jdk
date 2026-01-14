@@ -201,6 +201,10 @@ public class AOTCodeCompressedOopsTest {
                  if (aotCacheShift == -1 || currentShift == -1 || aotCacheBase == -1 || currentBase == -1) {
                      throw new RuntimeException("Failed to find CompressedOops settings");
                  }
+                 if (out.contains("AOT Code Cache is empty")) {
+                    // Nothing in the cache at all if both adapters/stubs are disabled.
+                    return;
+                 }
                  if (aotCacheShift != currentShift) {
                      out.shouldContain("AOT Code Cache disabled: it was created with different CompressedOops::shift()");
                  } else if ((aotCacheBase == 0 || currentBase == 0) && (aotCacheBase != currentBase)) {

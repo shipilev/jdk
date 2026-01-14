@@ -32,6 +32,7 @@
 #include "classfile/javaAssertions.hpp"
 #include "code/aotCodeCache.hpp"
 #include "code/codeCache.hpp"
+#include "gc/shared/barrierSet.hpp"
 #include "gc/shared/gcConfig.hpp"
 #include "logging/logStream.hpp"
 #include "memory/memoryReserver.hpp"
@@ -183,6 +184,8 @@ void AOTCodeCache::initialize() {
 
   // Disable stubs caching until JDK-8357398 is fixed.
   FLAG_SET_ERGO(AOTStubCaching, false);
+  // C2I adapters have GC barriers, so their caching cannot be enabled for a generic AOT cache.
+  FLAG_SET_ERGO(AOTAdapterCaching, false);
 
   if (VerifyOops) {
     // Disable AOT stubs caching when VerifyOops flag is on.
@@ -238,6 +241,7 @@ void AOTCodeCache::initialize() {
     FLAG_SET_DEFAULT(ForceUnreachable, true);
   }
   FLAG_SET_DEFAULT(DelayCompilerStubsGeneration, false);
+
 #endif // defined(AMD64) || defined(AARCH64)
 }
 
@@ -804,6 +808,7 @@ bool AOTCodeCache::store_code_blob(CodeBlob& blob, AOTCodeEntry::Kind entry_kind
   if (cache == nullptr) {
     return false;
   }
+  assert(NoBarrierSetAccessVerifier::is_in_scope(), "code generation must be guarded with NoBarrierSetAccessVerifier");
   assert(AOTCodeEntry::is_valid_entry_kind(entry_kind), "invalid entry_kind %d", entry_kind);
 
   if (AOTCodeEntry::is_adapter(entry_kind) && !is_dumping_adapter()) {

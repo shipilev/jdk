@@ -502,6 +502,10 @@ public:
     ZBarrierSet::assembler()->generate_c1_load_barrier_runtime_stub(sasm, _decorators);
     return nullptr;
   }
+
+  virtual bool is_gc_specific() {
+    return true;
+  }
 };
 
 static address generate_c1_load_runtime_stub(BufferBlob* blob, DecoratorSet decorators, const char* name) {
@@ -521,6 +525,10 @@ public:
   virtual OopMapSet* generate_code(StubAssembler* sasm) {
     ZBarrierSet::assembler()->generate_c1_store_barrier_runtime_stub(sasm, _self_healing);
     return nullptr;
+  }
+
+  virtual bool is_gc_specific() {
+    return true;
   }
 };
 

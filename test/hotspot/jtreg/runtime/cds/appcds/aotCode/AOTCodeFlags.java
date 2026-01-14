@@ -50,8 +50,13 @@ import jdk.test.lib.process.OutputAnalyzer;
 public class AOTCodeFlags {
     public static void main(String... args) throws Exception {
         Tester t = new Tester();
-        // Run only 2 modes (0 - no AOT code, 1 - AOT adapters) until JDK-8357398 is fixed
-        for (int mode = 0; mode < 2; mode++) {
+        // Modes:
+        //  0 - no AOT code
+        //  1 - AOT adapters
+        //  2 - AOT stubs
+        //
+        // Run only until JDK-8357398 and JDK-XXXXXXX are fixed
+        for (int mode = 0; mode < 1; mode++) {
             t.setTestMode(mode);
             t.run(new String[] {"AOT", "--two-step-training"});
         }

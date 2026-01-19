@@ -34,5 +34,5 @@
  *
  * @build jdk.test.whitebox.WhiteBox
  * @run driver jdk.test.lib.helpers.ClassFileInstaller jdk.test.whitebox.WhiteBox
- * @run driver/timeout=7200 sun.hotspot.tools.ctw.CtwRunner modules:java.desktop 0 100
+ * @run driver/timeout=7200 sun.hotspot.tools.ctw.CtwRunner modules:java.desktop 0% 50%
  */

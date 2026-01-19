@@ -281,10 +281,22 @@ void Compile::gvn_replace_by(Node* n, Node* nn) {
     uint uses_found = 0;
     for (uint j = 0; j < use->len(); j++) {
       if (use->in(j) == n) {
-        if (j < use->req())
-          use->set_req(j, nn);
-        else
-          use->set_prec(j, nn);
+        if (use != nn || use->is_CFG() || use->is_Phi() || use->is_Mach()) {
+          if (j < use->req()) {
+            use->set_req(j, nn);
+          } else {
+            use->set_prec(j, nn);
+          }
+        } else {
+          // Avoid linking node with itself, drop the input instead.
+          // Roll the IV back a bit to revisit the now-j-th node.
+          if (j < use->req()) {
+            use->del_req(j);
+          } else {
+            use->rm_prec(j);
+          }
+          j--;
+        }
         uses_found++;
       }
     }

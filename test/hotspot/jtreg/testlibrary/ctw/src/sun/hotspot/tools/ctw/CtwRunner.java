@@ -319,7 +319,6 @@ public class CtwRunner {
                 "-XX:-VerifyInlineCaches",
                 // Do not pay extra zapping cost for explicit GC invocations
                 "-XX:-ZapUnusedHeapArea",
-                "-XX:VerifyIterativeGVN=11111",
                 // Stress* are c2-specific stress flags, so IgnoreUnrecognizedVMOptions is needed
                 "-XX:+StressLCM",
                 "-XX:+StressGCM",

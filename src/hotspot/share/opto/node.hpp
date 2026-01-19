@@ -465,6 +465,7 @@ public:
   void set_req( uint i, Node *n ) {
     assert( is_not_dead(n), "can not use dead node");
     assert( i < _cnt, "oob: i=%d, _cnt=%d", i, _cnt);
+    assert( this != n || is_CFG() || is_Phi() || is_Mach(), "cannot create input loops");
     assert( !VerifyHashTableKeys || _hash_lock == 0,
             "remove node from hash table before modifying it");
     Node** p = &_in[i];    // cache this._in, across the del_out call
@@ -477,6 +478,7 @@ public:
   void init_req( uint i, Node *n ) {
     assert( (i == 0 && this == n) ||
             is_not_dead(n), "can not use dead node");
+    assert( this != n || is_CFG() || is_Phi() || is_Mach(), "cannot create input loops");
     assert( i < _cnt, "oob");
     assert( !VerifyHashTableKeys || _hash_lock == 0,
             "remove node from hash table before modifying it");

@@ -389,8 +389,9 @@
           "information at the bailout point")                               \
                                                                             \
   product(bool, InlineColdMethods, false, DIAGNOSTIC,                       \
-          "Inline cold methods that would otherwise be rejected based"      \
-          "on profile information. Only useful for compiler testing.")      \
+          "Inline cold methods that would otherwise be rejected due to "    \
+          "cold profile counters. Useful for compiler testing to expose "   \
+          "more code to compilers.")                                        \
                                                                             \
 
 // end of COMPILER_FLAGS

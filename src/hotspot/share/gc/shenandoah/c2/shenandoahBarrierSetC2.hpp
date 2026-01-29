@@ -80,7 +80,7 @@ private:
   void insert_pre_barrier(GraphKit* kit, Node* base_oop, Node* offset,
                           Node* pre_val, bool need_mem_bar) const;
 
-  static bool clone_needs_barrier(Node* src, PhaseGVN& gvn);
+  static bool clone_needs_barrier(const TypeOopPtr* src_type, bool& is_oop_array);
 
 protected:
   virtual Node* load_at_resolved(C2Access& access, const Type* val_type) const;
@@ -95,7 +95,6 @@ public:
   static ShenandoahBarrierSetC2* bsc2();
 
   static bool is_shenandoah_wb_pre_call(Node* call);
-  static bool is_shenandoah_clone_call(Node* call);
   static bool is_shenandoah_lrb_call(Node* call);
   static bool is_shenandoah_marking_if(PhaseValues* phase, Node* n);
   static bool is_shenandoah_state_load(Node* n);
@@ -104,11 +103,11 @@ public:
   ShenandoahBarrierSetC2State* state() const;
 
   static const TypeFunc* write_barrier_pre_Type();
-  static const TypeFunc* clone_barrier_Type();
   static const TypeFunc* load_reference_barrier_Type();
   virtual bool has_load_barrier_nodes() const { return true; }
 
   // This is the entry-point for the backend to perform accesses through the Access API.
+  virtual void clone(GraphKit* kit, Node* src_base, Node* dst_base, Node* size, bool is_array) const;
   virtual void clone_at_expansion(PhaseMacroExpand* phase, ArrayCopyNode* ac) const;
 
   // These are general helper methods used by C2

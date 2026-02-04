@@ -860,16 +860,15 @@ void ShenandoahBarrierSetC2::clone(GraphKit* kit, Node* src_base, Node* dst_base
 
   bool is_oop_array = false;
   if (!clone_needs_barrier(src_type, is_oop_array)) {
-    // No barrier is needed? Just do what common BarrierSetC2 wants
-    // with it.
+    // No barrier is needed? Just do what common BarrierSetC2 wants with it.
     BarrierSetC2::clone(kit, src_base, dst_base, size, is_array);
     return;
   }
 
-  if (!is_array || !is_oop_array) {
-    // Looks like an instance? Prepare the instance clone. This would
-    // either be exploded into individual accesses or be left as runtime
-    // call. Common BarrierSetC2 prepares everything for both cases.
+  if (ShenandoahCloneRuntime || !is_array || !is_oop_array) {
+    // Looks like an instance? Prepare the instance clone. This would either
+    // be exploded into individual accesses or be left as runtime call.
+    // Common BarrierSetC2 prepares everything for both cases.
     BarrierSetC2::clone(kit, src_base, dst_base, size, is_array);
     return;
   }
@@ -909,7 +908,7 @@ void ShenandoahBarrierSetC2::clone_at_expansion(PhaseMacroExpand* phase, ArrayCo
     return;
   }
 
-  if (!ac->is_clone_array() || !is_oop_array) {
+  if (ShenandoahCloneRuntime || !ac->is_clone_array() || !is_oop_array) {
     // Still looks like an instance? Likely a large instance or reflective
     // clone with unknown length. Go to runtime and handle it there.
     clone_in_runtime(phase, ac, CAST_FROM_FN_PTR(address, ShenandoahRuntime::clone_addr()), "ShenandoahRuntime::clone");
@@ -929,11 +928,9 @@ void ShenandoahBarrierSetC2::clone_at_expansion(PhaseMacroExpand* phase, ArrayCo
   const char*   copyfunc_name = "arraycopy";
   const address copyfunc_addr = phase->basictype2arraycopy(T_OBJECT, nullptr, nullptr, true, copyfunc_name, true);
 
-  Node* const call = phase->make_leaf_call(ctrl,
-      mem,
+  Node* const call = phase->make_leaf_call(ctrl, mem,
       OptoRuntime::fast_arraycopy_Type(),
-      copyfunc_addr,
-      copyfunc_name,
+      copyfunc_addr, copyfunc_name,
       TypeRawPtr::BOTTOM,
       phase->basic_plus_adr(src, src_offset),
       phase->basic_plus_adr(dest, dest_offset),

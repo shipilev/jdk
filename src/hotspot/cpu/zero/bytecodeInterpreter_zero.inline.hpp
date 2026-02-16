@@ -26,6 +26,8 @@
 #ifndef CPU_ZERO_BYTECODEINTERPRETER_ZERO_INLINE_HPP
 #define CPU_ZERO_BYTECODEINTERPRETER_ZERO_INLINE_HPP
 
+#include "sanitizers/ub.hpp"
+
 // Inline interpreter functions for zero
 
 inline jfloat BytecodeInterpreter::VMfloatAdd(jfloat op1, jfloat op2) {
@@ -40,6 +42,7 @@ inline jfloat BytecodeInterpreter::VMfloatMul(jfloat op1, jfloat op2) {
   return op1 * op2;
 }
 
+ATTRIBUTE_NO_UBSAN // IEEE-754 division by zero is well-defined
 inline jfloat BytecodeInterpreter::VMfloatDiv(jfloat op1, jfloat op2) {
   return op1 / op2;
 }
@@ -183,8 +186,8 @@ inline jdouble BytecodeInterpreter::VMdoubleAdd(jdouble op1, jdouble op2) {
   return op1 + op2;
 }
 
+ATTRIBUTE_NO_UBSAN // IEEE-754 division by zero is well-defined
 inline jdouble BytecodeInterpreter::VMdoubleDiv(jdouble op1, jdouble op2) {
-  // Divide by zero... QQQ
   return op1 / op2;
 }
 

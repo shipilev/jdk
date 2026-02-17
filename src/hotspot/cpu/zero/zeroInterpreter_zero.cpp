@@ -368,7 +368,7 @@ int ZeroInterpreter::native_entry(Method* method, intptr_t UNUSED, TRAPS) {
     goto unlock_unwind_and_return;
 
   void **arguments;
-  // These two must remain on stack until call completes
+  // These locals must remain on stack until call completes
   void *mirror;
   void *env;
   {

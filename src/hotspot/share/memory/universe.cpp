@@ -1183,9 +1183,7 @@ bool universe_post_init() {
   }
 
   // Initialize serviceability
-  Universe::heap()->initialize_serviceability();
-  MemoryService::add_metaspace_memory_pools();
-  MemoryService::set_universe_heap(Universe::heap());
+  MemoryService::initialize(Universe::heap());
 
   // Complete initialization
   Universe::heap()->post_initialize();

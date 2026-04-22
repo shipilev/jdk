@@ -898,6 +898,18 @@ public:
   // Virtual inherited Node size
   virtual uint size_of() const;
 
+  bool is_Mem() const {
+    return ((_class_id & ClassMask_Mem) == Class_Mem);
+  }
+  MemNode *as_Mem() const {
+    assert(is_Mem(), "invalid node class: %s", Name());
+    assert(!is_LoadStore(), "Caveat: LoadStore is_Mem() == true, but as_Mem() is incorrect, check the code");
+    return (MemNode*)this;
+  }
+  MemNode* isa_Mem() const {
+    return is_Mem() ? as_Mem() : nullptr;
+  }
+
   // Other interesting Node properties
   #define DEFINE_CLASS_QUERY(type)                           \
   bool is_##type() const {                                   \
@@ -990,7 +1002,6 @@ public:
   DEFINE_CLASS_QUERY(MachTemp)
   DEFINE_CLASS_QUERY(MachMemBar)
   DEFINE_CLASS_QUERY(MachMerge)
-  DEFINE_CLASS_QUERY(Mem)
   DEFINE_CLASS_QUERY(MemBar)
   DEFINE_CLASS_QUERY(MemBarStoreStore)
   DEFINE_CLASS_QUERY(MergeMem)

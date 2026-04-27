@@ -417,7 +417,8 @@ jobs:
       bootjdk-platform: linux-x64
       runs-on: ubuntu-24.04
       dry-run: ${{ needs.prepare.outputs.dry-run == 'true' }}
-      static-suffix: "-static"
+      static-suffix: -static
+      debug-suffix: -debug
 
   test-macos-aarch64:
     name: macos-aarch64

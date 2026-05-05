@@ -473,7 +473,18 @@ void ZBarrierSetC2::clone_at_expansion(PhaseMacroExpand* phase, ArrayCopyNode* a
 
 #undef XTOP
 
-void ZBarrierSetC2::elide_dominated_barrier(MachNode* mach) const {
+void check_barrier_data_bit(MachNode* mach, MachNode* dominator, uint8_t bit) {
+  uint8_t bd = mach->barrier_data();
+  assert(((bd & bit) == 0) || (dominator == nullptr) || ((dominator->barrier_data() & bit) != 0),
+        "Dominator should have the relevant barrier enabled: " UINT8_FORMAT_X_0, bit);
+}
+
+void ZBarrierSetC2::elide_dominated_barrier(MachNode* mach, MachNode* dominator) const {
+  check_barrier_data_bit(mach, dominator, ZBarrierStrong);
+  check_barrier_data_bit(mach, dominator, ZBarrierWeak);
+  check_barrier_data_bit(mach, dominator, ZBarrierPhantom);
+  check_barrier_data_bit(mach, dominator, ZBarrierNoKeepalive);
+  check_barrier_data_bit(mach, dominator, ZBarrierNative);
   mach->set_barrier_data(ZBarrierElided);
 }
 
@@ -514,8 +525,9 @@ void ZBarrierSetC2::analyze_dominating_barriers() const {
       MachNode* const mach = node->as_Mach();
       switch (mach->ideal_Opcode()) {
       case Op_LoadP:
-        if ((mach->barrier_data() & ZBarrierStrong) != 0 &&
-            (mach->barrier_data() & ZBarrierNoKeepalive) == 0) {
+        if (mach->barrier_data() != 0) {
+        // if ((mach->barrier_data() & ZBarrierStrong) != 0 &&
+        //     (mach->barrier_data() & ZBarrierNoKeepalive) == 0) {
           loads.push(mach);
           load_dominators.push(mach);
         }

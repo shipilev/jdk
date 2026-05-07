@@ -41,30 +41,24 @@ LIR_Opr ShenandoahBarrierSetC1::atomic_cmpxchg_at_resolved(LIRAccess& access, LI
   if (access.is_oop()) {
     LIRGenerator* gen = access.gen();
 
-    LIR_Opr t1 = gen->new_register(T_OBJECT);
-    LIR_Opr t2 = gen->new_register(T_OBJECT);
+    LIR_Opr tmp = gen->new_register(T_OBJECT);
     LIR_Opr addr = access.resolved_addr()->as_address_ptr()->base();
-    LIR_Opr result = gen->new_register(T_INT);
 
     // Handle the previous value through SATB, as we are about to perform the store.
-    __ load(access.resolved_addr()->as_address_ptr(), t1);
+    __ load(access.resolved_addr()->as_address_ptr(), tmp);
     if (ShenandoahSATBBarrier) {
       pre_barrier(gen, access.access_emit_info(), access.decorators(), LIR_OprFact::illegalOpr,
-                  t1 /* pre_val */);
+                  tmp /* pre_val */);
     }
 
     // Perform LRB on location to fix it up for this and all following accesses.
     // This guarantees there are no false negatives due to concurrent evacuation,
     // and the value loaded later by CAS is sanitized by some LRB, or is null.
     if (ShenandoahLoadRefBarrier) {
-      __ load(access.resolved_addr()->as_address_ptr(), t1);
-      load_reference_barrier(gen, t1, addr, access.decorators());
+      load_reference_barrier(gen, tmp, addr, access.decorators());
     }
 
-    cmp_value.load_item_force(FrameMap::rax_oop_opr);
-    new_value.load_item();
-
-    __ cas_obj(addr, cmp_value.result(), new_value.result(), t1, t2, result);
+    LIR_Opr result = BarrierSetC1::atomic_cmpxchg_at_resolved(access, cmp_value, new_value);
 
     if (ShenandoahCardBarrier) {
       post_barrier(access, access.resolved_addr(), new_value.result());

@@ -29,33 +29,7 @@
 #include "gc/shenandoah/c1/shenandoahBarrierSetC1.hpp"
 #include "gc/shenandoah/shenandoahBarrierSet.hpp"
 #include "gc/shenandoah/shenandoahBarrierSetAssembler.hpp"
-
-#define __ masm->masm()->
-
-void LIR_OpShenandoahCompareAndSwap::emit_code(LIR_Assembler* masm) {
-  Register addr = _addr->is_single_cpu() ? _addr->as_register() : _addr->as_register_lo();
-  Register newval = _new_value->as_register();
-  Register cmpval = _cmp_value->as_register();
-  Register tmp1 = _tmp1->as_register();
-  Register tmp2 = _tmp2->as_register();
-  Register result = result_opr()->as_register();
-  assert(cmpval == rax, "wrong register");
-  assert(newval != noreg, "new val must be register");
-  assert(cmpval != newval, "cmp and new values must be in different registers");
-  assert(cmpval != addr, "cmp and addr must be in different registers");
-  assert(newval != addr, "new value and addr must be in different registers");
-
-  if (UseCompressedOops) {
-    __ encode_heap_oop(cmpval);
-    __ mov(rscratch1, newval);
-    __ encode_heap_oop(rscratch1);
-    newval = rscratch1;
-  }
-
-  ShenandoahBarrierSet::assembler()->cmpxchg_oop(masm->masm(), result, Address(addr, 0), cmpval, newval, false, tmp1, tmp2);
-}
-
-#undef __
+#include "oops/generateOopMap.hpp"
 
 #ifdef ASSERT
 #define __ gen->lir(__FILE__, __LINE__)->
@@ -64,29 +38,38 @@ void LIR_OpShenandoahCompareAndSwap::emit_code(LIR_Assembler* masm) {
 #endif
 
 LIR_Opr ShenandoahBarrierSetC1::atomic_cmpxchg_at_resolved(LIRAccess& access, LIRItem& cmp_value, LIRItem& new_value) {
-
   if (access.is_oop()) {
     LIRGenerator* gen = access.gen();
+
+    LIR_Opr t1 = gen->new_register(T_OBJECT);
+    LIR_Opr t2 = gen->new_register(T_OBJECT);
+    LIR_Opr addr = access.resolved_addr()->as_address_ptr()->base();
+    LIR_Opr result = gen->new_register(T_INT);
+
+    // Handle the previous value through SATB, as we are about to perform the store.
+    __ load(access.resolved_addr()->as_address_ptr(), t1);
     if (ShenandoahSATBBarrier) {
-      pre_barrier(gen, access.access_emit_info(), access.decorators(), access.resolved_addr(),
-                  LIR_OprFact::illegalOpr /* pre_val */);
+      pre_barrier(gen, access.access_emit_info(), access.decorators(), LIR_OprFact::illegalOpr,
+                  t1 /* pre_val */);
     }
-    if (ShenandoahCASBarrier) {
-      cmp_value.load_item_force(FrameMap::rax_oop_opr);
-      new_value.load_item();
 
-      LIR_Opr t1 = gen->new_register(T_OBJECT);
-      LIR_Opr t2 = gen->new_register(T_OBJECT);
-      LIR_Opr addr = access.resolved_addr()->as_address_ptr()->base();
-      LIR_Opr result = gen->new_register(T_INT);
-
-      __ append(new LIR_OpShenandoahCompareAndSwap(addr, cmp_value.result(), new_value.result(), t1, t2, result));
-
-      if (ShenandoahCardBarrier) {
-        post_barrier(access, access.resolved_addr(), new_value.result());
-      }
-      return result;
+    // Perform LRB on location to fix it up for this and all following accesses.
+    // This guarantees there are no false negatives due to concurrent evacuation,
+    // and the value loaded later by CAS is sanitized by some LRB, or is null.
+    if (ShenandoahLoadRefBarrier) {
+      __ load(access.resolved_addr()->as_address_ptr(), t1);
+      load_reference_barrier(gen, t1, addr, access.decorators());
     }
+
+    cmp_value.load_item_force(FrameMap::rax_oop_opr);
+    new_value.load_item();
+
+    __ cas_obj(addr, cmp_value.result(), new_value.result(), t1, t2, result);
+
+    if (ShenandoahCardBarrier) {
+      post_barrier(access, access.resolved_addr(), new_value.result());
+    }
+    return result;
   }
   return BarrierSetC1::atomic_cmpxchg_at_resolved(access, cmp_value, new_value);
 }

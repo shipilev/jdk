@@ -73,6 +73,7 @@ public:
     WorkerTask("Shenandoah Final Mark"), _cm(cm), _terminator(terminator) {}
 
   void work(uint worker_id) {
+    ShenandoahWorkerTimingsTracker timer(ShenandoahPhaseTimings::finish_mark, ShenandoahPhaseTimings::Work, worker_id, true);
     ShenandoahParallelWorkerSession worker_session(worker_id);
     _cm->mark_loop(worker_id, _terminator, GENERATION, false /*not cancellable*/);
     assert(_cm->task_queues()->is_empty(), "Should be empty");

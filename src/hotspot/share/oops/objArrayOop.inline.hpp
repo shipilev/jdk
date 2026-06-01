@@ -54,10 +54,16 @@ inline void objArrayOopDesc::obj_at_put(int index, oop value) {
 
 template <typename OopClosureType>
 void objArrayOopDesc::oop_iterate_elements_range(OopClosureType* blk, int start, int end) {
+  oop_iterate_elements_range(blk, klass(), start, end);
+}
+
+template <typename OopClosureType>
+void objArrayOopDesc::oop_iterate_elements_range(OopClosureType* blk, Klass* k, int start, int end) {
+  assert(klass() == k, "Wrong klass");
   if (UseCompressedOops) {
-    ((ObjArrayKlass*)klass())->oop_oop_iterate_elements_range<narrowOop>(this, blk, start, end);
+    ((ObjArrayKlass*)k)->oop_oop_iterate_elements_range<narrowOop>(this, blk, start, end);
   } else {
-    ((ObjArrayKlass*)klass())->oop_oop_iterate_elements_range<oop>(this, blk, start, end);
+    ((ObjArrayKlass*)k)->oop_oop_iterate_elements_range<oop>(this, blk, start, end);
   }
 }
 

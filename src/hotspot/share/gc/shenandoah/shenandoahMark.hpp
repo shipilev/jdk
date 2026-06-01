@@ -78,7 +78,7 @@ private:
   inline void do_chunked_array_start(ShenandoahObjToScanQueue* q, T* cl, oop array, Klass* klass, bool weak);
 
   template <class T>
-  inline void do_chunked_array(ShenandoahObjToScanQueue* q, T* cl, oop array, int chunk, int pow, bool weak);
+  inline void do_chunked_array(ShenandoahObjToScanQueue* q, T* cl, oop array, Klass* klass, int chunk, int pow, bool weak);
 
   template <ShenandoahGenerationType GENERATION>
   inline void count_liveness(ShenandoahLiveData* live_data, oop obj, Klass* klass, uint worker_id);

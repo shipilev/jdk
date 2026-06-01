@@ -55,12 +55,13 @@ void ShenandoahMark::do_task(ShenandoahObjToScanQueue* q, T* cl, ShenandoahLiveD
   shenandoah_assert_marked(nullptr, obj);
   shenandoah_assert_not_in_cset_except(nullptr, obj, ShenandoahHeap::heap()->cancelled_gc());
 
+  Klass* klass = obj->klass();
+
   // Are we in weak subgraph scan?
   bool weak = task->is_weak();
   cl->set_weak(weak);
 
   if (task->is_not_chunked()) {
-    Klass* klass = obj->klass();
     if (klass->is_instance_klass()) {
       // Case 1: Normal oop, process as usual.
       if (STRING_DEDUP && (klass == vmClasses::String_klass())) {
@@ -70,7 +71,7 @@ void ShenandoahMark::do_task(ShenandoahObjToScanQueue* q, T* cl, ShenandoahLiveD
         // Loom doesn't support mixing of weak marking and strong marking of stack chunks.
         cl->set_weak(false);
       }
-      obj->oop_iterate(cl);
+      obj->oop_iterate(cl, klass);
     } else if (klass->is_objArray_klass()) {
       // Case 2: Object array instance and no chunk is set. Must be the first
       // time we visit it, start the chunked processing.
@@ -90,7 +91,7 @@ void ShenandoahMark::do_task(ShenandoahObjToScanQueue* q, T* cl, ShenandoahLiveD
     }
   } else {
     // Case 4: Array chunk, has sensible chunk id. Process it.
-    do_chunked_array<T>(q, cl, obj, task->chunk(), task->pow(), weak);
+    do_chunked_array<T>(q, cl, obj, klass, task->chunk(), task->pow(), weak);
   }
 }
 
@@ -167,7 +168,7 @@ inline void ShenandoahMark::do_chunked_array_start(ShenandoahObjToScanQueue* q, 
 
   if (len <= (int) ObjArrayMarkingStride*2) {
     // A few slices only, process directly
-    array->oop_iterate_elements_range(cl, 0, len);
+    array->oop_iterate_elements_range(cl, klass, 0, len);
   } else {
     int bits = log2i_graceful(len);
     // Compensate for non-power-of-two arrays, cover the array in excess:
@@ -216,13 +217,13 @@ inline void ShenandoahMark::do_chunked_array_start(ShenandoahObjToScanQueue* q, 
     // Process the irregular tail, if present
     int from = last_idx;
     if (from < len) {
-      array->oop_iterate_elements_range(cl, from, len);
+      array->oop_iterate_elements_range(cl, klass, from, len);
     }
   }
 }
 
 template <class T>
-inline void ShenandoahMark::do_chunked_array(ShenandoahObjToScanQueue* q, T* cl, oop obj, int chunk, int pow, bool weak) {
+inline void ShenandoahMark::do_chunked_array(ShenandoahObjToScanQueue* q, T* cl, oop obj, Klass* klass, int chunk, int pow, bool weak) {
   assert(obj->is_objArray(), "expect object array");
   objArrayOop array = objArrayOop(obj);
 
@@ -246,7 +247,7 @@ inline void ShenandoahMark::do_chunked_array(ShenandoahObjToScanQueue* q, T* cl,
   assert (0 < to && to <= len, "to is sane: %d/%d", to, len);
 #endif
 
-  array->oop_iterate_elements_range(cl, from, to);
+  array->oop_iterate_elements_range(cl, klass, from, to);
 }
 
 template <ShenandoahGenerationType GENERATION>

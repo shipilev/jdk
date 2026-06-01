@@ -356,7 +356,13 @@ void oopDesc::incr_age() {
 
 template <typename OopClosureType>
 void oopDesc::oop_iterate(OopClosureType* cl) {
-  OopIteratorClosureDispatch::oop_oop_iterate(cl, this, klass());
+  oop_iterate(cl, klass());
+}
+
+template <typename OopClosureType>
+void oopDesc::oop_iterate(OopClosureType* cl, Klass* k) {
+  assert(k == klass(), "wrong klass");
+  OopIteratorClosureDispatch::oop_oop_iterate(cl, this, k);
 }
 
 template <typename OopClosureType>

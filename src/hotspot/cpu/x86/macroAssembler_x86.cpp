@@ -4960,7 +4960,7 @@ void MacroAssembler::profile_receiver_type(Register recv, Register mdp, int mdp_
   cmpptr(offset, end_receiver_offset);
   jccb(Assembler::notEqual, L_loop_search_receiver);
 
-  // Fast: no receiver, but profile is full
+  // Fast: no receiver, but profile is not full
   movptr(offset, base_receiver_offset);
   bind(L_loop_search_empty);
     cmpptr(Address(mdp, offset, Address::times_ptr), NULL_WORD);
@@ -4974,7 +4974,7 @@ void MacroAssembler::profile_receiver_type(Register recv, Register mdp, int mdp_
   movptr(offset, poly_count_offset);
   jmpb(L_count_update);
 
-  // Slow: try to install receiver
+  // Slowest: try to install receiver
   bind(L_found_empty);
 
   // Atomically swing receiver slot: null -> recv.
@@ -5030,6 +5030,7 @@ void MacroAssembler::profile_receiver_type(Register recv, Register mdp, int mdp_
   bind(L_found_recv);
   addptr(offset, receiver_to_count_step);
 
+  // Finally, update the counter
   bind(L_count_update);
   addptr(Address(mdp, offset, Address::times_ptr), DataLayout::counter_increment);
 }

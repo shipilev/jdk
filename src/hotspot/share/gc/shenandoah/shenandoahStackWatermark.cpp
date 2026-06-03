@@ -97,7 +97,7 @@ void ShenandoahStackWatermark::start_processing_impl(void* context) {
   // For evacuation:
   // New allocations would be with new freeset, which would be outside the collection set,
   // so no cset writes would happen there. Also, new allocations would happen past update watermark,
-  // and so less work would/ be needed for reference updates (would update the large filler instead).
+  // and so less work would be needed for reference updates (would update the large filler instead).
 
   if (UseTLAB) {
     _stats.reset();

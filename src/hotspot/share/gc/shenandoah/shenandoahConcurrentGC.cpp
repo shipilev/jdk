@@ -300,14 +300,13 @@ void ShenandoahConcurrentGC::entry_complete_abbreviated_cycle() {
 
   ShenandoahWorkerScope scope(heap->workers(),
                               ShenandoahWorkerPolicy::calc_workers_for_conc_evac(),
-                              "complete abbreviated");
+                              msg);
 
   // We chose not to evacuate because we found sufficient immediate garbage.
   // However, there may still be regions to promote in place, so do that now.
   if (heap->old_generation()->has_in_place_promotions()) {
     ShenandoahTimingsTracker timing(ShenandoahPhaseTimings::complete_abbreviated_promote_in_place);
     ShenandoahGCWorkerPhase worker_phase(ShenandoahPhaseTimings::complete_abbreviated_promote_in_place);
-
     heap->promote_regions_in_place(_generation, true);
   }
 
@@ -315,7 +314,6 @@ void ShenandoahConcurrentGC::entry_complete_abbreviated_cycle() {
   // the control thread will detect it on its next iteration and run a degenerated young cycle.
   if (!heap->cancelled_gc() && !_generation->is_old()) {
     ShenandoahTimingsTracker tracker(ShenandoahPhaseTimings::complete_abbreviated_update_region_ages);
-    ShenandoahGCWorkerPhase worker_phase(ShenandoahPhaseTimings::complete_abbreviated_update_region_ages);
     heap->update_region_ages(_generation->complete_marking_context());
   }
 }

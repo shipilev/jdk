@@ -1346,9 +1346,9 @@ const char* ShenandoahConcurrentGC::verify_final_event_message() const {
 
 const char* ShenandoahConcurrentGC::conc_final_roots_event_message() const {
   if (ShenandoahHeap::heap()->unload_classes()) {
-    SHENANDOAH_RETURN_EVENT_MESSAGE(_generation->type(), "Concurrent final roots", " (unload classes)");
+    SHENANDOAH_RETURN_EVENT_MESSAGE(_generation->type(), "Concurrent Final Roots", " (unload classes)");
   } else {
-    SHENANDOAH_RETURN_EVENT_MESSAGE(_generation->type(), "Concurrent final roots", "");
+    SHENANDOAH_RETURN_EVENT_MESSAGE(_generation->type(), "Concurrent Final Roots", "");
   }
 }
 

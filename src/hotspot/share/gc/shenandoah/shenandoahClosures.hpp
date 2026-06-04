@@ -241,6 +241,12 @@ public:
 // ========= Utilities
 //
 
+class ShenandoahNoOpClosure : public OopClosure {
+public:
+  inline void do_oop(oop* p)       { }
+  inline void do_oop(narrowOop* p) { }
+};
+
 #ifdef ASSERT
 class ShenandoahAssertNotForwardedClosure : public OopClosure {
 private:

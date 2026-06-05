@@ -142,7 +142,7 @@ void ShenandoahEvacuateUpdateRootClosureBase<CONCURRENT, STABLE_THREAD>::do_oop(
 template <bool CONCURRENT, bool STABLE_THREAD>
 template <class T>
 void ShenandoahEvacuateUpdateRootClosureBase<CONCURRENT, STABLE_THREAD>::do_oop_work(T* p) {
-  assert(_heap->is_evacuation_in_progress(), "Only do this when evacuation is in progress");
+  assert(_heap->is_evacuation_in_progress(), "Performance: no reason to call this otherwise");
 
   T o = RawAccess<>::oop_load(p);
   if (!CompressedOops::is_null(o)) {

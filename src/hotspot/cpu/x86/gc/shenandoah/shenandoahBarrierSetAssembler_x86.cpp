@@ -561,98 +561,46 @@ void ShenandoahBarrierSetAssembler::gen_write_ref_array_post_barrier(MacroAssemb
 #define __ ce->masm()->
 
 void ShenandoahBarrierSetAssembler::gen_pre_barrier_stub(LIR_Assembler* ce, ShenandoahPreBarrierStub* stub) {
-  ShenandoahBarrierSetC1* bs = (ShenandoahBarrierSetC1*)BarrierSet::barrier_set()->barrier_set_c1();
-  // At this point we know that marking is in progress.
-  // If do_load() is true then we have to emit the
-  // load of the previous value; otherwise it has already
-  // been loaded into _pre_val.
-
   __ bind(*stub->entry());
-  assert(stub->pre_val()->is_register(), "Precondition.");
-
-  Register pre_val_reg = stub->pre_val()->as_register();
 
   if (stub->do_load()) {
     ce->mem2reg(stub->addr(), stub->pre_val(), T_OBJECT, stub->patch_code(), stub->info(), false /*wide*/);
   }
 
-  __ cmpptr(pre_val_reg, NULL_WORD);
-  __ jcc(Assembler::equal, *stub->continuation());
-  ce->store_parameter(stub->pre_val()->as_register(), 0);
-  __ call(RuntimeAddress(bs->pre_barrier_c1_runtime_code_blob()->code_begin()));
-  __ jmp(*stub->continuation());
+  Register pre_val = stub->pre_val()->as_register();
+  Register addr = stub->addr()->as_pointer_register();
 
+  // Allocate temporary registers
+  Register tmp = noreg;
+  for (int i = 0; i < Register::available_gp_registers(); i++) {
+    Register r = as_Register(i);
+    if (r != rsp && r != rbp && r != pre_val && r != addr) {
+      if (tmp == noreg) {
+        tmp = r;
+        break;
+      }
+    }
+   }
+  assert(tmp != noreg, "tmp1 allocated");
+  assert_different_registers(addr, pre_val, tmp);
+
+  __ push(tmp);
+  satb_barrier(ce->masm(), addr, pre_val, tmp);
+  __ pop(tmp);
 }
 
 void ShenandoahBarrierSetAssembler::gen_load_reference_barrier_stub(LIR_Assembler* ce, ShenandoahLoadReferenceBarrierStub* stub) {
-  ShenandoahBarrierSetC1* bs = (ShenandoahBarrierSetC1*)BarrierSet::barrier_set()->barrier_set_c1();
   __ bind(*stub->entry());
 
   DecoratorSet decorators = stub->decorators();
-  bool is_strong  = ShenandoahBarrierSet::is_strong_access(decorators);
-  bool is_weak    = ShenandoahBarrierSet::is_weak_access(decorators);
-  bool is_phantom = ShenandoahBarrierSet::is_phantom_access(decorators);
-  bool is_native  = ShenandoahBarrierSet::is_native_access(decorators);
-
   Register obj = stub->obj()->as_register();
   Register res = stub->result()->as_register();
   Register addr = stub->addr()->as_pointer_register();
-  Register tmp1 = stub->tmp1()->as_register();
-  Register tmp2 = stub->tmp2()->as_register();
-  assert_different_registers(obj, res, addr, tmp1, tmp2);
-
-  Label slow_path;
-
-  assert(res == rax, "result must arrive in rax");
 
   if (res != obj) {
     __ mov(res, obj);
   }
-
-  if (is_strong) {
-    // Check for object being in the collection set.
-    __ mov(tmp1, res);
-    if (AOTCodeCache::is_on_for_dump()) {
-      __ push(rcx);
-      __ lea(rcx, ExternalAddress(AOTRuntimeConstants::grain_shift_address()));
-      __ movl(rcx, Address(rcx));
-      if (tmp1 != rcx) {
-        __ mov(tmp1, res);
-        __ shrptr(tmp1);
-        __ pop(rcx);
-      } else {
-        assert_different_registers(tmp2, rcx);
-        __ mov(tmp2, res);
-        __ shrptr(tmp2);
-        __ pop(rcx);
-        __ movptr(tmp1, tmp2);
-      }
-      __ lea(tmp2, ExternalAddress(AOTRuntimeConstants::cset_base_address()));
-      __ movptr(tmp2, Address(tmp2));
-    } else {
-      __ shrptr(tmp1, ShenandoahHeapRegion::region_size_bytes_shift_jint());
-      __ movptr(tmp2, (intptr_t) ShenandoahHeap::in_cset_fast_test_addr());
-    }
-    __ movbool(tmp2, Address(tmp2, tmp1, Address::times_1));
-    __ testbool(tmp2);
-    __ jcc(Assembler::zero, *stub->continuation());
-  }
-
-  __ bind(slow_path);
-  ce->store_parameter(res, 0);
-  ce->store_parameter(addr, 1);
-  if (is_strong) {
-    if (is_native) {
-      __ call(RuntimeAddress(bs->load_reference_barrier_strong_native_rt_code_blob()->code_begin()));
-    } else {
-      __ call(RuntimeAddress(bs->load_reference_barrier_strong_rt_code_blob()->code_begin()));
-    }
-  } else if (is_weak) {
-    __ call(RuntimeAddress(bs->load_reference_barrier_weak_rt_code_blob()->code_begin()));
-  } else {
-    assert(is_phantom, "only remaining strength");
-    __ call(RuntimeAddress(bs->load_reference_barrier_phantom_rt_code_blob()->code_begin()));
-  }
+  load_reference_barrier(ce->masm(), res, Address(addr, 0), decorators);
   __ jmp(*stub->continuation());
 }
 

@@ -154,11 +154,7 @@ void ShenandoahBarrierSetAssembler::satb_barrier(MacroAssembler* masm,
   Label runtime;
 
   assert(pre_val != noreg, "check this code");
-
-  if (obj != noreg) {
-    assert_different_registers(obj, pre_val, tmp);
-    assert(pre_val != rax, "check this code");
-  }
+  assert_different_registers(obj, pre_val, tmp);
 
   Address index(thread, in_bytes(ShenandoahThreadLocalData::satb_mark_queue_index_offset()));
   Address buffer(thread, in_bytes(ShenandoahThreadLocalData::satb_mark_queue_buffer_offset()));
@@ -563,12 +559,14 @@ void ShenandoahBarrierSetAssembler::gen_write_ref_array_post_barrier(MacroAssemb
 void ShenandoahBarrierSetAssembler::gen_pre_barrier_stub(LIR_Assembler* ce, ShenandoahPreBarrierStub* stub) {
   __ bind(*stub->entry());
 
-  if (stub->do_load()) {
-    ce->mem2reg(stub->addr(), stub->pre_val(), T_OBJECT, stub->patch_code(), stub->info(), false /*wide*/);
-  }
-
   Register pre_val = stub->pre_val()->as_register();
-  Register addr = stub->addr()->as_pointer_register();
+
+  Register addr;
+  if (stub->do_load()) {
+    addr = stub->addr()->as_pointer_register();
+  } else {
+    addr = noreg;
+  }
 
   // Allocate temporary registers
   Register tmp = noreg;
@@ -580,12 +578,15 @@ void ShenandoahBarrierSetAssembler::gen_pre_barrier_stub(LIR_Assembler* ce, Shen
         break;
       }
     }
-   }
-  assert(tmp != noreg, "tmp1 allocated");
+  }
+  assert(tmp != noreg, "tmp allocated");
   assert_different_registers(addr, pre_val, tmp);
 
+  // Double push to maintain stack alignment.
+  __ push(tmp);
   __ push(tmp);
   satb_barrier(ce->masm(), addr, pre_val, tmp);
+  __ pop(tmp);
   __ pop(tmp);
 }
 

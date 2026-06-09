@@ -47,7 +47,7 @@ public:
     _patch_code(patch_code), _info(info)
   {
     assert(_pre_val->is_register(), "should be temporary register");
-    assert(_addr->is_address(), "should be the address of the field");
+    assert(_addr->is_register(), "should be a register");
     FrameMap* f = Compilation::current()->frame_map();
     f->update_reserved_argument_area_size(2 * BytesPerWord);
   }
@@ -78,6 +78,7 @@ public:
         visitor->do_slow_case();
 
       visitor->do_input(_addr);
+      visitor->do_temp(_addr);
       visitor->do_temp(_pre_val);
     } else {
       visitor->do_slow_case();

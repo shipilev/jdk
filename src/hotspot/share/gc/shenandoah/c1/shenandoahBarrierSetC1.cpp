@@ -59,21 +59,15 @@ ShenandoahBarrierSetC1::ShenandoahBarrierSetC1() :
   _load_reference_barrier_phantom_rt_code_blob(nullptr) {}
 
 void ShenandoahBarrierSetC1::pre_barrier(LIRGenerator* gen, CodeEmitInfo* info, DecoratorSet decorators, LIR_Opr addr_opr, LIR_Opr pre_val) {
-  // First we test whether marking is in progress.
 
   bool patch = (decorators & C1_NEEDS_PATCHING) != 0;
-  bool do_load = pre_val == LIR_OprFact::illegalOpr;
+  bool do_load = (pre_val == LIR_OprFact::illegalOpr);
 
+  // First we test whether marking is in progress.
   LIR_Opr thrd = gen->getThreadPointer();
-  LIR_Address* gc_state_addr =
-          new LIR_Address(thrd,
-                          in_bytes(ShenandoahThreadLocalData::gc_state_offset()),
-                          T_BYTE);
-  // Read the gc_state flag.
+  LIR_Address* gc_state_addr = new LIR_Address(thrd, in_bytes(ShenandoahThreadLocalData::gc_state_offset()), T_BYTE);
   LIR_Opr flag_val = gen->new_register(T_INT);
   __ load(gc_state_addr, flag_val);
-
-  // Create a mask to test if the marking bit is set.
   LIR_Opr mask = LIR_OprFact::intConst(ShenandoahHeap::MARKING);
   LIR_Opr mask_reg = gen->new_register(T_INT);
   __ move(mask, mask_reg);
@@ -87,24 +81,17 @@ void ShenandoahBarrierSetC1::pre_barrier(LIRGenerator* gen, CodeEmitInfo* info, 
   }
   __ cmp(lir_cond_notEqual, flag_val, LIR_OprFact::intConst(0));
 
-  LIR_PatchCode pre_val_patch_code = lir_patch_none;
-
   CodeStub* slow;
 
   if (do_load) {
     assert(pre_val == LIR_OprFact::illegalOpr, "sanity");
     assert(addr_opr != LIR_OprFact::illegalOpr, "sanity");
 
-    if (patch)
-      pre_val_patch_code = lir_patch_normal;
-
     pre_val = gen->new_register(T_OBJECT);
+    addr_opr = ensure_in_register(gen, addr_opr, T_ADDRESS);
 
-    if (!addr_opr->is_address()) {
-      assert(addr_opr->is_register(), "must be");
-      addr_opr = LIR_OprFact::address(new LIR_Address(addr_opr, T_OBJECT));
-    }
-    slow = new ShenandoahPreBarrierStub(addr_opr, pre_val, pre_val_patch_code, info ? new CodeEmitInfo(info) : nullptr);
+    assert(addr_opr->is_register(), "must be");
+    slow = new ShenandoahPreBarrierStub(addr_opr, pre_val, patch ? lir_patch_normal : lir_patch_none, info ? new CodeEmitInfo(info) : nullptr);
   } else {
     assert(addr_opr == LIR_OprFact::illegalOpr, "sanity");
     assert(pre_val->is_register(), "must be");

@@ -236,12 +236,14 @@ public:
 };
 
 bool ShenandoahBarrierSetC1::generate_c1_runtime_stubs(BufferBlob* buffer_blob) {
-  C1ShenandoahPreBarrierCodeGenClosure pre_code_gen_cl;
-  _pre_barrier_c1_runtime_code_blob = Runtime1::generate_blob(buffer_blob, StubId::NO_STUBID,
-                                                              "shenandoah_pre_barrier_slow",
-                                                              false, &pre_code_gen_cl);
-  if (_pre_barrier_c1_runtime_code_blob == nullptr) {
-    return false;
+  if (ShenandoahSATBBarrier) {
+    C1ShenandoahPreBarrierCodeGenClosure pre_code_gen_cl;
+    _pre_barrier_c1_runtime_code_blob = Runtime1::generate_blob(buffer_blob, StubId::NO_STUBID,
+                                                                "shenandoah_pre_barrier_slow",
+                                                                false, &pre_code_gen_cl);
+    if (_pre_barrier_c1_runtime_code_blob == nullptr) {
+      return false;
+    }
   }
   if (ShenandoahLoadRefBarrier) {
     C1ShenandoahLoadReferenceBarrierCodeGenClosure lrb_strong_code_gen_cl(ON_STRONG_OOP_REF);

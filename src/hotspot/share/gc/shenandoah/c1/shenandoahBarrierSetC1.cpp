@@ -58,26 +58,14 @@ ShenandoahBarrierSetC1::ShenandoahBarrierSetC1() :
   _load_reference_barrier_weak_rt_code_blob(nullptr),
   _load_reference_barrier_phantom_rt_code_blob(nullptr) {}
 
-void ShenandoahBarrierSetC1::pre_barrier(LIRGenerator* gen, CodeEmitInfo* info, DecoratorSet decorators, LIR_Opr addr_opr, LIR_Opr pre_val) {
-  // First we test whether marking is in progress.
-
-  bool patch = (decorators & C1_NEEDS_PATCHING) != 0;
-  bool do_load = pre_val == LIR_OprFact::illegalOpr;
-
+void ShenandoahBarrierSetC1::enter_if_gc_state(LIRGenerator* gen, int flags, CodeStub* slow_stub) {
   LIR_Opr thrd = gen->getThreadPointer();
-  LIR_Address* gc_state_addr =
-          new LIR_Address(thrd,
-                          in_bytes(ShenandoahThreadLocalData::gc_state_offset()),
-                          T_BYTE);
-  // Read the gc_state flag.
   LIR_Opr flag_val = gen->new_register(T_INT);
-  __ load(gc_state_addr, flag_val);
-
-  // Create a mask to test if the marking bit is set.
-  LIR_Opr mask = LIR_OprFact::intConst(ShenandoahHeap::MARKING);
   LIR_Opr mask_reg = gen->new_register(T_INT);
-  __ move(mask, mask_reg);
 
+  LIR_Address* gc_state_addr = new LIR_Address(thrd, in_bytes(ShenandoahThreadLocalData::gc_state_offset()), T_BYTE);
+  __ load(gc_state_addr, flag_val);
+  __ move(LIR_OprFact::intConst(flags), mask_reg);
   if (two_operand_lir_form) {
     __ logical_and(flag_val, mask_reg, flag_val);
   } else {
@@ -86,91 +74,62 @@ void ShenandoahBarrierSetC1::pre_barrier(LIRGenerator* gen, CodeEmitInfo* info, 
     flag_val = masked_flag;
   }
   __ cmp(lir_cond_notEqual, flag_val, LIR_OprFact::intConst(0));
+  __ branch(lir_cond_notEqual, slow_stub);
+  __ branch_destination(slow_stub->continuation());
+}
 
-  LIR_PatchCode pre_val_patch_code = lir_patch_none;
-
-  CodeStub* slow;
-
-  if (do_load) {
-    assert(pre_val == LIR_OprFact::illegalOpr, "sanity");
-    assert(addr_opr != LIR_OprFact::illegalOpr, "sanity");
-
-    if (patch)
-      pre_val_patch_code = lir_patch_normal;
-
+void ShenandoahBarrierSetC1::pre_barrier(LIRGenerator* gen, CodeEmitInfo* info, DecoratorSet decorators, LIR_Opr addr_opr, LIR_Opr pre_val) {
+  CodeStub* slow_stub;
+  if (pre_val == LIR_OprFact::illegalOpr) {
+    // Caller wants us to do the load.
     pre_val = gen->new_register(T_OBJECT);
 
+    assert(addr_opr != LIR_OprFact::illegalOpr, "sanity");
     if (!addr_opr->is_address()) {
       assert(addr_opr->is_register(), "must be");
       addr_opr = LIR_OprFact::address(new LIR_Address(addr_opr, T_OBJECT));
     }
-    slow = new ShenandoahPreBarrierStub(addr_opr, pre_val, pre_val_patch_code, info ? new CodeEmitInfo(info) : nullptr);
+
+    LIR_PatchCode lir_patch_code = (decorators & C1_NEEDS_PATCHING) != 0 ? lir_patch_normal : lir_patch_none;
+    CodeEmitInfo* code_emit_info = info ? new CodeEmitInfo(info) : nullptr;
+    slow_stub = new ShenandoahPreBarrierStub(addr_opr, pre_val, lir_patch_code, code_emit_info);
   } else {
+    // Caller gave us the pre_val to work with.
     assert(addr_opr == LIR_OprFact::illegalOpr, "sanity");
     assert(pre_val->is_register(), "must be");
     assert(pre_val->type() == T_OBJECT, "must be an object");
 
-    slow = new ShenandoahPreBarrierStub(pre_val);
+    slow_stub = new ShenandoahPreBarrierStub(pre_val);
   }
 
-  __ branch(lir_cond_notEqual, slow);
-  __ branch_destination(slow->continuation());
+  enter_if_gc_state(gen, ShenandoahHeap::MARKING, slow_stub);
 }
 
-LIR_Opr ShenandoahBarrierSetC1::load_reference_barrier(LIRGenerator* gen, LIR_Opr obj, LIR_Opr addr, DecoratorSet decorators) {
+void ShenandoahBarrierSetC1::load_reference_barrier(LIRGenerator* gen, LIR_Opr obj, LIR_Opr addr, DecoratorSet decorators) {
   if (ShenandoahLoadRefBarrier) {
-    return load_reference_barrier_impl(gen, obj, addr, decorators);
-  } else {
-    return obj;
+    load_reference_barrier_impl(gen, obj, addr, decorators);
   }
 }
 
-LIR_Opr ShenandoahBarrierSetC1::load_reference_barrier_impl(LIRGenerator* gen, LIR_Opr obj, LIR_Opr addr, DecoratorSet decorators) {
+void ShenandoahBarrierSetC1::load_reference_barrier_impl(LIRGenerator* gen, LIR_Opr obj, LIR_Opr addr, DecoratorSet decorators) {
   assert(ShenandoahLoadRefBarrier, "Should be enabled");
 
   obj = ensure_in_register(gen, obj, T_OBJECT);
-  assert(obj->is_register(), "must be a register at this point");
   addr = ensure_in_register(gen, addr, T_ADDRESS);
+  assert(obj->is_register(), "must be a register at this point");
   assert(addr->is_register(), "must be a register at this point");
-  LIR_Opr result = gen->result_register_for(obj->value_type());
-  LIR_Opr tmp1 = gen->new_register(T_ADDRESS);
-  LIR_Opr tmp2 = gen->new_register(T_ADDRESS);
 
-  LIR_Opr thrd = gen->getThreadPointer();
-  LIR_Address* active_flag_addr =
-    new LIR_Address(thrd,
-                    in_bytes(ShenandoahThreadLocalData::gc_state_offset()),
-                    T_BYTE);
-  // Read and check the gc-state-flag.
-  LIR_Opr flag_val = gen->new_register(T_INT);
-  __ load(active_flag_addr, flag_val);
+  // Barrier slowpaths return value in this register. Declared it in the stub
+  // as clobbered. The obj would remain as result for both fast- and slow-paths.
+  LIR_Opr slow_result = gen->result_register_for(obj->value_type());
+
+  CodeStub* slow_stub = new ShenandoahLoadReferenceBarrierStub(obj, addr, slow_result, decorators);
+
   int flags = ShenandoahHeap::HAS_FORWARDED;
   if (!ShenandoahBarrierSet::is_strong_access(decorators)) {
     flags |= ShenandoahHeap::WEAK_ROOTS;
   }
-  LIR_Opr mask = LIR_OprFact::intConst(flags);
-  LIR_Opr mask_reg = gen->new_register(T_INT);
-  __ move(mask, mask_reg);
-
-  if (two_operand_lir_form) {
-    __ logical_and(flag_val, mask_reg, flag_val);
-  } else {
-    LIR_Opr masked_flag = gen->new_register(T_INT);
-    __ logical_and(flag_val, mask_reg, masked_flag);
-    flag_val = masked_flag;
-  }
-  __ cmp(lir_cond_notEqual, flag_val, LIR_OprFact::intConst(0));
-
-  CodeStub* slow = new ShenandoahLoadReferenceBarrierStub(obj, addr, result, tmp1, tmp2, decorators);
-  __ branch(lir_cond_notEqual, slow);
-
-  // No barrier is needed, move obj to result now.
-  __ move(obj, result);
-
-  // Slow-path re-enters here with result set.
-  __ branch_destination(slow->continuation());
-
-  return result;
+  enter_if_gc_state(gen, flags, slow_stub);
 }
 
 LIR_Opr ShenandoahBarrierSetC1::ensure_in_register(LIRGenerator* gen, LIR_Opr obj, BasicType type) {
@@ -230,7 +189,7 @@ void ShenandoahBarrierSetC1::load_at_resolved(LIRAccess& access, LIR_Opr result)
   if (ShenandoahBarrierSet::need_load_reference_barrier(decorators, type)) {
     LIR_Opr tmp = gen->new_register(T_OBJECT);
     BarrierSetC1::load_at_resolved(access, tmp);
-    tmp = load_reference_barrier(gen, tmp, access.resolved_addr(), decorators);
+    load_reference_barrier(gen, tmp, access.resolved_addr(), decorators);
     __ move(tmp, result);
   } else {
     BarrierSetC1::load_at_resolved(access, result);

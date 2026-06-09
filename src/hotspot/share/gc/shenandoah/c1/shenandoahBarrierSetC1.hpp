@@ -78,6 +78,7 @@ public:
         visitor->do_slow_case();
 
       visitor->do_input(_addr);
+      visitor->do_temp(_addr);
       visitor->do_temp(_pre_val);
     } else {
       visitor->do_slow_case();
@@ -94,19 +95,14 @@ class ShenandoahLoadReferenceBarrierStub: public CodeStub {
 private:
   LIR_Opr _obj;
   LIR_Opr _addr;
-  LIR_Opr _result;
-  LIR_Opr _tmp1;
-  LIR_Opr _tmp2;
+  LIR_Opr _slow_result;
   DecoratorSet _decorators;
 public:
-  ShenandoahLoadReferenceBarrierStub(LIR_Opr obj, LIR_Opr addr, LIR_Opr result, LIR_Opr tmp1, LIR_Opr tmp2, DecoratorSet decorators) :
-          _obj(obj), _addr(addr), _result(result), _tmp1(tmp1), _tmp2(tmp2), _decorators(decorators)
+  ShenandoahLoadReferenceBarrierStub(LIR_Opr obj, LIR_Opr addr, LIR_Opr slow_result, DecoratorSet decorators) :
+          _obj(obj), _addr(addr), _slow_result(slow_result), _decorators(decorators)
   {
     assert(_obj->is_register(), "should be register");
     assert(_addr->is_register(), "should be register");
-    assert(_result->is_register(), "should be register");
-    assert(_tmp1->is_register(), "should be register");
-    assert(_tmp2->is_register(), "should be register");
 
     FrameMap* f = Compilation::current()->frame_map();
     f->update_reserved_argument_area_size(2 * BytesPerWord);
@@ -114,9 +110,6 @@ public:
 
   LIR_Opr obj() const { return _obj; }
   LIR_Opr addr() const { return _addr; }
-  LIR_Opr result() const { return _result; }
-  LIR_Opr tmp1() const { return _tmp1; }
-  LIR_Opr tmp2() const { return _tmp2; }
   DecoratorSet decorators() const { return _decorators; }
 
   virtual void emit_code(LIR_Assembler* e);
@@ -124,12 +117,11 @@ public:
     visitor->do_slow_case();
     visitor->do_input(_obj);
     visitor->do_temp(_obj);
+    visitor->do_output(_obj);
     visitor->do_input(_addr);
     visitor->do_temp(_addr);
-    visitor->do_temp(_result);
-    visitor->do_output(_result);
-    visitor->do_temp(_tmp1);
-    visitor->do_temp(_tmp2);
+    visitor->do_temp(_slow_result);
+    // visitor->do_output(_slow_result);
   }
 #ifndef PRODUCT
   virtual void print_name(outputStream* out) const { out->print("ShenandoahLoadReferenceBarrierStub"); }
@@ -144,11 +136,13 @@ private:
   CodeBlob* _load_reference_barrier_weak_rt_code_blob;
   CodeBlob* _load_reference_barrier_phantom_rt_code_blob;
 
+  void enter_if_gc_state(LIRGenerator* gen, int flags, CodeStub* slow_stub);
+
   void pre_barrier(LIRGenerator* gen, CodeEmitInfo* info, DecoratorSet decorators, LIR_Opr addr_opr, LIR_Opr pre_val);
 
-  LIR_Opr load_reference_barrier(LIRGenerator* gen, LIR_Opr obj, LIR_Opr addr, DecoratorSet decorators);
+  void load_reference_barrier(LIRGenerator* gen, LIR_Opr obj, LIR_Opr addr, DecoratorSet decorators);
 
-  LIR_Opr load_reference_barrier_impl(LIRGenerator* gen, LIR_Opr obj, LIR_Opr addr, DecoratorSet decorators);
+  void load_reference_barrier_impl(LIRGenerator* gen, LIR_Opr obj, LIR_Opr addr, DecoratorSet decorators);
 
   LIR_Opr ensure_in_register(LIRGenerator* gen, LIR_Opr obj, BasicType type);
 

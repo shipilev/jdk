@@ -515,8 +515,8 @@ void ShenandoahBarrierSetAssembler::load_reference_barrier_c1_stub(LIR_Assembler
 void ShenandoahBarrierSetAssembler::keepalive_barrier_c1_runtime_stub(StubAssembler* sasm) {
   __ prologue("shenandoah_keepalive_barrier", false);
   const Register tmp_obj = r0;
-  const Register tmp1 = rscratch1;
-  const Register tmp2 = rscratch2;
+  const Register tmp1 = r1;
+  const Register tmp2 = r2;
   __ push(tmp1);
   __ push(tmp2);
   __ push(tmp_obj);
@@ -531,7 +531,7 @@ void ShenandoahBarrierSetAssembler::keepalive_barrier_c1_runtime_stub(StubAssemb
 void ShenandoahBarrierSetAssembler::load_reference_barrier_c1_runtime_stub(StubAssembler* sasm, DecoratorSet decorators) {
   __ prologue("shenandoah_load_reference_barrier", false);
   const Register tmp_obj = r0;
-  const Register tmp_addr = rscratch1;
+  const Register tmp_addr = r1;
   __ push(tmp_addr);
   __ load_parameter(0, tmp_obj);
   __ load_parameter(1, tmp_addr);

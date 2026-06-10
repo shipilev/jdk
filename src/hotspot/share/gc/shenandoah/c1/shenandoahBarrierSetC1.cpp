@@ -119,7 +119,7 @@ void ShenandoahBarrierSetC1::load_reference_barrier_impl(LIRGenerator* gen, LIR_
   assert(obj->is_register(), "must be a register at this point");
   assert(addr->is_register(), "must be a register at this point");
 
-  // Barrier slowpaths return value in this register. Declared it in the stub
+  // Barrier slowpaths return value in this register. Declare it in the stub
   // as clobbered. The obj would remain as result for both fast- and slow-paths.
   LIR_Opr slow_result = gen->result_register_for(obj->value_type());
 

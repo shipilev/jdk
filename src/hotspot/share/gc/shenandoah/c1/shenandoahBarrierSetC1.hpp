@@ -99,7 +99,7 @@ private:
   DecoratorSet _decorators;
 public:
   ShenandoahLoadReferenceBarrierStub(LIR_Opr obj, LIR_Opr addr, LIR_Opr slow_result, DecoratorSet decorators) :
-          _obj(obj), _addr(addr), _slow_result(slow_result), _decorators(decorators)
+    _obj(obj), _addr(addr), _slow_result(slow_result), _decorators(decorators)
   {
     assert(_obj->is_register(), "should be register");
     assert(_addr->is_register(), "should be register");
@@ -121,7 +121,6 @@ public:
     visitor->do_input(_addr);
     visitor->do_temp(_addr);
     visitor->do_temp(_slow_result);
-    // visitor->do_output(_slow_result);
   }
 #ifndef PRODUCT
   virtual void print_name(outputStream* out) const { out->print("ShenandoahLoadReferenceBarrierStub"); }

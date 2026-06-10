@@ -556,7 +556,7 @@ void ShenandoahBarrierSetAssembler::gen_write_ref_array_post_barrier(MacroAssemb
 
 #define __ ce->masm()->
 
-void ShenandoahBarrierSetAssembler::gen_keepalive_barrier_stub(LIR_Assembler* ce, ShenandoahKeepaliveBarrierStub* stub) {
+void ShenandoahBarrierSetAssembler::keepalive_barrier_c1_stub(LIR_Assembler* ce, ShenandoahKeepaliveBarrierStub* stub) {
   __ bind(*stub->entry());
 
   ShenandoahBarrierSetC1* bs = (ShenandoahBarrierSetC1*)BarrierSet::barrier_set()->barrier_set_c1();
@@ -572,7 +572,7 @@ void ShenandoahBarrierSetAssembler::gen_keepalive_barrier_stub(LIR_Assembler* ce
   __ jmp(*stub->continuation());
 }
 
-void ShenandoahBarrierSetAssembler::gen_load_reference_barrier_stub(LIR_Assembler* ce, ShenandoahLoadReferenceBarrierStub* stub) {
+void ShenandoahBarrierSetAssembler::load_reference_barrier_c1_stub(LIR_Assembler* ce, ShenandoahLoadReferenceBarrierStub* stub) {
   __ bind(*stub->entry());
 
   DecoratorSet decorators = stub->decorators();
@@ -612,27 +612,28 @@ void ShenandoahBarrierSetAssembler::gen_load_reference_barrier_stub(LIR_Assemble
 
 #define __ sasm->
 
-void ShenandoahBarrierSetAssembler::generate_c1_pre_barrier_runtime_stub(StubAssembler* sasm) {
-  __ prologue("shenandoah_pre_barrier", false);
-  const Register tmp1 = rdx;
-  const Register tmp2 = c_rarg0;
-  __ push(tmp1);
-  __ push(tmp2);
-  __ load_parameter(0, tmp2);
-  satb_barrier(sasm, noreg, tmp2, tmp1);
-  __ pop(tmp2);
-  __ pop(tmp1);
+void ShenandoahBarrierSetAssembler::keepalive_barrier_c1_runtime_stub(StubAssembler* sasm) {
+  __ prologue("shenandoah_keepalive_barrier", false);
+  const Register tmp_obj = rax;
+  const Register tmp = rdx;
+  __ push(tmp);
+  __ push(tmp_obj);
+  __ load_parameter(0, tmp_obj);
+  satb_barrier(sasm, noreg, tmp_obj, tmp);
+  __ pop(tmp_obj);
+  __ pop(tmp);
   __ epilogue();
 }
 
-void ShenandoahBarrierSetAssembler::generate_c1_load_reference_barrier_runtime_stub(StubAssembler* sasm, DecoratorSet decorators) {
+void ShenandoahBarrierSetAssembler::load_reference_barrier_c1_runtime_stub(StubAssembler* sasm, DecoratorSet decorators) {
   __ prologue("shenandoah_load_reference_barrier", false);
-  const Register tmp = rdx;
-  __ push(tmp);
-  __ load_parameter(0, rax);
-  __ load_parameter(1, tmp);
-  load_reference_barrier(sasm, rax, Address(tmp, 0), decorators);
-  __ pop(tmp);
+  const Register tmp_obj = rax;
+  const Register tmp_addr = rdx;
+  __ push(tmp_addr);
+  __ load_parameter(0, tmp_obj);
+  __ load_parameter(1, tmp_addr);
+  load_reference_barrier(sasm, tmp_obj, Address(tmp_addr, 0), decorators);
+  __ pop(tmp_addr);
   __ epilogue();
 }
 

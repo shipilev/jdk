@@ -43,12 +43,12 @@
 
 void ShenandoahKeepaliveBarrierStub::emit_code(LIR_Assembler* ce) {
   ShenandoahBarrierSetAssembler* bs = (ShenandoahBarrierSetAssembler*)BarrierSet::barrier_set()->barrier_set_assembler();
-  bs->gen_keepalive_barrier_stub(ce, this);
+  bs->keepalive_barrier_c1_stub(ce, this);
 }
 
 void ShenandoahLoadReferenceBarrierStub::emit_code(LIR_Assembler* ce) {
   ShenandoahBarrierSetAssembler* bs = (ShenandoahBarrierSetAssembler*)BarrierSet::barrier_set()->barrier_set_assembler();
-  bs->gen_load_reference_barrier_stub(ce, this);
+  bs->load_reference_barrier_c1_stub(ce, this);
 }
 
 ShenandoahBarrierSetC1::ShenandoahBarrierSetC1() :
@@ -206,10 +206,10 @@ void ShenandoahBarrierSetC1::load_at_resolved(LIRAccess& access, LIR_Opr result)
   }
 }
 
-class C1ShenandoahPreBarrierCodeGenClosure : public StubAssemblerCodeGenClosure {
+class C1ShenandoahKeepaliveBarrierCodeGenClosure : public StubAssemblerCodeGenClosure {
   virtual OopMapSet* generate_code(StubAssembler* sasm) {
     ShenandoahBarrierSetAssembler* bs = (ShenandoahBarrierSetAssembler*)BarrierSet::barrier_set()->barrier_set_assembler();
-    bs->generate_c1_pre_barrier_runtime_stub(sasm);
+    bs->keepalive_barrier_c1_runtime_stub(sasm);
     return nullptr;
   }
 };
@@ -223,17 +223,17 @@ public:
 
   virtual OopMapSet* generate_code(StubAssembler* sasm) {
     ShenandoahBarrierSetAssembler* bs = (ShenandoahBarrierSetAssembler*)BarrierSet::barrier_set()->barrier_set_assembler();
-    bs->generate_c1_load_reference_barrier_runtime_stub(sasm, _decorators);
+    bs->load_reference_barrier_c1_runtime_stub(sasm, _decorators);
     return nullptr;
   }
 };
 
 bool ShenandoahBarrierSetC1::generate_c1_runtime_stubs(BufferBlob* buffer_blob) {
   if (ShenandoahSATBBarrier) {
-    C1ShenandoahPreBarrierCodeGenClosure pre_code_gen_cl;
+    C1ShenandoahKeepaliveBarrierCodeGenClosure keepalive_code_gen_cl;
     _keepalive_barrier_c1_runtime_code_blob = Runtime1::generate_blob(buffer_blob, StubId::NO_STUBID,
-                                                                "shenandoah_pre_barrier_slow",
-                                                                false, &pre_code_gen_cl);
+                                                                      "shenandoah_keepalive_barrier_slow",
+                                                                      false, &keepalive_code_gen_cl);
     if (_keepalive_barrier_c1_runtime_code_blob == nullptr) {
       return false;
     }

@@ -556,19 +556,19 @@ void ShenandoahBarrierSetAssembler::gen_write_ref_array_post_barrier(MacroAssemb
 
 #define __ ce->masm()->
 
-void ShenandoahBarrierSetAssembler::gen_pre_barrier_stub(LIR_Assembler* ce, ShenandoahPreBarrierStub* stub) {
+void ShenandoahBarrierSetAssembler::gen_keepalive_barrier_stub(LIR_Assembler* ce, ShenandoahKeepaliveBarrierStub* stub) {
   __ bind(*stub->entry());
 
   ShenandoahBarrierSetC1* bs = (ShenandoahBarrierSetC1*)BarrierSet::barrier_set()->barrier_set_c1();
 
-  Register pre_val = stub->pre_val()->as_register();
+  Register obj = stub->obj()->as_register();
 
   if (stub->do_load()) {
-    ce->mem2reg(stub->addr(), stub->pre_val(), T_OBJECT, stub->patch_code(), stub->info(), false /*wide*/);
+    ce->mem2reg(stub->addr(), stub->obj(), T_OBJECT, stub->patch_code(), stub->info(), /* wide = */ false);
   }
 
-  ce->store_parameter(pre_val, 0);
-  __ call(RuntimeAddress(bs->pre_barrier_c1_runtime_code_blob()->code_begin()));
+  ce->store_parameter(obj, 0);
+  __ call(RuntimeAddress(bs->keepalive_barrier_c1_runtime_code_blob()->code_begin()));
   __ jmp(*stub->continuation());
 }
 

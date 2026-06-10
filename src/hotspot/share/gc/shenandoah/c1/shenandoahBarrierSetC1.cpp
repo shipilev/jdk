@@ -41,9 +41,9 @@
 #define __ gen->lir()->
 #endif
 
-void ShenandoahPreBarrierStub::emit_code(LIR_Assembler* ce) {
+void ShenandoahKeepaliveBarrierStub::emit_code(LIR_Assembler* ce) {
   ShenandoahBarrierSetAssembler* bs = (ShenandoahBarrierSetAssembler*)BarrierSet::barrier_set()->barrier_set_assembler();
-  bs->gen_pre_barrier_stub(ce, this);
+  bs->gen_keepalive_barrier_stub(ce, this);
 }
 
 void ShenandoahLoadReferenceBarrierStub::emit_code(LIR_Assembler* ce) {
@@ -52,7 +52,7 @@ void ShenandoahLoadReferenceBarrierStub::emit_code(LIR_Assembler* ce) {
 }
 
 ShenandoahBarrierSetC1::ShenandoahBarrierSetC1() :
-  _pre_barrier_c1_runtime_code_blob(nullptr),
+  _keepalive_barrier_c1_runtime_code_blob(nullptr),
   _load_reference_barrier_strong_rt_code_blob(nullptr),
   _load_reference_barrier_strong_native_rt_code_blob(nullptr),
   _load_reference_barrier_weak_rt_code_blob(nullptr),
@@ -78,28 +78,28 @@ void ShenandoahBarrierSetC1::enter_if_gc_state(LIRGenerator* gen, int flags, Cod
   __ branch_destination(slow_stub->continuation());
 }
 
-void ShenandoahBarrierSetC1::pre_barrier(LIRGenerator* gen, LIR_Opr addr_opr, LIR_Opr pre_val, DecoratorSet decorators, CodeEmitInfo* info) {
+void ShenandoahBarrierSetC1::keepalive_barrier(LIRGenerator* gen, LIR_Opr obj, LIR_Opr addr, DecoratorSet decorators, CodeEmitInfo* info) {
   CodeStub* slow_stub;
-  if (pre_val == LIR_OprFact::illegalOpr) {
+  if (obj == LIR_OprFact::illegalOpr) {
     // Caller wants us to do the load.
-    pre_val = gen->new_register(T_OBJECT);
+    obj = gen->new_register(T_OBJECT);
 
-    assert(addr_opr != LIR_OprFact::illegalOpr, "sanity");
-    if (!addr_opr->is_address()) {
-      assert(addr_opr->is_register(), "must be");
-      addr_opr = LIR_OprFact::address(new LIR_Address(addr_opr, T_OBJECT));
+    assert(addr != LIR_OprFact::illegalOpr, "sanity");
+    if (!addr->is_address()) {
+      assert(addr->is_register(), "must be");
+      addr = LIR_OprFact::address(new LIR_Address(addr, T_OBJECT));
     }
 
     LIR_PatchCode lir_patch_code = (decorators & C1_NEEDS_PATCHING) != 0 ? lir_patch_normal : lir_patch_none;
     CodeEmitInfo* code_emit_info = info ? new CodeEmitInfo(info) : nullptr;
-    slow_stub = new ShenandoahPreBarrierStub(addr_opr, pre_val, lir_patch_code, code_emit_info);
+    slow_stub = new ShenandoahKeepaliveBarrierStub(obj, addr, lir_patch_code, code_emit_info);
   } else {
     // Caller gave us the pre_val to work with.
-    assert(addr_opr == LIR_OprFact::illegalOpr, "sanity");
-    assert(pre_val->is_register(), "must be");
-    assert(pre_val->type() == T_OBJECT, "must be an object");
+    assert(addr == LIR_OprFact::illegalOpr, "sanity");
+    assert(obj->is_register(), "must be");
+    assert(obj->type() == T_OBJECT, "must be an object");
 
-    slow_stub = new ShenandoahPreBarrierStub(pre_val);
+    slow_stub = new ShenandoahKeepaliveBarrierStub(obj);
   }
 
   enter_if_gc_state(gen, ShenandoahHeap::MARKING, slow_stub);
@@ -143,8 +143,8 @@ LIR_Opr ShenandoahBarrierSetC1::ensure_in_register(LIRGenerator* gen, LIR_Opr ob
 
 void ShenandoahBarrierSetC1::store_at_resolved(LIRAccess& access, LIR_Opr value) {
   if (ShenandoahSATBBarrier && access.is_oop()) {
-    pre_barrier(access.gen(), /* addr = */ access.resolved_addr(), /* pre_val = */ LIR_OprFact::illegalOpr,
-                access.decorators(), access.access_emit_info());
+    keepalive_barrier(access.gen(), /* obj = */ LIR_OprFact::illegalOpr, /* addr = */ access.resolved_addr(),
+                      access.decorators(), access.access_emit_info());
   }
   BarrierSetC1::store_at_resolved(access, value);
 
@@ -198,8 +198,8 @@ void ShenandoahBarrierSetC1::load_at_resolved(LIRAccess& access, LIR_Opr result)
       Lcont_anonymous = new LabelObj();
       generate_referent_check(access, Lcont_anonymous);
     }
-    pre_barrier(gen, /* addr = */ LIR_OprFact::illegalOpr, /* pre_val = */ result,
-                decorators, access.access_emit_info());
+    keepalive_barrier(gen, /* obj = */ result, /* addr = */ LIR_OprFact::illegalOpr,
+                      decorators, access.access_emit_info());
     if (is_anonymous) {
       __ branch_destination(Lcont_anonymous->label());
     }
@@ -231,10 +231,10 @@ public:
 bool ShenandoahBarrierSetC1::generate_c1_runtime_stubs(BufferBlob* buffer_blob) {
   if (ShenandoahSATBBarrier) {
     C1ShenandoahPreBarrierCodeGenClosure pre_code_gen_cl;
-    _pre_barrier_c1_runtime_code_blob = Runtime1::generate_blob(buffer_blob, StubId::NO_STUBID,
+    _keepalive_barrier_c1_runtime_code_blob = Runtime1::generate_blob(buffer_blob, StubId::NO_STUBID,
                                                                 "shenandoah_pre_barrier_slow",
                                                                 false, &pre_code_gen_cl);
-    if (_pre_barrier_c1_runtime_code_blob == nullptr) {
+    if (_keepalive_barrier_c1_runtime_code_blob == nullptr) {
       return false;
     }
   }
@@ -340,8 +340,8 @@ LIR_Opr ShenandoahBarrierSetC1::atomic_cmpxchg_at_resolved(LIRAccess& access, LI
   // Handle the previous value through SATB, as we are about to perform the store.
   __ load(addr->as_address_ptr(), tmp);
   if (ShenandoahSATBBarrier) {
-    pre_barrier(gen, /* addr_opr (unused) = */ LIR_OprFact::illegalOpr, /* pre_val = */ tmp,
-                 access.decorators(), access.access_emit_info());
+    keepalive_barrier(gen, /* obj = */ tmp, /* addr = */ LIR_OprFact::illegalOpr,
+                      access.decorators(), access.access_emit_info());
   }
 
   // Perform LRB on location to fix it up for this and all following accesses.
@@ -373,8 +373,8 @@ LIR_Opr ShenandoahBarrierSetC1::atomic_xchg_at_resolved(LIRAccess& access, LIRIt
   // Handle the previous value through SATB, as we are about to perform the store.
   __ load(addr->as_address_ptr(), tmp);
   if (ShenandoahSATBBarrier) {
-    pre_barrier(gen, /* addr_opr (unused) = */ LIR_OprFact::illegalOpr, /* pre_val = */ tmp,
-                 access.decorators(), access.access_emit_info());
+    keepalive_barrier(gen, /* obj = */ tmp, /* addr = */ LIR_OprFact::illegalOpr,
+                      access.decorators(), access.access_emit_info());
   }
 
   // Perform LRB on location to fix it up for this and all following accesses.

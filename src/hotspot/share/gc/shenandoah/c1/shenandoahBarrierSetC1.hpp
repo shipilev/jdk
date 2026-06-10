@@ -29,40 +29,38 @@
 #include "c1/c1_CodeStubs.hpp"
 #include "gc/shared/c1/barrierSetC1.hpp"
 
-class ShenandoahPreBarrierStub: public CodeStub {
+class ShenandoahKeepaliveBarrierStub: public CodeStub {
   friend class ShenandoahBarrierSetC1;
 private:
-  bool _do_load;
+  LIR_Opr _obj;
   LIR_Opr _addr;
-  LIR_Opr _pre_val;
   LIR_PatchCode _patch_code;
   CodeEmitInfo* _info;
+  bool _do_load;
 
 public:
-  // Version that _does_ generate a load of the previous value from addr.
+  // Version that _does_ generate a load of the value from addr.
   // addr (the address of the field to be read) must be a LIR_Address
-  // pre_val (a temporary register) must be a register;
-  ShenandoahPreBarrierStub(LIR_Opr addr, LIR_Opr pre_val, LIR_PatchCode patch_code, CodeEmitInfo* info) :
-    _do_load(true), _addr(addr), _pre_val(pre_val),
-    _patch_code(patch_code), _info(info)
+  // obj (a temporary register) must be a register;
+  ShenandoahKeepaliveBarrierStub(LIR_Opr obj, LIR_Opr addr, LIR_PatchCode patch_code, CodeEmitInfo* info) :
+     _obj(obj),  _addr(addr), _patch_code(patch_code), _info(info), _do_load(true)
   {
-    assert(_pre_val->is_register(), "should be temporary register");
+    assert(_obj->is_register(), "should be temporary register");
     assert(_addr->is_address(), "should be the address of the field");
     FrameMap* f = Compilation::current()->frame_map();
     f->update_reserved_argument_area_size(2 * BytesPerWord);
   }
 
-  // Version that _does not_ generate load of the previous value; the
-  // previous value is assumed to have already been loaded into pre_val.
-  ShenandoahPreBarrierStub(LIR_Opr pre_val) :
-    _do_load(false), _addr(LIR_OprFact::illegalOpr), _pre_val(pre_val),
-    _patch_code(lir_patch_none), _info(nullptr)
+  // Version that _does not_ generate load of the value; the value
+  // is assumed to have already been loaded into obj.
+  ShenandoahKeepaliveBarrierStub(LIR_Opr obj) :
+     _obj(obj), _addr(LIR_OprFact::illegalOpr), _patch_code(lir_patch_none), _info(nullptr), _do_load(false)
   {
-    assert(_pre_val->is_register(), "should be a register");
+    assert(_obj->is_register(), "should be a register");
   }
 
   LIR_Opr addr() const { return _addr; }
-  LIR_Opr pre_val() const { return _pre_val; }
+  LIR_Opr obj() const { return _obj; }
   LIR_PatchCode patch_code() const { return _patch_code; }
   CodeEmitInfo* info() const { return _info; }
   bool do_load() const { return _do_load; }
@@ -79,14 +77,14 @@ public:
 
       visitor->do_input(_addr);
       visitor->do_temp(_addr);
-      visitor->do_temp(_pre_val);
+      visitor->do_temp(_obj);
     } else {
       visitor->do_slow_case();
-      visitor->do_input(_pre_val);
+      visitor->do_input(_obj);
     }
   }
 #ifndef PRODUCT
-  virtual void print_name(outputStream* out) const { out->print("ShenandoahPreBarrierStub"); }
+  virtual void print_name(outputStream* out) const { out->print("ShenandoahKeepaliveBarrierStub"); }
 #endif // PRODUCT
 };
 
@@ -129,7 +127,7 @@ public:
 
 class ShenandoahBarrierSetC1 : public BarrierSetC1 {
 private:
-  CodeBlob* _pre_barrier_c1_runtime_code_blob;
+  CodeBlob* _keepalive_barrier_c1_runtime_code_blob;
   CodeBlob* _load_reference_barrier_strong_rt_code_blob;
   CodeBlob* _load_reference_barrier_strong_native_rt_code_blob;
   CodeBlob* _load_reference_barrier_weak_rt_code_blob;
@@ -137,7 +135,7 @@ private:
 
   void enter_if_gc_state(LIRGenerator* gen, int flags, CodeStub* slow_stub);
 
-  void pre_barrier(LIRGenerator* gen, LIR_Opr addr_opr, LIR_Opr pre_val, DecoratorSet decorators, CodeEmitInfo* info);
+  void keepalive_barrier(LIRGenerator* gen, LIR_Opr obj, LIR_Opr addr, DecoratorSet decorators, CodeEmitInfo* info);
 
   void load_reference_barrier(LIRGenerator* gen, LIR_Opr obj, LIR_Opr addr, DecoratorSet decorators);
 
@@ -146,9 +144,9 @@ private:
 public:
   ShenandoahBarrierSetC1();
 
-  CodeBlob* pre_barrier_c1_runtime_code_blob() {
-    assert(_pre_barrier_c1_runtime_code_blob != nullptr, "");
-    return _pre_barrier_c1_runtime_code_blob;
+  CodeBlob* keepalive_barrier_c1_runtime_code_blob() {
+    assert(_keepalive_barrier_c1_runtime_code_blob != nullptr, "");
+    return _keepalive_barrier_c1_runtime_code_blob;
   }
 
   CodeBlob* load_reference_barrier_strong_rt_code_blob() {

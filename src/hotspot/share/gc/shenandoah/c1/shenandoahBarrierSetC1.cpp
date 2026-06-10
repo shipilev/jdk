@@ -78,7 +78,7 @@ void ShenandoahBarrierSetC1::enter_if_gc_state(LIRGenerator* gen, int flags, Cod
   __ branch_destination(slow_stub->continuation());
 }
 
-void ShenandoahBarrierSetC1::pre_barrier(LIRGenerator* gen, CodeEmitInfo* info, DecoratorSet decorators, LIR_Opr addr_opr, LIR_Opr pre_val) {
+void ShenandoahBarrierSetC1::pre_barrier(LIRGenerator* gen, LIR_Opr addr_opr, LIR_Opr pre_val, DecoratorSet decorators, CodeEmitInfo* info) {
   CodeStub* slow_stub;
   if (pre_val == LIR_OprFact::illegalOpr) {
     // Caller wants us to do the load.
@@ -142,10 +142,9 @@ LIR_Opr ShenandoahBarrierSetC1::ensure_in_register(LIRGenerator* gen, LIR_Opr ob
 }
 
 void ShenandoahBarrierSetC1::store_at_resolved(LIRAccess& access, LIR_Opr value) {
-  if (access.is_oop()) {
-    if (ShenandoahSATBBarrier) {
-      pre_barrier(access.gen(), access.access_emit_info(), access.decorators(), access.resolved_addr(), LIR_OprFact::illegalOpr /* pre_val */);
-    }
+  if (ShenandoahSATBBarrier && access.is_oop()) {
+    pre_barrier(access.gen(), /* addr = */ access.resolved_addr(), /* pre_val = */ LIR_OprFact::illegalOpr,
+                access.decorators(), access.access_emit_info());
   }
   BarrierSetC1::store_at_resolved(access, value);
 
@@ -199,8 +198,8 @@ void ShenandoahBarrierSetC1::load_at_resolved(LIRAccess& access, LIR_Opr result)
       Lcont_anonymous = new LabelObj();
       generate_referent_check(access, Lcont_anonymous);
     }
-    pre_barrier(gen, access.access_emit_info(), decorators, LIR_OprFact::illegalOpr /* addr_opr */,
-                result /* pre_val */);
+    pre_barrier(gen, /* addr = */ LIR_OprFact::illegalOpr, /* pre_val = */ result,
+                decorators, access.access_emit_info());
     if (is_anonymous) {
       __ branch_destination(Lcont_anonymous->label());
     }
@@ -341,9 +340,8 @@ LIR_Opr ShenandoahBarrierSetC1::atomic_cmpxchg_at_resolved(LIRAccess& access, LI
   // Handle the previous value through SATB, as we are about to perform the store.
   __ load(addr->as_address_ptr(), tmp);
   if (ShenandoahSATBBarrier) {
-    pre_barrier(gen, access.access_emit_info(), access.decorators(),
-                /* addr_opr (unused) = */ LIR_OprFact::illegalOpr,
-                /* pre_val = */ tmp);
+    pre_barrier(gen, /* addr_opr (unused) = */ LIR_OprFact::illegalOpr, /* pre_val = */ tmp,
+                 access.decorators(), access.access_emit_info());
   }
 
   // Perform LRB on location to fix it up for this and all following accesses.
@@ -375,9 +373,8 @@ LIR_Opr ShenandoahBarrierSetC1::atomic_xchg_at_resolved(LIRAccess& access, LIRIt
   // Handle the previous value through SATB, as we are about to perform the store.
   __ load(addr->as_address_ptr(), tmp);
   if (ShenandoahSATBBarrier) {
-    pre_barrier(gen, access.access_emit_info(), access.decorators(),
-                /* addr_opr (unused) = */ LIR_OprFact::illegalOpr,
-                /* pre_val = */ tmp);
+    pre_barrier(gen, /* addr_opr (unused) = */ LIR_OprFact::illegalOpr, /* pre_val = */ tmp,
+                 access.decorators(), access.access_emit_info());
   }
 
   // Perform LRB on location to fix it up for this and all following accesses.

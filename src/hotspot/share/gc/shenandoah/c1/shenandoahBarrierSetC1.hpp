@@ -137,7 +137,7 @@ private:
 
   void enter_if_gc_state(LIRGenerator* gen, int flags, CodeStub* slow_stub);
 
-  void pre_barrier(LIRGenerator* gen, CodeEmitInfo* info, DecoratorSet decorators, LIR_Opr addr_opr, LIR_Opr pre_val);
+  void pre_barrier(LIRGenerator* gen, LIR_Opr addr_opr, LIR_Opr pre_val, DecoratorSet decorators, CodeEmitInfo* info);
 
   void load_reference_barrier(LIRGenerator* gen, LIR_Opr obj, LIR_Opr addr, DecoratorSet decorators);
 

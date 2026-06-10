@@ -693,81 +693,56 @@ void ShenandoahBarrierSetAssembler::gen_write_ref_array_post_barrier(MacroAssemb
 
 #define __ ce->masm()->
 
-void ShenandoahBarrierSetAssembler::gen_pre_barrier_stub(LIR_Assembler *ce, ShenandoahKeepaliveStub *stub) {
+void ShenandoahBarrierSetAssembler::keepalive_barrier_c1_stub(LIR_Assembler* ce, ShenandoahKeepaliveBarrierStub* stub) {
   __ block_comment("gen_pre_barrier_stub (shenandoahgc) {");
-
-  ShenandoahBarrierSetC1 *bs = (ShenandoahBarrierSetC1*) BarrierSet::barrier_set()->barrier_set_c1();
   __ bind(*stub->entry());
 
-  // GC status has already been verified by 'ShenandoahBarrierSetC1::pre_barrier'.
-  // This stub is the slowpath of that function.
+  ShenandoahBarrierSetC1 *bs = (ShenandoahBarrierSetC1*) BarrierSet::barrier_set()->barrier_set_c1();
 
-  assert(stub->pre_val()->is_register(), "pre_val must be a register");
-  Register pre_val = stub->pre_val()->as_register();
+  Register obj = stub->obj()->as_register();
 
   // If 'do_load()' returns false, the to-be-stored value is already available in 'stub->pre_val()'
   // ("preloaded mode" of the store barrier).
   if (stub->do_load()) {
-    ce->mem2reg(stub->addr(), stub->pre_val(), T_OBJECT, stub->patch_code(), stub->info(), false);
+    ce->mem2reg(stub->addr(), stub->obj(), T_OBJECT, stub->patch_code(), stub->info(), false);
   }
 
   // Fast path: Reference is null.
-  __ cmpdi(CR0, pre_val, 0);
+  __ cmpdi(CR0, obj, 0);
   __ bc_far_optimized(Assembler::bcondCRbiIs1_bhintNoHint, __ bi0(CR0, Assembler::equal), *stub->continuation());
 
   // Argument passing via the stack.
-  __ std(pre_val, -8, R1_SP);
+  __ std(obj, -8, R1_SP);
 
-  __ load_const_optimized(R0, bs->pre_barrier_c1_runtime_code_blob()->code_begin());
+  __ load_const_optimized(R0, bs->keepalive_barrier_c1_runtime_code_blob()->code_begin());
   __ call_stub(R0);
 
   __ b(*stub->continuation());
   __ block_comment("} gen_pre_barrier_stub (shenandoahgc)");
 }
 
-void ShenandoahBarrierSetAssembler::gen_load_reference_barrier_stub(LIR_Assembler *ce,
-                                                                    ShenandoahLoadReferenceBarrierStub *stub) {
+void ShenandoahBarrierSetAssembler::load_reference_barrier_c1_stub(LIR_Assembler* ce, ShenandoahLoadReferenceBarrierStub* stub) {
   __ block_comment("gen_load_reference_barrier_stub (shenandoahgc) {");
 
-  ShenandoahBarrierSetC1 *bs = (ShenandoahBarrierSetC1*) BarrierSet::barrier_set()->barrier_set_c1();
   __ bind(*stub->entry());
-
-  Register obj  = stub->obj()->as_register();
-  Register res  = stub->result()->as_register();
-  Register addr = stub->addr()->as_pointer_register();
-  Register tmp1 = stub->tmp1()->as_register();
-  Register tmp2 = stub->tmp2()->as_register();
-  assert_different_registers(addr, res, tmp1, tmp2);
-
-  assert(R3_RET == res, "res must be r3");
-
-  if (res != obj) {
-    __ mr(res, obj);
-  }
-
-  DecoratorSet decorators = stub->decorators();
 
   /* ==== Check whether region is in collection set ==== */
   // GC status (unstable) has already been verified by 'ShenandoahBarrierSetC1::load_reference_barrier_impl'.
   // This stub is the slowpath of that function.
 
+  DecoratorSet decorators = stub->decorators();
   bool is_strong  = ShenandoahBarrierSet::is_strong_access(decorators);
   bool is_weak    = ShenandoahBarrierSet::is_weak_access(decorators);
   bool is_phantom = ShenandoahBarrierSet::is_phantom_access(decorators);
   bool is_native  = ShenandoahBarrierSet::is_native_access(decorators);
 
-  if (is_strong) {
-    // Check whether object is in collection set.
-    __ load_const_optimized(tmp2, ShenandoahHeap::in_cset_fast_test_addr(), tmp1);
-    __ srdi(tmp1, obj, ShenandoahHeapRegion::region_size_bytes_shift_jint());
-    __ lbzx(tmp2, tmp1, tmp2);
+  ShenandoahBarrierSetC1 *bs = (ShenandoahBarrierSetC1*) BarrierSet::barrier_set()->barrier_set_c1();
 
-    __ andi_(tmp2, tmp2, 1);
-    __ bc_far_optimized(Assembler::bcondCRbiIs1_bhintNoHint, __ bi0(CR0, Assembler::equal), *stub->continuation());
-  }
+  Register obj  = stub->obj()->as_register();
+  Register addr = stub->addr()->as_pointer_register();
+  assert_different_registers(obj, addr);
 
   address blob_addr = nullptr;
-
   if (is_strong) {
     if (is_native) {
       blob_addr = bs->load_reference_barrier_strong_native_rt_code_blob()->code_begin();
@@ -786,8 +761,8 @@ void ShenandoahBarrierSetAssembler::gen_load_reference_barrier_stub(LIR_Assemble
   // Argument passing via the stack.  'obj' is passed implicitly (as asserted above).
   __ std(addr, -8, R1_SP);
 
-  __ load_const_optimized(tmp1, blob_addr, tmp2);
-  __ call_stub(tmp1);
+  __ load_const_optimized(R0, blob_addr);
+  __ call_stub(R0);
 
   // 'res' is 'R3_RET'.  The result is thus already in the correct register.
 
@@ -799,63 +774,17 @@ void ShenandoahBarrierSetAssembler::gen_load_reference_barrier_stub(LIR_Assemble
 
 #define __ sasm->
 
-void ShenandoahBarrierSetAssembler::generate_c1_pre_barrier_runtime_stub(StubAssembler *sasm) {
+void ShenandoahBarrierSetAssembler::keepalive_barrier_c1_runtime_stub(StubAssembler* sasm) {
   __ block_comment("generate_c1_pre_barrier_runtime_stub (shenandoahgc) {");
 
-  Label runtime, skip_barrier;
-  BarrierSet *bs = BarrierSet::barrier_set();
-
-  // Argument passing via the stack.
-  const int caller_stack_slots = 3;
-
-  Register R0_pre_val = R0;
+  Register R0_obj = R0;
   __ ld(R0, -8, R1_SP);
   Register R11_tmp1 = R11_scratch1;
   __ std(R11_tmp1, -16, R1_SP);
   Register R12_tmp2 = R12_scratch2;
   __ std(R12_tmp2, -24, R1_SP);
 
-  /* ==== Check whether marking is active ==== */
-  // Even though gc status was checked in 'ShenandoahBarrierSetAssembler::gen_pre_barrier_stub',
-  // another check is required as a safepoint might have been reached in the meantime (JDK-8140588).
-  __ lbz(R12_tmp2, in_bytes(ShenandoahThreadLocalData::gc_state_offset()), R16_thread);
-
-  __ andi_(R12_tmp2, R12_tmp2, ShenandoahHeap::MARKING);
-  __ beq(CR0, skip_barrier);
-
-  /* ==== Add previous value directly to thread-local SATB mark queue ==== */
-  // Check queue's capacity.  Jump to runtime if no free slot is available.
-  __ ld(R12_tmp2, in_bytes(ShenandoahThreadLocalData::satb_mark_queue_index_offset()), R16_thread);
-  __ cmpdi(CR0, R12_tmp2, 0);
-  __ beq(CR0, runtime);
-
-  // Capacity suffices.  Decrement the queue's size by one slot (size of one oop).
-  __ addi(R12_tmp2, R12_tmp2, -wordSize);
-  __ std(R12_tmp2, in_bytes(ShenandoahThreadLocalData::satb_mark_queue_index_offset()), R16_thread);
-
-  // Enqueue the previous value and skip the runtime invocation.
-  __ ld(R11_tmp1, in_bytes(ShenandoahThreadLocalData::satb_mark_queue_buffer_offset()), R16_thread);
-  __ stdx(R0_pre_val, R11_tmp1, R12_tmp2);
-  __ b(skip_barrier);
-
-  __ bind(runtime);
-
-  /* ==== Invoke runtime to commit SATB mark queue to gc and allocate a new buffer ==== */
-  // Save to-be-preserved registers.
-  const int nbytes_save = (MacroAssembler::num_volatile_regs + caller_stack_slots) * BytesPerWord;
-  __ save_volatile_gprs(R1_SP, -nbytes_save);
-  __ save_LR(R11_tmp1);
-  __ push_frame_reg_args(nbytes_save, R11_tmp1);
-
-  // Invoke runtime.
-  __ call_VM_leaf(CAST_FROM_FN_PTR(address, ShenandoahRuntime::write_barrier_pre), R0_pre_val);
-
-  // Restore to-be-preserved registers.
-  __ pop_frame();
-  __ restore_LR(R11_tmp1);
-  __ restore_volatile_gprs(R1_SP, -nbytes_save);
-
-  __ bind(skip_barrier);
+  satb_barrier(sasm, noreg, noreg, R0_obj, R11_tmp1, R12_tmp2, MacroAssembler::PRESERVATION_FRAME_LR_GP_FP_REGS);
 
   // Restore spilled registers.
   __ ld(R11_tmp1, -16, R1_SP);
@@ -865,70 +794,24 @@ void ShenandoahBarrierSetAssembler::generate_c1_pre_barrier_runtime_stub(StubAss
   __ block_comment("} generate_c1_pre_barrier_runtime_stub (shenandoahgc)");
 }
 
-void ShenandoahBarrierSetAssembler::generate_c1_load_reference_barrier_runtime_stub(StubAssembler *sasm,
-                                                                                    DecoratorSet decorators) {
+void ShenandoahBarrierSetAssembler::load_reference_barrier_c1_runtime_stub(StubAssembler* sasm, DecoratorSet decorators) {
   __ block_comment("generate_c1_load_reference_barrier_runtime_stub (shenandoahgc) {");
 
-  // Argument passing via the stack.
-  const int caller_stack_slots = 1;
-
-  // Save to-be-preserved registers.
-  const int nbytes_save = (MacroAssembler::num_volatile_regs - 1 // 'R3_ARG1' is skipped
-                           + caller_stack_slots) * BytesPerWord;
-  __ save_volatile_gprs(R1_SP, -nbytes_save, true, false);
-
-  // Load arguments from stack.
-  // No load required, as caller has already loaded obj into R3.
-  Register R3_obj = R3_ARG1;
+  Register R0_obj = R3_ARG1;
+  __ ld(R0, -8, R1_SP);
   Register R4_load_addr = R4_ARG2;
   __ ld(R4_load_addr, -8, R1_SP);
+  Register R11_tmp1 = R11_scratch1;
+  __ std(R11_tmp1, -16, R1_SP);
+  Register R12_tmp2 = R12_scratch2;
+  __ std(R12_tmp2, -24, R1_SP);
 
-  Register R11_tmp = R11_scratch1;
+  // FIXME: register saves?
+  load_reference_barrier(sasm, decorators, R4_load_addr, noreg, R0_obj, R11_tmp1, R12_tmp2, MacroAssembler::PRESERVATION_FRAME_LR_GP_FP_REGS);
 
-  /* ==== Invoke runtime ==== */
-  bool is_strong  = ShenandoahBarrierSet::is_strong_access(decorators);
-  bool is_weak    = ShenandoahBarrierSet::is_weak_access(decorators);
-  bool is_phantom = ShenandoahBarrierSet::is_phantom_access(decorators);
-  bool is_native  = ShenandoahBarrierSet::is_native_access(decorators);
+  __ ld(R11_tmp1, -16, R1_SP);
+  __ ld(R12_tmp2, -24, R1_SP);
 
-  address jrt_address = nullptr;
-
-  if (is_strong) {
-    if (is_native) {
-      jrt_address = CAST_FROM_FN_PTR(address, ShenandoahRuntime::load_reference_barrier_strong);
-    } else {
-      if (UseCompressedOops) {
-        jrt_address = CAST_FROM_FN_PTR(address, ShenandoahRuntime::load_reference_barrier_strong_narrow);
-      } else {
-        jrt_address = CAST_FROM_FN_PTR(address, ShenandoahRuntime::load_reference_barrier_strong);
-      }
-    }
-  } else if (is_weak) {
-    assert(!is_native, "weak load reference barrier must not be called off-heap");
-    if (UseCompressedOops) {
-      jrt_address = CAST_FROM_FN_PTR(address, ShenandoahRuntime::load_reference_barrier_weak_narrow);
-    } else {
-      jrt_address = CAST_FROM_FN_PTR(address, ShenandoahRuntime::load_reference_barrier_weak);
-    }
-  } else {
-    assert(is_phantom, "reference type must be phantom");
-    assert(is_native, "phantom load reference barrier must be called off-heap");
-    jrt_address = CAST_FROM_FN_PTR(address, ShenandoahRuntime::load_reference_barrier_phantom);
-  }
-  assert(jrt_address != nullptr, "load reference barrier runtime routine cannot be found");
-
-  __ save_LR(R11_tmp);
-  __ push_frame_reg_args(nbytes_save, R11_tmp);
-
-  // Invoke runtime.  Arguments are already stored in the corresponding registers.
-  __ call_VM_leaf(jrt_address, R3_obj, R4_load_addr);
-
-  // Restore to-be-preserved registers.
-  __ pop_frame();
-  __ restore_LR(R11_tmp);
-  __ restore_volatile_gprs(R1_SP, -nbytes_save, true, false); // Skip 'R3_RET' register.
-
-  __ blr();
   __ block_comment("} generate_c1_load_reference_barrier_runtime_stub (shenandoahgc)");
 }
 

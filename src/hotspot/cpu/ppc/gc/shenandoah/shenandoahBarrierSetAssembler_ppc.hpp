@@ -34,7 +34,7 @@
 #ifdef COMPILER1
 
 class LIR_Assembler;
-class ShenandoahKeepaliveStub;
+class ShenandoahKeepaliveBarrierStub;
 class ShenandoahLoadReferenceBarrierStub;
 class StubAssembler;
 
@@ -78,15 +78,11 @@ public:
 
   /* ==== C1 stubs ==== */
 #ifdef COMPILER1
+  void keepalive_barrier_c1_stub(LIR_Assembler* ce, ShenandoahKeepaliveBarrierStub* stub);
+  void keepalive_barrier_c1_runtime_stub(StubAssembler* sasm);
 
-  void gen_pre_barrier_stub(LIR_Assembler* ce, ShenandoahKeepaliveStub* stub);
-
-  void gen_load_reference_barrier_stub(LIR_Assembler* ce, ShenandoahLoadReferenceBarrierStub* stub);
-
-  void generate_c1_pre_barrier_runtime_stub(StubAssembler* sasm);
-
-  void generate_c1_load_reference_barrier_runtime_stub(StubAssembler* sasm, DecoratorSet decorators);
-
+  void load_reference_barrier_c1_stub(LIR_Assembler* ce, ShenandoahLoadReferenceBarrierStub* stub);
+  void load_reference_barrier_c1_runtime_stub(StubAssembler* sasm, DecoratorSet decorators);
 #endif
 
   /* ==== Available barriers (facades of the actual implementations) ==== */

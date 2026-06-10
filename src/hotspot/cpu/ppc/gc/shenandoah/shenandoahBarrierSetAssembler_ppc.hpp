@@ -34,7 +34,7 @@
 #ifdef COMPILER1
 
 class LIR_Assembler;
-class ShenandoahPreBarrierStub;
+class ShenandoahKeepaliveStub;
 class ShenandoahLoadReferenceBarrierStub;
 class StubAssembler;
 
@@ -79,7 +79,7 @@ public:
   /* ==== C1 stubs ==== */
 #ifdef COMPILER1
 
-  void gen_pre_barrier_stub(LIR_Assembler* ce, ShenandoahPreBarrierStub* stub);
+  void gen_pre_barrier_stub(LIR_Assembler* ce, ShenandoahKeepaliveStub* stub);
 
   void gen_load_reference_barrier_stub(LIR_Assembler* ce, ShenandoahLoadReferenceBarrierStub* stub);
 

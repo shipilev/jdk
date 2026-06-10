@@ -566,6 +566,8 @@ void ShenandoahBarrierSetAssembler::keepalive_barrier_c1_stub(LIR_Assembler* ce,
   if (stub->do_load()) {
     ce->mem2reg(stub->addr(), stub->obj(), T_OBJECT, stub->patch_code(), stub->info(), /* wide = */ false);
   }
+  __ cmpptr(obj, NULL_WORD);
+  __ jcc(Assembler::equal, *stub->continuation());
 
   ce->store_parameter(obj, 0);
   __ call(RuntimeAddress(bs->keepalive_barrier_c1_runtime_code_blob()->code_begin()));

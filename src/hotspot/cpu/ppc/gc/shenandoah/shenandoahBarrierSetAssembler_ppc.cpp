@@ -693,7 +693,7 @@ void ShenandoahBarrierSetAssembler::gen_write_ref_array_post_barrier(MacroAssemb
 
 #define __ ce->masm()->
 
-void ShenandoahBarrierSetAssembler::gen_pre_barrier_stub(LIR_Assembler *ce, ShenandoahPreBarrierStub *stub) {
+void ShenandoahBarrierSetAssembler::gen_pre_barrier_stub(LIR_Assembler *ce, ShenandoahKeepaliveStub *stub) {
   __ block_comment("gen_pre_barrier_stub (shenandoahgc) {");
 
   ShenandoahBarrierSetC1 *bs = (ShenandoahBarrierSetC1*) BarrierSet::barrier_set()->barrier_set_c1();

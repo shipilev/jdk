@@ -33,7 +33,7 @@
 
 #ifdef COMPILER1
 class LIR_Assembler;
-class ShenandoahPreBarrierStub;
+class ShenandoahKeepaliveStub;
 class ShenandoahLoadReferenceBarrierStub;
 class StubAssembler;
 #endif
@@ -81,7 +81,7 @@ public:
                                                Register tmp, Label& slow_path);
 
 #ifdef COMPILER1
-  void gen_pre_barrier_stub(LIR_Assembler* ce, ShenandoahPreBarrierStub* stub);
+  void gen_pre_barrier_stub(LIR_Assembler* ce, ShenandoahKeepaliveStub* stub);
   void gen_load_reference_barrier_stub(LIR_Assembler* ce, ShenandoahLoadReferenceBarrierStub* stub);
   void generate_c1_pre_barrier_runtime_stub(StubAssembler* sasm);
   void generate_c1_load_reference_barrier_runtime_stub(StubAssembler* sasm, DecoratorSet decorators);

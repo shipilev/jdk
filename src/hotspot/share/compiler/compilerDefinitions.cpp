@@ -471,11 +471,6 @@ void CompilerConfig::ergo_initialize() {
     FLAG_SET_CMDLINE(ProfileInterpreter, false);
   }
 
-  // Xcomp has no reasonable profiling information, enable inlining cold methods
-  if (Arguments::is_compiler_only() && FLAG_IS_DEFAULT(InlineColdMethods)) {
-    FLAG_SET_DEFAULT(InlineColdMethods, true);
-  }
-
 #ifdef COMPILER2
   // Xcomp has no reasonable profiling information, enable inlining cold methods
   if (Arguments::is_compiler_only() && FLAG_IS_DEFAULT(InlineColdMethods)) {

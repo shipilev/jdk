@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, 2026, Oracle and/or its affiliates. All rights reserved.
+ * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,28 +22,25 @@
  *
  */
 
-#ifndef SHARE_GC_G1_G1CONCURRENTREFINESWEEPTASK_HPP
-#define SHARE_GC_G1_G1CONCURRENTREFINESWEEPTASK_HPP
+/*
+ * @test
+ * @bug 8385651
+ * @summary Verify the HotCodeSampler and JFR do not attempt to suspend the same JavaThread and crash
+ * @requires vm.compiler2.enabled & vm.hasJFR
+ * @run main/othervm -XX:StartFlightRecording -XX:+UnlockExperimentalVMOptions -XX:+HotCodeHeap -XX:+NMethodRelocation -XX:+UnlockDiagnosticVMOptions
+ *                   -XX:HotCodeIntervalSeconds=0 -XX:HotCodeStartupDelaySeconds=0 -XX:HotCodeStablePercent=-1 -Xlog:hotcode=debug
+ *                   compiler.hotcode.HotCodeCollectorJFR
+ */
 
-#include "gc/shared/workerThread.hpp"
-#include "runtime/atomic.hpp"
+package compiler.hotcode;
 
-class G1CardTableClaimTable;
-class G1ConcurrentRefineStats;
+public class HotCodeCollectorJFR {
 
-class G1ConcurrentRefineSweepTask : public WorkerTask {
-  G1CardTableClaimTable* _scan_state;
-  G1ConcurrentRefineStats* _stats;
-  uint _max_workers;
-  Atomic<bool> _sweep_completed;
+    private static final int FUNC_RUN_MILLIS = 10_000;
 
-public:
+    public static void main(String[] args) throws Exception {
+        long start = System.currentTimeMillis();
+        while (System.currentTimeMillis() - start < FUNC_RUN_MILLIS) {}
+    }
 
-  G1ConcurrentRefineSweepTask(G1CardTableClaimTable* scan_state, G1ConcurrentRefineStats* stats, uint max_workers);
-
-  void work(uint worker_id) override;
-
-  bool sweep_completed() const;
-};
-
-#endif /* SHARE_GC_G1_G1CONCURRENTREFINESWEEPTASK_HPP */
+}

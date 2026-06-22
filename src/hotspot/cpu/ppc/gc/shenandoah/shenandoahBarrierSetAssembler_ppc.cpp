@@ -761,19 +761,21 @@ void ShenandoahBarrierSetAssembler::keepalive_barrier_c1_runtime_stub(StubAssemb
   Register tmp2 = R12_scratch2;
 
   // Save registers we are about to clobber
-  __ std(obj,  32, R1_SP);
-  __ std(tmp1, 40, R1_SP);
-  __ std(tmp2, 48, R1_SP);
+  __ std(obj,  -16, R1_SP);
+  __ std(tmp1, -24, R1_SP);
+  __ std(tmp2, -32, R1_SP);
 
   // Pull the arguments from stack
   __ ld(obj, -8, R1_SP);
 
+  __ push_frame(4 * BytesPerWord + frame::java_abi_size, R0); // create dummy frame around saved regs
   satb_barrier(sasm, noreg, noreg, obj, tmp1, tmp2, MacroAssembler::PRESERVATION_FRAME_LR_GP_FP_REGS);
+  __ pop_frame();
 
   // Restore registers
-  __ ld(tmp2, 48, R1_SP);
-  __ ld(tmp1, 40, R1_SP);
-  __ ld(obj,  32, R1_SP);
+  __ ld(tmp2, -32, R1_SP);
+  __ ld(tmp1, -24, R1_SP);
+  __ ld(obj,  -16, R1_SP);
 
   __ blr();
   __ block_comment("} generate_c1_pre_barrier_runtime_stub (shenandoahgc)");
@@ -788,20 +790,22 @@ void ShenandoahBarrierSetAssembler::load_reference_barrier_c1_runtime_stub(StubA
   Register tmp2 = R12_scratch2;
 
   // Save registers we are about to clobber
-  __ std(addr, 32, R1_SP);
-  __ std(tmp1, 40, R1_SP);
-  __ std(tmp2, 48, R1_SP);
+  __ std(addr, -24, R1_SP);
+  __ std(tmp1, -32, R1_SP);
+  __ std(tmp2, -40, R1_SP);
 
   // Pull the arguments from the stack
   __ ld(obj,    -8, R1_SP);
   __ ld(addr,  -16, R1_SP);
 
+  __ push_frame(4 * BytesPerWord + frame::java_abi_size, R0); // create dummy frame around saved regs
   load_reference_barrier(sasm, decorators, addr, noreg, obj, tmp1, tmp2, MacroAssembler::PRESERVATION_FRAME_LR_GP_FP_REGS);
+  __ pop_frame();
 
   // Restore registers
-  __ ld(tmp2,  48, R1_SP);
-  __ ld(tmp1,  40, R1_SP);
-  __ ld(addr,  32, R1_SP);
+  __ ld(tmp2, -40, R1_SP);
+  __ ld(tmp1, -32, R1_SP);
+  __ ld(addr, -24, R1_SP);
 
   __ blr();
   __ block_comment("} generate_c1_load_reference_barrier_runtime_stub (shenandoahgc)");

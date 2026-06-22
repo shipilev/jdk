@@ -34,13 +34,11 @@ class ShenandoahKeepaliveBarrierStub: public CodeStub {
 private:
   LIR_Opr _obj;
   LIR_Opr _addr;
-  LIR_PatchCode _patch_code;
-  CodeEmitInfo* _info;
   bool _do_load;
 
 public:
-  ShenandoahKeepaliveBarrierStub(LIR_Opr obj, LIR_Opr addr, LIR_PatchCode patch_code, CodeEmitInfo* info) :
-    _obj(obj),  _addr(addr), _patch_code(patch_code), _info(info), _do_load(true)
+  ShenandoahKeepaliveBarrierStub(LIR_Opr obj, LIR_Opr addr) :
+    _obj(obj), _addr(addr), _do_load(true)
   {
     assert(_obj->is_register(), "should be temporary register");
     assert(_addr->is_address(), "should be the address of the field");
@@ -49,7 +47,7 @@ public:
   }
 
   ShenandoahKeepaliveBarrierStub(LIR_Opr obj) :
-    _obj(obj), _addr(LIR_OprFact::illegalOpr), _patch_code(lir_patch_none), _info(nullptr), _do_load(false)
+    _obj(obj), _addr(LIR_OprFact::illegalOpr), _do_load(false)
   {
     assert(_obj->is_register(), "should be a register");
     FrameMap* f = Compilation::current()->frame_map();
@@ -58,25 +56,16 @@ public:
 
   LIR_Opr addr() const { return _addr; }
   LIR_Opr obj() const { return _obj; }
-  LIR_PatchCode patch_code() const { return _patch_code; }
-  CodeEmitInfo* info() const { return _info; }
   bool do_load() const { return _do_load; }
 
   virtual void emit_code(LIR_Assembler* e);
   virtual void visit(LIR_OpVisitState* visitor) {
+    visitor->do_slow_case();
     if (_do_load) {
-      // Do not pass in the code emit info since it's processed in the fast path.
-      if (_info != nullptr) {
-        visitor->do_slow_case(_info);
-      } else {
-        visitor->do_slow_case();
-      }
-
       visitor->do_input(_addr);
       visitor->do_temp(_addr);
       visitor->do_temp(_obj);
     } else {
-      visitor->do_slow_case();
       visitor->do_input(_obj);
     }
   }
@@ -132,7 +121,7 @@ private:
 
   void enter_if_gc_state(LIRGenerator* gen, int flags, CodeStub* slow_stub);
 
-  void keepalive_barrier(LIRGenerator* gen, LIR_Opr obj, LIR_Opr addr, DecoratorSet decorators, CodeEmitInfo* info);
+  void keepalive_barrier(LIRGenerator* gen, LIR_Opr obj, LIR_Opr addr, DecoratorSet decorators);
   void load_reference_barrier(LIRGenerator* gen, LIR_Opr obj, LIR_Opr addr, DecoratorSet decorators);
   void card_barrier(LIRGenerator* gen, LIR_Opr addr, DecoratorSet decorators);
 

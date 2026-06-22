@@ -108,7 +108,7 @@ void ShenandoahBarrierSetC1::enter_if_gc_state(LIRGenerator* gen, int flags, Cod
   __ branch_destination(slow_stub->continuation());
 }
 
-void ShenandoahBarrierSetC1::keepalive_barrier(LIRGenerator* gen, LIR_Opr obj, LIR_Opr addr, DecoratorSet decorators, CodeEmitInfo* info) {
+void ShenandoahBarrierSetC1::keepalive_barrier(LIRGenerator* gen, LIR_Opr obj, LIR_Opr addr, DecoratorSet decorators) {
   CodeStub* slow_stub;
   if (obj == LIR_OprFact::illegalOpr) {
     // Caller wants us to do the load.
@@ -120,9 +120,7 @@ void ShenandoahBarrierSetC1::keepalive_barrier(LIRGenerator* gen, LIR_Opr obj, L
       addr = LIR_OprFact::address(new LIR_Address(addr, T_OBJECT));
     }
 
-    LIR_PatchCode lir_patch_code = (decorators & C1_NEEDS_PATCHING) != 0 ? lir_patch_normal : lir_patch_none;
-    CodeEmitInfo* code_emit_info = info ? new CodeEmitInfo(info) : nullptr;
-    slow_stub = new ShenandoahKeepaliveBarrierStub(obj, addr, lir_patch_code, code_emit_info);
+    slow_stub = new ShenandoahKeepaliveBarrierStub(obj, addr);
   } else {
     // Caller gave us the obj to work with.
     assert(addr == LIR_OprFact::illegalOpr, "sanity");
@@ -176,8 +174,7 @@ void ShenandoahBarrierSetC1::store_at_resolved(LIRAccess& access, LIR_Opr value)
   LIRGenerator* gen = access.gen();
 
   if (ShenandoahSATBBarrier && access.is_oop()) {
-    keepalive_barrier(gen, /* obj = */ LIR_OprFact::illegalOpr, /* addr = */ access.resolved_addr(),
-                      decorators, access.access_emit_info());
+    keepalive_barrier(gen, /* obj = */ LIR_OprFact::illegalOpr, /* addr = */ access.resolved_addr(), decorators);
   }
   BarrierSetC1::store_at_resolved(access, value);
 
@@ -230,8 +227,7 @@ void ShenandoahBarrierSetC1::load_at_resolved(LIRAccess& access, LIR_Opr result)
       Lcont_anonymous = new LabelObj();
       generate_referent_check(access, Lcont_anonymous);
     }
-    keepalive_barrier(gen, /* obj = */ result, /* addr = */ LIR_OprFact::illegalOpr,
-                      decorators, access.access_emit_info());
+    keepalive_barrier(gen, /* obj = */ result, /* addr = */ LIR_OprFact::illegalOpr, decorators);
     if (is_anonymous) {
       __ branch_destination(Lcont_anonymous->label());
     }
@@ -371,8 +367,7 @@ LIR_Opr ShenandoahBarrierSetC1::atomic_cmpxchg_at_resolved(LIRAccess& access, LI
   // Handle the previous value through SATB, as we are about to perform the store.
   __ load(addr->as_address_ptr(), tmp);
   if (ShenandoahSATBBarrier) {
-    keepalive_barrier(gen, /* obj = */ tmp, /* addr = */ LIR_OprFact::illegalOpr,
-                      decorators, access.access_emit_info());
+    keepalive_barrier(gen, /* obj = */ tmp, /* addr = */ LIR_OprFact::illegalOpr, decorators);
   }
 
   // Perform LRB on location to fix it up for this and all following accesses.
@@ -405,8 +400,7 @@ LIR_Opr ShenandoahBarrierSetC1::atomic_xchg_at_resolved(LIRAccess& access, LIRIt
   // Handle the previous value through SATB, as we are about to perform the store.
   __ load(addr->as_address_ptr(), tmp);
   if (ShenandoahSATBBarrier) {
-    keepalive_barrier(gen, /* obj = */ tmp, /* addr = */ LIR_OprFact::illegalOpr,
-                      decorators, access.access_emit_info());
+    keepalive_barrier(gen, /* obj = */ tmp, /* addr = */ LIR_OprFact::illegalOpr, decorators);
   }
 
   // Perform LRB on location to fix it up for this and all following accesses.

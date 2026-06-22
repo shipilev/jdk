@@ -694,7 +694,7 @@ void ShenandoahBarrierSetAssembler::gen_write_ref_array_post_barrier(MacroAssemb
 #define __ ce->masm()->
 
 void ShenandoahBarrierSetAssembler::keepalive_barrier_c1_stub(LIR_Assembler* ce, ShenandoahKeepaliveBarrierStub* stub) {
-  __ block_comment("gen_pre_barrier_stub (shenandoahgc) {");
+  __ block_comment("keepalive_barrier_stub (shenandoahgc) {");
   __ bind(*stub->entry());
 
   ShenandoahBarrierSetC1* bs = (ShenandoahBarrierSetC1*) BarrierSet::barrier_set()->barrier_set_c1();
@@ -718,11 +718,11 @@ void ShenandoahBarrierSetAssembler::keepalive_barrier_c1_stub(LIR_Assembler* ce,
   __ call_stub(R0);
 
   __ b(*stub->continuation());
-  __ block_comment("} gen_pre_barrier_stub (shenandoahgc)");
+  __ block_comment("} keepalive_barrier_stub (shenandoahgc)");
 }
 
 void ShenandoahBarrierSetAssembler::load_reference_barrier_c1_stub(LIR_Assembler* ce, ShenandoahLoadReferenceBarrierStub* stub) {
-  __ block_comment("gen_load_reference_barrier_stub (shenandoahgc) {");
+  __ block_comment("load_reference_barrier_stub (shenandoahgc) {");
 
   __ bind(*stub->entry());
 
@@ -746,7 +746,7 @@ void ShenandoahBarrierSetAssembler::load_reference_barrier_c1_stub(LIR_Assembler
   }
 
   __ b(*stub->continuation());
-  __ block_comment("} gen_load_reference_barrier_stub (shenandoahgc)");
+  __ block_comment("} load_reference_barrier_stub (shenandoahgc)");
 }
 
 #undef __

@@ -56,10 +56,11 @@
 void ShenandoahBarrierSetAssembler::satb_barrier(MacroAssembler *masm,
                                                  Register base, RegisterOrConstant ind_or_offs,
                                                  Register tmp1, Register tmp2, Register tmp3,
-                                                 MacroAssembler::PreservationLevel preservation_level) {
+                                                 MacroAssembler::PreservationLevel preservation_level,
+                                                 int extra_stack_space) {
   if (ShenandoahSATBBarrier) {
     __ block_comment("satb_barrier (shenandoahgc) {");
-    satb_barrier_impl(masm, 0, base, ind_or_offs, tmp1, tmp2, tmp3, preservation_level);
+    satb_barrier_impl(masm, 0, base, ind_or_offs, tmp1, tmp2, tmp3, preservation_level, extra_stack_space);
     __ block_comment("} satb_barrier (shenandoahgc)");
   }
 }
@@ -68,10 +69,11 @@ void ShenandoahBarrierSetAssembler::load_reference_barrier(MacroAssembler *masm,
                                                            Register base, RegisterOrConstant ind_or_offs,
                                                            Register dst,
                                                            Register tmp1, Register tmp2,
-                                                           MacroAssembler::PreservationLevel preservation_level) {
+                                                           MacroAssembler::PreservationLevel preservation_level,
+                                                           int extra_stack_space) {
   if (ShenandoahLoadRefBarrier) {
     __ block_comment("load_reference_barrier (shenandoahgc) {");
-    load_reference_barrier_impl(masm, decorators, base, ind_or_offs, dst, tmp1, tmp2, preservation_level);
+    load_reference_barrier_impl(masm, decorators, base, ind_or_offs, dst, tmp1, tmp2, preservation_level, extra_stack_space);
     __ block_comment("} load_reference_barrier (shenandoahgc)");
   }
 }
@@ -205,7 +207,8 @@ void ShenandoahBarrierSetAssembler::satb_barrier_impl(MacroAssembler *masm, Deco
                                                       Register base, RegisterOrConstant ind_or_offs,
                                                       Register pre_val,
                                                       Register tmp1, Register tmp2,
-                                                      MacroAssembler::PreservationLevel preservation_level) {
+                                                      MacroAssembler::PreservationLevel preservation_level,
+                                                      int extra_stack_space) {
   assert(ShenandoahSATBBarrier, "Should be checked by caller");
   assert_different_registers(tmp1, tmp2, pre_val, noreg);
 
@@ -299,7 +302,7 @@ void ShenandoahBarrierSetAssembler::satb_barrier_impl(MacroAssembler *masm, Deco
     if (preserve_gp_registers) {
       nbytes_save = (preserve_fp_registers
                      ? MacroAssembler::num_volatile_gp_regs + MacroAssembler::num_volatile_fp_regs
-                     : MacroAssembler::num_volatile_gp_regs) * BytesPerWord;
+                     : MacroAssembler::num_volatile_gp_regs) * BytesPerWord + extra_stack_space;
       __ save_volatile_gprs(R1_SP, -nbytes_save, preserve_fp_registers);
     }
 
@@ -343,7 +346,8 @@ void ShenandoahBarrierSetAssembler::load_reference_barrier_impl(
     Register base, RegisterOrConstant ind_or_offs,
     Register dst,
     Register tmp1, Register tmp2,
-    MacroAssembler::PreservationLevel preservation_level) {
+    MacroAssembler::PreservationLevel preservation_level,
+    int extra_stack_space) {
   if (ind_or_offs.is_register()) {
     assert_different_registers(tmp1, tmp2, base, ind_or_offs.as_register(), dst, noreg);
   } else {
@@ -430,7 +434,7 @@ void ShenandoahBarrierSetAssembler::load_reference_barrier_impl(
     if (preserve_gp_registers) {
       nbytes_save = (preserve_fp_registers
                      ? MacroAssembler::num_volatile_gp_regs + MacroAssembler::num_volatile_fp_regs
-                     : MacroAssembler::num_volatile_gp_regs) * BytesPerWord;
+                     : MacroAssembler::num_volatile_gp_regs) * BytesPerWord + extra_stack_space;
       __ save_volatile_gprs(R1_SP, -nbytes_save, preserve_fp_registers);
     }
 
@@ -768,9 +772,7 @@ void ShenandoahBarrierSetAssembler::keepalive_barrier_c1_runtime_stub(StubAssemb
   // Pull the arguments from stack
   __ ld(obj, -8, R1_SP);
 
-  __ push_frame(4 * BytesPerWord + frame::java_abi_size, R0); // create dummy frame around saved regs
-  satb_barrier(sasm, noreg, noreg, obj, tmp1, tmp2, MacroAssembler::PRESERVATION_FRAME_LR_GP_FP_REGS);
-  __ pop_frame();
+  satb_barrier(sasm, noreg, noreg, obj, tmp1, tmp2, MacroAssembler::PRESERVATION_FRAME_LR_GP_FP_REGS, 4 * BytesPerWord);
 
   // Restore registers
   __ ld(tmp2, -32, R1_SP);
@@ -798,9 +800,8 @@ void ShenandoahBarrierSetAssembler::load_reference_barrier_c1_runtime_stub(StubA
   __ ld(obj,    -8, R1_SP);
   __ ld(addr,  -16, R1_SP);
 
-  __ push_frame(4 * BytesPerWord + frame::java_abi_size, R0); // create dummy frame around saved regs
-  load_reference_barrier(sasm, decorators, addr, noreg, obj, tmp1, tmp2, MacroAssembler::PRESERVATION_FRAME_LR_GP_FP_REGS);
-  __ pop_frame();
+  load_reference_barrier(sasm, decorators, addr, noreg, obj, tmp1, tmp2,
+                         MacroAssembler::PRESERVATION_FRAME_LR_GP_FP_REGS, 5 * BytesPerWord);
 
   // Restore registers
   __ ld(tmp2, -40, R1_SP);

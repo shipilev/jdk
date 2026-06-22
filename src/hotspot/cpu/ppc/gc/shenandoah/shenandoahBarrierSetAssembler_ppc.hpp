@@ -56,7 +56,8 @@ private:
                          Register base, RegisterOrConstant ind_or_offs,
                          Register pre_val,
                          Register tmp1, Register tmp2,
-                         MacroAssembler::PreservationLevel preservation_level);
+                         MacroAssembler::PreservationLevel preservation_level,
+                         int extra_stack_space = 0);
 
   void card_barrier(MacroAssembler* masm,
                     Register base, RegisterOrConstant ind_or_offs,
@@ -66,7 +67,8 @@ private:
                                    Register base, RegisterOrConstant ind_or_offs,
                                    Register dst,
                                    Register tmp1, Register tmp2,
-                                   MacroAssembler::PreservationLevel preservation_level);
+                                   MacroAssembler::PreservationLevel preservation_level,
+                                   int extra_stack_space = 0);
 
   /* ==== Helper methods for barrier implementations ==== */
   void gen_write_ref_array_post_barrier(MacroAssembler* masm, DecoratorSet decorators,
@@ -89,13 +91,15 @@ public:
   void satb_barrier(MacroAssembler* masm,
                     Register base, RegisterOrConstant ind_or_offs,
                     Register tmp1, Register tmp2, Register tmp3,
-                    MacroAssembler::PreservationLevel preservation_level);
+                    MacroAssembler::PreservationLevel preservation_level,
+                    int extra_stack_space = 0);
 
   void load_reference_barrier(MacroAssembler* masm, DecoratorSet decorators,
                               Register base, RegisterOrConstant ind_or_offs,
                               Register dst,
                               Register tmp1, Register tmp2,
-                              MacroAssembler::PreservationLevel preservation_level);
+                              MacroAssembler::PreservationLevel preservation_level,
+                              int extra_stack_space = 0);
 
   /* ==== Access api ==== */
   virtual void arraycopy_prologue(MacroAssembler* masm, DecoratorSet decorators, BasicType type,

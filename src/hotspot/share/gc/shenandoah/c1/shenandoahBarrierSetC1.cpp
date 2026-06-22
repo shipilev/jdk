@@ -124,7 +124,7 @@ void ShenandoahBarrierSetC1::keepalive_barrier(LIRGenerator* gen, LIR_Opr obj, L
     CodeEmitInfo* code_emit_info = info ? new CodeEmitInfo(info) : nullptr;
     slow_stub = new ShenandoahKeepaliveBarrierStub(obj, addr, lir_patch_code, code_emit_info);
   } else {
-    // Caller gave us the pre_val to work with.
+    // Caller gave us the obj to work with.
     assert(addr == LIR_OprFact::illegalOpr, "sanity");
     assert(obj->is_register(), "must be");
     assert(obj->type() == T_OBJECT, "must be an object");

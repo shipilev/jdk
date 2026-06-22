@@ -172,20 +172,22 @@ LIR_Opr ShenandoahBarrierSetC1::ensure_in_register(LIRGenerator* gen, LIR_Opr ob
 }
 
 void ShenandoahBarrierSetC1::store_at_resolved(LIRAccess& access, LIR_Opr value) {
+  DecoratorSet decorators = access.decorators();
+  LIRGenerator* gen = access.gen();
+
   if (ShenandoahSATBBarrier && access.is_oop()) {
-    keepalive_barrier(access.gen(), /* obj = */ LIR_OprFact::illegalOpr, /* addr = */ access.resolved_addr(),
-                      access.decorators(), access.access_emit_info());
+    keepalive_barrier(gen, /* obj = */ LIR_OprFact::illegalOpr, /* addr = */ access.resolved_addr(),
+                      decorators, access.access_emit_info());
   }
   BarrierSetC1::store_at_resolved(access, value);
 
   if (ShenandoahCardBarrier && access.is_oop()) {
-    DecoratorSet decorators = access.decorators();
     bool is_array = (decorators & IS_ARRAY) != 0;
     bool on_anonymous = (decorators & ON_UNKNOWN_OOP_REF) != 0;
 
     bool precise = is_array || on_anonymous;
     LIR_Opr post_addr = precise ? access.resolved_addr() : access.base().opr();
-    post_barrier(access, post_addr);
+    card_barrier(gen, post_addr, decorators);
   }
 }
 
@@ -302,11 +304,9 @@ bool ShenandoahBarrierSetC1::generate_c1_runtime_stubs(BufferBlob* buffer_blob) 
   return true;
 }
 
-void ShenandoahBarrierSetC1::post_barrier(LIRAccess& access, LIR_Opr addr) {
+void ShenandoahBarrierSetC1::card_barrier(LIRGenerator* gen, LIR_Opr addr, DecoratorSet decorators) {
   assert(ShenandoahCardBarrier, "Should have been checked by caller");
 
-  DecoratorSet decorators = access.decorators();
-  LIRGenerator* gen = access.gen();
   bool in_heap = (decorators & IN_HEAP) != 0;
   if (!in_heap) {
     return;
@@ -362,6 +362,7 @@ LIR_Opr ShenandoahBarrierSetC1::atomic_cmpxchg_at_resolved(LIRAccess& access, LI
     return BarrierSetC1::atomic_cmpxchg_at_resolved(access, cmp_value, new_value);
   }
 
+  DecoratorSet decorators = access.decorators();
   LIRGenerator* gen = access.gen();
 
   LIR_Opr tmp = gen->new_register(T_OBJECT);
@@ -371,20 +372,20 @@ LIR_Opr ShenandoahBarrierSetC1::atomic_cmpxchg_at_resolved(LIRAccess& access, LI
   __ load(addr->as_address_ptr(), tmp);
   if (ShenandoahSATBBarrier) {
     keepalive_barrier(gen, /* obj = */ tmp, /* addr = */ LIR_OprFact::illegalOpr,
-                      access.decorators(), access.access_emit_info());
+                      decorators, access.access_emit_info());
   }
 
   // Perform LRB on location to fix it up for this and all following accesses.
   // This guarantees there are no false negatives due to concurrent evacuation,
   // and the value loaded later by CAS is sanitized by some LRB, or is null.
   if (ShenandoahLoadRefBarrier) {
-    load_reference_barrier(gen, /* obj = */ tmp, /* addr = */ addr, access.decorators());
+    load_reference_barrier(gen, /* obj = */ tmp, /* addr = */ addr, decorators);
   }
 
   LIR_Opr result = BarrierSetC1::atomic_cmpxchg_at_resolved(access, cmp_value, new_value);
 
   if (ShenandoahCardBarrier) {
-    post_barrier(access, /* addr = */ addr);
+    card_barrier(gen, /* addr = */ addr, decorators);
   }
 
   return result;
@@ -395,6 +396,7 @@ LIR_Opr ShenandoahBarrierSetC1::atomic_xchg_at_resolved(LIRAccess& access, LIRIt
     return BarrierSetC1::atomic_xchg_at_resolved(access, value);
   }
 
+  DecoratorSet decorators = access.decorators();
   LIRGenerator* gen = access.gen();
 
   LIR_Opr tmp = gen->new_register(T_OBJECT);
@@ -404,7 +406,7 @@ LIR_Opr ShenandoahBarrierSetC1::atomic_xchg_at_resolved(LIRAccess& access, LIRIt
   __ load(addr->as_address_ptr(), tmp);
   if (ShenandoahSATBBarrier) {
     keepalive_barrier(gen, /* obj = */ tmp, /* addr = */ LIR_OprFact::illegalOpr,
-                      access.decorators(), access.access_emit_info());
+                      decorators, access.access_emit_info());
   }
 
   // Perform LRB on location to fix it up for this and all following accesses.
@@ -417,7 +419,7 @@ LIR_Opr ShenandoahBarrierSetC1::atomic_xchg_at_resolved(LIRAccess& access, LIRIt
   LIR_Opr result = BarrierSetC1::atomic_xchg_at_resolved(access, value);
 
   if (ShenandoahCardBarrier) {
-    post_barrier(access, /* addr = */ addr);
+    card_barrier(gen, /* addr = */ addr, decorators);
   }
 
   return result;

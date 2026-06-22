@@ -39,24 +39,21 @@ private:
   bool _do_load;
 
 public:
-  // Version that _does_ generate a load of the value from addr.
-  // addr (the address of the field to be read) must be a LIR_Address
-  // obj (a temporary register) must be a register;
   ShenandoahKeepaliveBarrierStub(LIR_Opr obj, LIR_Opr addr, LIR_PatchCode patch_code, CodeEmitInfo* info) :
     _obj(obj),  _addr(addr), _patch_code(patch_code), _info(info), _do_load(true)
   {
     assert(_obj->is_register(), "should be temporary register");
     assert(_addr->is_address(), "should be the address of the field");
     FrameMap* f = Compilation::current()->frame_map();
-    f->update_reserved_argument_area_size(2 * BytesPerWord);
+    f->update_reserved_argument_area_size(1 * BytesPerWord);
   }
 
-  // Version that _does not_ generate load of the value; the value
-  // is assumed to have already been loaded into obj.
   ShenandoahKeepaliveBarrierStub(LIR_Opr obj) :
     _obj(obj), _addr(LIR_OprFact::illegalOpr), _patch_code(lir_patch_none), _info(nullptr), _do_load(false)
   {
     assert(_obj->is_register(), "should be a register");
+    FrameMap* f = Compilation::current()->frame_map();
+    f->update_reserved_argument_area_size(1 * BytesPerWord);
   }
 
   LIR_Opr addr() const { return _addr; }
@@ -68,12 +65,12 @@ public:
   virtual void emit_code(LIR_Assembler* e);
   virtual void visit(LIR_OpVisitState* visitor) {
     if (_do_load) {
-      // don't pass in the code emit info since it's processed in the fast
-      // path
-      if (_info != nullptr)
+      // Do not pass in the code emit info since it's processed in the fast path.
+      if (_info != nullptr) {
         visitor->do_slow_case(_info);
-      else
+      } else {
         visitor->do_slow_case();
+      }
 
       visitor->do_input(_addr);
       visitor->do_temp(_addr);
@@ -101,7 +98,6 @@ public:
   {
     assert(_obj->is_register(), "should be register");
     assert(_addr->is_register(), "should be register");
-
     FrameMap* f = Compilation::current()->frame_map();
     f->update_reserved_argument_area_size(2 * BytesPerWord);
   }
@@ -137,8 +133,8 @@ private:
   void enter_if_gc_state(LIRGenerator* gen, int flags, CodeStub* slow_stub);
 
   void keepalive_barrier(LIRGenerator* gen, LIR_Opr obj, LIR_Opr addr, DecoratorSet decorators, CodeEmitInfo* info);
-
   void load_reference_barrier(LIRGenerator* gen, LIR_Opr obj, LIR_Opr addr, DecoratorSet decorators);
+  void card_barrier(LIRGenerator* gen, LIR_Opr addr, DecoratorSet decorators);
 
   LIR_Opr ensure_in_register(LIRGenerator* gen, LIR_Opr obj, BasicType type);
 
@@ -148,21 +144,15 @@ public:
   address keepalive_barrier_stub();
   address load_reference_barrier_stub(DecoratorSet decorators);
 
-protected:
+  virtual bool generate_c1_runtime_stubs(BufferBlob* buffer_blob);
 
+protected:
   virtual void store_at_resolved(LIRAccess& access, LIR_Opr value);
   virtual LIR_Opr resolve_address(LIRAccess& access, bool resolve_in_register);
   virtual void load_at_resolved(LIRAccess& access, LIR_Opr result);
 
   virtual LIR_Opr atomic_cmpxchg_at_resolved(LIRAccess& access, LIRItem& cmp_value, LIRItem& new_value);
-
   virtual LIR_Opr atomic_xchg_at_resolved(LIRAccess& access, LIRItem& value);
-
-  void post_barrier(LIRAccess& access, LIR_Opr addr);
-
-public:
-
-  virtual bool generate_c1_runtime_stubs(BufferBlob* buffer_blob);
 };
 
 #endif // SHARE_GC_SHENANDOAH_C1_SHENANDOAHBARRIERSETC1_HPP

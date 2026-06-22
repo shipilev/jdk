@@ -31,8 +31,6 @@
 #include "gc/shenandoah/shenandoahBarrierSet.hpp"
 #include "gc/shenandoah/shenandoahBarrierSetAssembler.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
-#include "gc/shenandoah/shenandoahHeapRegion.hpp"
-#include "gc/shenandoah/shenandoahRuntime.hpp"
 #include "gc/shenandoah/shenandoahThreadLocalData.hpp"
 
 #ifdef ASSERT
@@ -407,7 +405,7 @@ LIR_Opr ShenandoahBarrierSetC1::atomic_xchg_at_resolved(LIRAccess& access, LIRIt
   // This is purely opportunistic: we would not have any false negatives here.
   // This guarantees the value loaded later by XCHG is sanitized by some LRB, or is null.
   if (ShenandoahLoadRefBarrier) {
-    load_reference_barrier(gen, /* obj = */ tmp, /* addr = */ addr, access.decorators());
+    load_reference_barrier(gen, /* obj = */ tmp, /* addr = */ addr, decorators);
   }
 
   LIR_Opr result = BarrierSetC1::atomic_xchg_at_resolved(access, value);

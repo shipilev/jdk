@@ -58,7 +58,8 @@ ShenandoahBarrierSetC1::ShenandoahBarrierSetC1() :
   _load_reference_barrier_weak_rt_code_blob(nullptr),
   _load_reference_barrier_phantom_rt_code_blob(nullptr) {}
 
-address ShenandoahBarrierSetC1::keep_alive_barrier_stub() {
+address ShenandoahBarrierSetC1::keepalive_barrier_stub() {
+  assert(_keepalive_barrier_c1_runtime_code_blob != nullptr, "Must be available");
   return _keepalive_barrier_c1_runtime_code_blob->code_begin();
 }
 
@@ -70,14 +71,17 @@ address ShenandoahBarrierSetC1::load_reference_barrier_stub(DecoratorSet decorat
 
   if (is_strong) {
     if (is_native) {
+      assert(_load_reference_barrier_strong_native_rt_code_blob != nullptr, "Must be available");
       return _load_reference_barrier_strong_native_rt_code_blob->code_begin();
     } else {
+      assert(_load_reference_barrier_strong_rt_code_blob != nullptr, "Must be available");
       return _load_reference_barrier_strong_rt_code_blob->code_begin();
     }
   } else if (is_weak) {
+    assert(_load_reference_barrier_weak_rt_code_blob != nullptr, "Must be available");
     return _load_reference_barrier_weak_rt_code_blob->code_begin();
-  } else {
-    assert(is_phantom, "only remaining strength");
+  } else if (is_phantom) {
+    assert(_load_reference_barrier_phantom_rt_code_blob != nullptr, "Must be available");
     return _load_reference_barrier_phantom_rt_code_blob->code_begin();
   }
   ShouldNotReachHere();

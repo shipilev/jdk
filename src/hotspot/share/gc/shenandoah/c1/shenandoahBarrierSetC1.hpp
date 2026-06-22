@@ -43,7 +43,7 @@ public:
   // addr (the address of the field to be read) must be a LIR_Address
   // obj (a temporary register) must be a register;
   ShenandoahKeepaliveBarrierStub(LIR_Opr obj, LIR_Opr addr, LIR_PatchCode patch_code, CodeEmitInfo* info) :
-     _obj(obj),  _addr(addr), _patch_code(patch_code), _info(info), _do_load(true)
+    _obj(obj),  _addr(addr), _patch_code(patch_code), _info(info), _do_load(true)
   {
     assert(_obj->is_register(), "should be temporary register");
     assert(_addr->is_address(), "should be the address of the field");
@@ -54,7 +54,7 @@ public:
   // Version that _does not_ generate load of the value; the value
   // is assumed to have already been loaded into obj.
   ShenandoahKeepaliveBarrierStub(LIR_Opr obj) :
-     _obj(obj), _addr(LIR_OprFact::illegalOpr), _patch_code(lir_patch_none), _info(nullptr), _do_load(false)
+    _obj(obj), _addr(LIR_OprFact::illegalOpr), _patch_code(lir_patch_none), _info(nullptr), _do_load(false)
   {
     assert(_obj->is_register(), "should be a register");
   }
@@ -145,7 +145,7 @@ private:
 public:
   ShenandoahBarrierSetC1();
 
-  address keep_alive_barrier_stub();
+  address keepalive_barrier_stub();
   address load_reference_barrier_stub(DecoratorSet decorators);
 
 protected:

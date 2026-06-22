@@ -484,7 +484,7 @@ void ShenandoahBarrierSetAssembler::keepalive_barrier_c1_stub(LIR_Assembler* ce,
   __ beqz(obj, *stub->continuation(), /* is_far */ true);
 
   ce->store_parameter(obj, 0);
-  __ far_call(RuntimeAddress(bs->keep_alive_barrier_stub()));
+  __ far_call(RuntimeAddress(bs->keepalive_barrier_stub()));
   __ j(*stub->continuation());
 }
 

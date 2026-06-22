@@ -570,7 +570,7 @@ void ShenandoahBarrierSetAssembler::keepalive_barrier_c1_stub(LIR_Assembler* ce,
   __ jcc(Assembler::equal, *stub->continuation());
 
   ce->store_parameter(obj, 0);
-  __ call(RuntimeAddress(bs->keep_alive_barrier_stub()));
+  __ call(RuntimeAddress(bs->keepalive_barrier_stub()));
   __ jmp(*stub->continuation());
 }
 

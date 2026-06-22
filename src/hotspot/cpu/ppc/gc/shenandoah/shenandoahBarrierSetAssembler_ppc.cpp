@@ -713,7 +713,7 @@ void ShenandoahBarrierSetAssembler::keepalive_barrier_c1_stub(LIR_Assembler* ce,
   // Argument passing via the stack.
   __ std(obj, -8, R1_SP);
 
-  address blob_addr = bs->keep_alive_barrier_stub();
+  address blob_addr = bs->keepalive_barrier_stub();
   __ load_const_optimized(R0, blob_addr);
   __ call_stub(R0);
 
@@ -754,7 +754,7 @@ void ShenandoahBarrierSetAssembler::load_reference_barrier_c1_stub(LIR_Assembler
 #define __ sasm->
 
 void ShenandoahBarrierSetAssembler::keepalive_barrier_c1_runtime_stub(StubAssembler* sasm) {
-  __ block_comment("generate_c1_pre_barrier_runtime_stub (shenandoahgc) {");
+  __ block_comment("generate_c1_keepalive_barrier_runtime_stub (shenandoahgc) {");
 
   Register obj  = R3_ARG1;
   Register tmp1 = R11_scratch1;
@@ -778,7 +778,7 @@ void ShenandoahBarrierSetAssembler::keepalive_barrier_c1_runtime_stub(StubAssemb
   __ ld(obj,  -16, R1_SP);
 
   __ blr();
-  __ block_comment("} generate_c1_pre_barrier_runtime_stub (shenandoahgc)");
+  __ block_comment("} generate_c1_keepalive_barrier_runtime_stub (shenandoahgc)");
 }
 
 void ShenandoahBarrierSetAssembler::load_reference_barrier_c1_runtime_stub(StubAssembler* sasm, DecoratorSet decorators) {

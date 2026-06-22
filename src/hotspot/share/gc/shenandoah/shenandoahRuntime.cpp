@@ -52,47 +52,47 @@ JRT_LEAF(void, ShenandoahRuntime::write_barrier_pre_narrow(narrowOop nobj))
 JRT_END
 
 JRT_LEAF(oopDesc*, ShenandoahRuntime::load_reference_barrier_strong(oopDesc* src, oop* load_addr))
-  return ShenandoahBarrierSet::barrier_set()->load_reference_barrier_mutator<ON_STRONG_OOP_REF, oop>(src, load_addr);
+  return ShenandoahBarrierSet::barrier_set()->load_reference_barrier_mutator<oop>(ON_STRONG_OOP_REF, src, load_addr);
 JRT_END
 
 JRT_LEAF(oopDesc*, ShenandoahRuntime::load_reference_barrier_strong_narrow(oopDesc* src, narrowOop* load_addr))
-  return ShenandoahBarrierSet::barrier_set()->load_reference_barrier_mutator<ON_STRONG_OOP_REF, narrowOop>(src, load_addr);
+  return ShenandoahBarrierSet::barrier_set()->load_reference_barrier_mutator<narrowOop>(ON_STRONG_OOP_REF, src, load_addr);
 JRT_END
 
 JRT_LEAF(narrowOop, ShenandoahRuntime::load_reference_barrier_strong_narrow_narrow(narrowOop src, narrowOop* load_addr))
   assert(!CompressedOops::is_null(src), "Filtered by caller");
   oop s = CompressedOops::decode_not_null(src);
-  oop r = ShenandoahBarrierSet::barrier_set()->load_reference_barrier_mutator<ON_STRONG_OOP_REF, narrowOop>(s, load_addr);
+  oop r = ShenandoahBarrierSet::barrier_set()->load_reference_barrier_mutator<narrowOop>(ON_STRONG_OOP_REF, s, load_addr);
   return CompressedOops::encode(r);
 JRT_END
 
 JRT_LEAF(oopDesc*, ShenandoahRuntime::load_reference_barrier_weak(oopDesc* src, oop* load_addr))
-  return ShenandoahBarrierSet::barrier_set()->load_reference_barrier_mutator<ON_WEAK_OOP_REF, oop>(src, load_addr);
+  return ShenandoahBarrierSet::barrier_set()->load_reference_barrier_mutator<oop>(ON_WEAK_OOP_REF, src, load_addr);
 JRT_END
 
 JRT_LEAF(oopDesc*, ShenandoahRuntime::load_reference_barrier_weak_narrow(oopDesc* src, narrowOop* load_addr))
-  return ShenandoahBarrierSet::barrier_set()->load_reference_barrier_mutator<ON_WEAK_OOP_REF, narrowOop>(src, load_addr);
+  return ShenandoahBarrierSet::barrier_set()->load_reference_barrier_mutator<narrowOop>(ON_WEAK_OOP_REF, src, load_addr);
 JRT_END
 
 JRT_LEAF(narrowOop, ShenandoahRuntime::load_reference_barrier_weak_narrow_narrow(narrowOop src, narrowOop* load_addr))
   assert(!CompressedOops::is_null(src), "Filtered by caller");
   oop s = CompressedOops::decode_not_null(src);
-  oop r = ShenandoahBarrierSet::barrier_set()->load_reference_barrier_mutator<ON_WEAK_OOP_REF, narrowOop>(s, load_addr);
+  oop r = ShenandoahBarrierSet::barrier_set()->load_reference_barrier_mutator<narrowOop>(ON_WEAK_OOP_REF, s, load_addr);
   return CompressedOops::encode(r);
 JRT_END
 
 JRT_LEAF(oopDesc*, ShenandoahRuntime::load_reference_barrier_phantom(oopDesc* src, oop* load_addr))
-  return ShenandoahBarrierSet::barrier_set()->load_reference_barrier_mutator<ON_PHANTOM_OOP_REF, oop>(src, load_addr);
+  return ShenandoahBarrierSet::barrier_set()->load_reference_barrier_mutator<oop>(ON_PHANTOM_OOP_REF, src, load_addr);
 JRT_END
 
 JRT_LEAF(oopDesc*, ShenandoahRuntime::load_reference_barrier_phantom_narrow(oopDesc* src, narrowOop* load_addr))
-  return ShenandoahBarrierSet::barrier_set()->load_reference_barrier_mutator<ON_PHANTOM_OOP_REF, narrowOop>(src, load_addr);
+  return ShenandoahBarrierSet::barrier_set()->load_reference_barrier_mutator<narrowOop>(ON_PHANTOM_OOP_REF, src, load_addr);
 JRT_END
 
 JRT_LEAF(narrowOop, ShenandoahRuntime::load_reference_barrier_phantom_narrow_narrow(narrowOop src, narrowOop* load_addr))
   assert(!CompressedOops::is_null(src), "Filtered by caller");
   oop s = CompressedOops::decode_not_null(src);
-  oop r = ShenandoahBarrierSet::barrier_set()->load_reference_barrier_mutator<ON_PHANTOM_OOP_REF, narrowOop>(s, load_addr);
+  oop r = ShenandoahBarrierSet::barrier_set()->load_reference_barrier_mutator<narrowOop>(ON_PHANTOM_OOP_REF, s, load_addr);
   return CompressedOops::encode(r);
 JRT_END
 

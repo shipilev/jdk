@@ -82,7 +82,7 @@ public:
   void print_on(outputStream* st) const override;
 
   template <class T>
-  inline void arraycopy_barrier(T* src, T* dst, size_t count);
+  void arraycopy_barrier(T* src, T* dst, size_t count);
 
   // Support for optimizing compilers to call the barrier set on slow path allocations
   // that did not enter a TLAB. Used for e.g. ReduceInitialCardMarks to take any
@@ -93,33 +93,33 @@ public:
   void on_thread_attach(Thread* thread) override;
   void on_thread_detach(Thread* thread) override;
 
-  static inline oop resolve_forwarded_not_null(oop p);
-  static inline oop resolve_forwarded(oop p);
+  static oop resolve_forwarded_not_null(oop p);
+  static oop resolve_forwarded(oop p);
 
-  template <DecoratorSet decorators, typename T>
-  inline void satb_barrier(T* field);
-  inline void satb_enqueue(oop value);
+  template <typename T>
+  void satb_barrier(DecoratorSet decorators, T* field);
+  void satb_enqueue(oop value);
 
-  inline void keep_alive_if_weak(DecoratorSet decorators, oop value);
+  void keep_alive_if_weak(DecoratorSet decorators, oop value);
 
-  inline void enqueue(oop obj, bool filter = true);
+  void enqueue(oop obj, bool filter = true);
 
-  inline oop load_reference_barrier(oop obj);
-
-  template <DecoratorSet decorators, class T>
-  inline oop load_reference_barrier_mutator(oop obj, T* load_addr);
+  oop load_reference_barrier(oop obj);
 
   template <class T>
-  inline oop load_reference_barrier(DecoratorSet decorators, oop obj, T* load_addr);
+  oop load_reference_barrier_mutator(DecoratorSet decorators, oop obj, T* load_addr);
+
+  template <class T>
+  oop load_reference_barrier(DecoratorSet decorators, oop obj, T* load_addr);
 
   template <typename T>
-  inline oop oop_load(DecoratorSet decorators, T* addr);
+  oop oop_load(DecoratorSet decorators, T* addr);
 
   template <typename T>
-  inline oop oop_cmpxchg(DecoratorSet decorators, T* addr, oop compare_value, oop new_value);
+  oop oop_cmpxchg(DecoratorSet decorators, T* addr, oop compare_value, oop new_value);
 
   template <typename T>
-  inline oop oop_xchg(DecoratorSet decorators, T* addr, oop new_value);
+  oop oop_xchg(DecoratorSet decorators, T* addr, oop new_value);
 
   template <DecoratorSet decorators, typename T>
   void write_ref_field_post(T* field);
@@ -130,15 +130,15 @@ private:
   template <bool IS_GENERATIONAL, class T>
   void arraycopy_marking(T* dst, size_t count);
   template <class T>
-  inline void arraycopy_evacuation(T* src, size_t count);
+  void arraycopy_evacuation(T* src, size_t count);
   template <class T>
-  inline void arraycopy_update(T* src, size_t count);
+  void arraycopy_update(T* src, size_t count);
 
-  inline void clone_evacuation(oop src);
-  inline void clone_update(oop src);
+  void clone_evacuation(oop src);
+  void clone_update(oop src);
 
   template <class T, bool HAS_FWD, bool EVAC, bool ENQUEUE>
-  inline void arraycopy_work(T* src, size_t count);
+  void arraycopy_work(T* src, size_t count);
 
   inline bool need_bulk_update(HeapWord* dst);
 public:

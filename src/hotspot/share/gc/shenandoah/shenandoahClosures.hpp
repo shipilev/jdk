@@ -95,7 +95,8 @@ template <ShenandoahGenerationType GENERATION>
 class ShenandoahMarkRefsClosure : public ShenandoahMarkRefsSuperClosure {
 private:
   template <class T>
-  ALWAYSINLINE void do_oop_work(T* p) { work<T, GENERATION>(p); }
+  ALWAYSINLINE
+  void do_oop_work(T* p) { work<T, GENERATION>(p); }
 
 public:
   ShenandoahMarkRefsClosure(ShenandoahObjToScanQueue* q, ShenandoahReferenceProcessor* rp, ShenandoahObjToScanQueue* old_q) :

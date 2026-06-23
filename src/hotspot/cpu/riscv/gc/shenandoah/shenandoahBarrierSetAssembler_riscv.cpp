@@ -518,14 +518,10 @@ void ShenandoahBarrierSetAssembler::keepalive_barrier_c1_runtime_stub(StubAssemb
   const Register tmp_obj = x10;
   const Register tmp1 = t1;
   const Register tmp2 = t2;
-  __ push_reg(RegSet::of(tmp1), sp);
-  __ push_reg(RegSet::of(tmp2), sp);
-  __ push_reg(RegSet::of(tmp_obj), sp);
+  __ push_reg(RegSet::of(tmp1, tmp2, tmp_obj), sp);
   __ load_parameter(0, tmp_obj);
   satb_barrier(sasm, noreg, tmp_obj, xthread, tmp1, tmp2);
-  __ pop_reg(RegSet::of(tmp_obj), sp);
-  __ pop_reg(RegSet::of(tmp2), sp);
-  __ pop_reg(RegSet::of(tmp1), sp);
+  __ pop_reg(RegSet::of(tmp1, tmp2, tmp_obj), sp);
   __ epilogue();
 }
 

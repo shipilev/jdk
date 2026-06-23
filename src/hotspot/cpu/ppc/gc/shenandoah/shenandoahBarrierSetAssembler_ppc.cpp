@@ -758,7 +758,7 @@ void ShenandoahBarrierSetAssembler::load_reference_barrier_c1_stub(LIR_Assembler
 #define __ sasm->
 
 void ShenandoahBarrierSetAssembler::keepalive_barrier_c1_runtime_stub(StubAssembler* sasm) {
-  __ block_comment("generate_c1_keepalive_barrier_runtime_stub (shenandoahgc) {");
+  __ block_comment("keepalive_barrier_runtime_stub (shenandoahgc) {");
 
   Register obj  = R3_ARG1;
   Register tmp1 = R11_scratch1;
@@ -780,11 +780,11 @@ void ShenandoahBarrierSetAssembler::keepalive_barrier_c1_runtime_stub(StubAssemb
   __ ld(obj,  -16, R1_SP);
 
   __ blr();
-  __ block_comment("} generate_c1_keepalive_barrier_runtime_stub (shenandoahgc)");
+  __ block_comment("} keepalive_barrier_runtime_stub (shenandoahgc)");
 }
 
 void ShenandoahBarrierSetAssembler::load_reference_barrier_c1_runtime_stub(StubAssembler* sasm, DecoratorSet decorators) {
-  __ block_comment("generate_c1_load_reference_barrier_runtime_stub (shenandoahgc) {");
+  __ block_comment("load_reference_barrier_runtime_stub (shenandoahgc) {");
 
   Register obj  = R3_ARG1;
   Register addr = R4_ARG2;
@@ -809,7 +809,7 @@ void ShenandoahBarrierSetAssembler::load_reference_barrier_c1_runtime_stub(StubA
   __ ld(addr, -24, R1_SP);
 
   __ blr();
-  __ block_comment("} generate_c1_load_reference_barrier_runtime_stub (shenandoahgc)");
+  __ block_comment("} load_reference_barrier_runtime_stub (shenandoahgc)");
 }
 
 #undef __

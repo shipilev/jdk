@@ -77,11 +77,11 @@ private:
   static void do_task(ShenandoahObjToScanQueue* q, T* cl, ShenandoahLiveData* live_data, StringDedup::Requests* const req, ShenandoahMarkTask* task, uint worker_id);
 
   template <class T>
-  NOINLINE // Large method, the cost amortizes over multiple elements
+  ALWAYSINLINE
   static void do_chunked_array_start(ShenandoahObjToScanQueue* q, T* cl, oop array, Klass* klass, bool weak);
 
   template <class T>
-  NOINLINE // Large method, the cost amortizes over multiple elements
+  ALWAYSINLINE
   static void do_chunked_array(ShenandoahObjToScanQueue* q, T* cl, oop array, int chunk, int pow, bool weak);
 
   template <ShenandoahGenerationType GENERATION>

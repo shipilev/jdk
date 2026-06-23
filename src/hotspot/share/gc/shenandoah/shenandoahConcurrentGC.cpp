@@ -182,7 +182,7 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
 
   assert(heap->is_concurrent_weak_root_in_progress(), "Must be doing weak roots now");
 
-  // Concurrent stack processing
+  // Finish all thread/stack roots if needed. This completes stack watermark processing.
   if (heap->is_evacuation_in_progress()) {
     entry_thread_roots();
   }

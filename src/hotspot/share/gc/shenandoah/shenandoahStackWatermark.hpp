@@ -67,6 +67,8 @@ private:
   uint32_t epoch_id() const;
   void start_processing_impl(void* context);
   void process(const frame& fr, RegisterMap& register_map, void* context);
+
+  void retire_tlab();
 };
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHSTACKWATERMARK_HPP

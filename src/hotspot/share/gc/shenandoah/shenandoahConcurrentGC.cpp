@@ -212,7 +212,7 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
     entry_strong_roots();
   }
 
-  // Roots processing is complete, put the weak roots/ref flags down.
+  // Roots processing is complete, put the weak roots flag down.
   entry_final_roots();
 
   // Continue the cycle with evacuation and optional update-refs.

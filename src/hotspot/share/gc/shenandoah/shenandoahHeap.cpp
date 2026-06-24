@@ -1253,6 +1253,8 @@ void ShenandoahHeap::concurrent_prepare_for_update_refs() {
 
 void ShenandoahHeap::concurrent_final_roots() {
   {
+    MutexLocker lock(Threads_lock);
+
 #ifdef ASSERT
     for (JavaThreadIteratorWithHandle jtiwh; JavaThread* jt = jtiwh.next();) {
       StackWatermark* sw = StackWatermarkSet::get(jt, StackWatermarkKind::gc);
@@ -1261,7 +1263,6 @@ void ShenandoahHeap::concurrent_final_roots() {
     }
 #endif
 
-    MutexLocker lock(Threads_lock);
     set_gc_state_concurrent(WEAK_ROOTS, false);
   }
 

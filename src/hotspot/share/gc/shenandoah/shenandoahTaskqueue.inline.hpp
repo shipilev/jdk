@@ -32,7 +32,7 @@
 #include "utilities/stack.inline.hpp"
 
 template <class E, MemTag MT, unsigned int N>
-inline bool BufferedOverflowTaskQueue<E, MT, N>::pop(E &t) {
+bool BufferedOverflowTaskQueue<E, MT, N>::pop(E &t) {
   if (!_buf_empty) {
     t = _elem;
     _buf_empty = true;
@@ -47,7 +47,7 @@ inline bool BufferedOverflowTaskQueue<E, MT, N>::pop(E &t) {
 }
 
 template <class E, MemTag MT, unsigned int N>
-inline bool BufferedOverflowTaskQueue<E, MT, N>::push(E t) {
+bool BufferedOverflowTaskQueue<E, MT, N>::push(E t) {
   if (_buf_empty) {
     _elem = t;
     _buf_empty = false;

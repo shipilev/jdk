@@ -103,10 +103,10 @@ public:
           ShenandoahMarkRefsSuperClosure(q, rp, old_q) {};
 
   ALWAYSINLINE
-  virtual void do_oop(narrowOop* p) { do_oop_work(p); }
+  void do_oop(narrowOop* p) override { do_oop_work(p); }
 
   ALWAYSINLINE
-  virtual void do_oop(oop* p)       { do_oop_work(p); }
+  void do_oop(oop* p) override { do_oop_work(p); }
 };
 
 class ShenandoahForwardedIsAliveClosure : public BoolObjectClosure {

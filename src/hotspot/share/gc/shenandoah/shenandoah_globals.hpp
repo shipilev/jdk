@@ -151,7 +151,7 @@
           range(1,16)                                                       \
                                                                             \
   product(double, ShenandoahGenerationalTenuringMortalityRateThreshold,     \
-                                                         0.1, EXPERIMENTAL, \
+                                                         0.2, EXPERIMENTAL, \
           "(Generational mode only) Cohort mortality rates below this "     \
           "value will be treated as indicative of longevity, leading to "   \
           "tenuring. A lower value delays tenuring, a higher value hastens "\

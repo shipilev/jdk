@@ -155,7 +155,11 @@ inline oop ShenandoahBarrierSet::oop_load(DecoratorSet decorators, T* addr, bool
   shenandoah_assert_not_in_cset_loc_except(addr, !in_heap || heap->cancelled_gc());
 
   oop value = RawAccess<>::oop_load(addr);
+
+  // Perform LRB to handle evacuation and possibly weak loads.
   value = load_reference_barrier(decorators, value, addr);
+
+  // If weak load survived the LRB, we need to keep-alive the value.
   if (!is_strong_access(decorators)) {
     keepalive_barrier(decorators, (T*)nullptr, value, FILTER_MARKED);
   }
@@ -177,10 +181,12 @@ inline void ShenandoahBarrierSet::oop_store(DecoratorSet decorators, T* addr, oo
                               heap->is_evacuation_in_progress() &&
                               !(heap->active_generation()->is_young() && heap->heap_region_containing(new_value)->is_old()));
 
+  // Handle the previous value through SATB, as we are about to perform the store.
   keepalive_barrier(decorators, addr, nullptr, FILTER_WEAK_AND_MARKED);
+
   RawAccess<>::oop_store(addr, new_value);
 
-  // Flip the card mark if needed.
+  // Handle card table updates if needed.
   if (in_heap) {
     card_barrier(addr);
   }
@@ -210,7 +216,7 @@ inline oop ShenandoahBarrierSet::oop_cmpxchg(DecoratorSet decorators, T* addr, o
 
   oop result = RawAccess<>::oop_atomic_cmpxchg(addr, compare_value, new_value);
 
-  // Flip the card mark if needed.
+  // Handle card table updates if needed.
   if (in_heap) {
     card_barrier(addr);
   }
@@ -240,7 +246,7 @@ inline oop ShenandoahBarrierSet::oop_xchg(DecoratorSet decorators, T* addr, oop 
 
   oop result = RawAccess<>::oop_atomic_xchg(addr, new_value);
 
-  // Flip the card mark if needed.
+  // Handle card table updates if needed.
   if (in_heap) {
     card_barrier(addr);
   }

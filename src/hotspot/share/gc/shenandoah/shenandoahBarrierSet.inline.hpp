@@ -82,7 +82,7 @@ inline oop ShenandoahBarrierSet::load_reference_barrier(DecoratorSet decorators,
 }
 
 template<class T>
-inline void ShenandoahBarrierSet::keepalive_barrier(DecoratorSet decorators, T* addr, oop obj, bool filter_weak, bool filter_marked) {
+inline void ShenandoahBarrierSet::keepalive_barrier(DecoratorSet decorators, T* addr, oop obj, Filter filter) {
   // Uninitialized and no-keepalive loads/stores do not need barrier.
   if (((decorators & IS_DEST_UNINITIALIZED) != 0) ||
       ((decorators & AS_NO_KEEPALIVE) != 0)) {
@@ -92,8 +92,9 @@ inline void ShenandoahBarrierSet::keepalive_barrier(DecoratorSet decorators, T* 
   assert((decorators & ON_UNKNOWN_OOP_REF) == 0, "Reference strength must be known");
 
   // No need for barriers on weaks, if requested. Normally filtered for stores, accepted for loads.
-  if (filter_weak && (((decorators & ON_WEAK_OOP_REF) != 0) ||
-                      ((decorators & ON_PHANTOM_OOP_REF) != 0))) {
+  if (((filter & FILTER_WEAK) != 0) &&
+        (((decorators & ON_WEAK_OOP_REF) != 0) ||
+         ((decorators & ON_PHANTOM_OOP_REF) != 0))) {
     return;
   }
 
@@ -112,7 +113,7 @@ inline void ShenandoahBarrierSet::keepalive_barrier(DecoratorSet decorators, T* 
     return;
   }
 
-  keepalive_barrier_slow(obj, filter_marked);
+  keepalive_barrier_slow(obj, filter);
 }
 
 template <typename T>
@@ -156,7 +157,7 @@ inline oop ShenandoahBarrierSet::oop_load(DecoratorSet decorators, T* addr, bool
   oop value = RawAccess<>::oop_load(addr);
   value = load_reference_barrier(decorators, value, addr);
   if (!is_strong_access(decorators)) {
-    keepalive_barrier(decorators, (T*)nullptr, value, /* filter_weak = */ false, /* filter_marked = */ true);
+    keepalive_barrier(decorators, (T*)nullptr, value, FILTER_MARKED);
   }
 
   return value;
@@ -176,7 +177,7 @@ inline void ShenandoahBarrierSet::oop_store(DecoratorSet decorators, T* addr, oo
                               heap->is_evacuation_in_progress() &&
                               !(heap->active_generation()->is_young() && heap->heap_region_containing(new_value)->is_old()));
 
-  keepalive_barrier(decorators, addr, nullptr, /* filter_weak = */ true, /* filter_marked = */ true);
+  keepalive_barrier(decorators, addr, nullptr, FILTER_WEAK_AND_MARKED);
   RawAccess<>::oop_store(addr, new_value);
 
   // Flip the card mark if needed.
@@ -200,7 +201,7 @@ inline oop ShenandoahBarrierSet::oop_cmpxchg(DecoratorSet decorators, T* addr, o
 
   // Handle the previous value through SATB, as we are about to perform the store.
   oop prev = RawAccess<>::oop_load(addr);
-  keepalive_barrier(decorators, (T*)nullptr, prev, /* filter_weak = */ false, /* filter_marked = */ true);
+  keepalive_barrier(decorators, (T*)nullptr, prev, FILTER_MARKED);
 
   // Perform LRB on location to fix it up for this and all following accesses.
   // This guarantees there are no false negatives due to concurrent evacuation,
@@ -230,7 +231,7 @@ inline oop ShenandoahBarrierSet::oop_xchg(DecoratorSet decorators, T* addr, oop 
 
   // Handle the previous value through SATB, as we are about to perform the store.
   oop prev = RawAccess<>::oop_load(addr);
-  keepalive_barrier(decorators, (T*)nullptr, prev, /* filter_weak = */ false, /* filter_marked = */ true);
+  keepalive_barrier(decorators, (T*)nullptr, prev, FILTER_MARKED);
 
   // Perform LRB on location to fix it up for this and all following accesses.
   // This is purely opportunistic: we would not have any false negatives here.

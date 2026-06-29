@@ -90,6 +90,13 @@ public:
   void on_thread_attach(Thread* thread) override;
   void on_thread_detach(Thread* thread) override;
 
+  enum Filter {
+    FILTER_NONE   = (1 << 0),
+    FILTER_WEAK   = (1 << 1),
+    FILTER_MARKED = (1 << 2),
+    FILTER_WEAK_AND_MARKED = FILTER_WEAK | FILTER_MARKED,
+  };
+
   template <typename T>
   inline oop oop_load(DecoratorSet decorators, T* addr, bool in_heap);
 
@@ -103,7 +110,7 @@ public:
   inline oop oop_xchg(DecoratorSet decorators, T* addr, oop new_value, bool in_heap);
 
   template <typename T>
-  inline void keepalive_barrier(DecoratorSet decorators, T* addr, oop obj, bool filter_weak, bool filter_marked);
+  inline void keepalive_barrier(DecoratorSet decorators, T* addr, oop obj, Filter filter);
 
   template <class T>
   inline oop load_reference_barrier(DecoratorSet decorators, oop obj, T* load_addr);
@@ -112,7 +119,7 @@ public:
   inline void arraycopy_barrier(T* src, T* dst, size_t count);
 
 private:
-  void keepalive_barrier_slow(oop obj, bool filter);
+  void keepalive_barrier_slow(oop obj, Filter filter);
 
   template <class T>
   oop load_reference_barrier_slow(oop obj, T* load_addr);

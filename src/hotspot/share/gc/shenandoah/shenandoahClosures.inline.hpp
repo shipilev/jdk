@@ -118,7 +118,7 @@ template <typename T>
 void ShenandoahKeepAliveClosure::do_oop_work(T* p) {
   assert(ShenandoahHeap::heap()->is_concurrent_mark_in_progress(), "Only for concurrent marking phase");
   assert(ShenandoahHeap::heap()->is_concurrent_old_mark_in_progress() || !ShenandoahHeap::heap()->has_forwarded_objects(), "Not expected");
-  _bs->keepalive_barrier(ON_STRONG_OOP_REF, p, nullptr, /* filter_weak = */ false, /* filter_marked = */ true);
+  _bs->keepalive_barrier(ON_STRONG_OOP_REF, p, nullptr, ShenandoahBarrierSet::FILTER_MARKED);
 }
 
 

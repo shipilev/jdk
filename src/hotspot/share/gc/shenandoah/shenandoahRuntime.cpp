@@ -40,7 +40,7 @@ JRT_END
 JRT_LEAF(void, ShenandoahRuntime::write_barrier_pre(oopDesc* obj))
   // Called from barrier slow-paths on full buffer.
   // We need to enqueue without filters to force buffer cleanups.
-  ShenandoahBarrierSet::barrier_set()->keepalive_barrier(ON_STRONG_OOP_REF, (oop*)nullptr, obj, /* filter_weak = */ false, /* filter_marked = */ false);
+  ShenandoahBarrierSet::barrier_set()->keepalive_barrier(ON_STRONG_OOP_REF, (oop*)nullptr, obj, ShenandoahBarrierSet::FILTER_NONE);
 JRT_END
 
 JRT_LEAF(void, ShenandoahRuntime::write_barrier_pre_narrow(narrowOop nobj))
@@ -48,7 +48,7 @@ JRT_LEAF(void, ShenandoahRuntime::write_barrier_pre_narrow(narrowOop nobj))
   oop obj = CompressedOops::decode_not_null(nobj);
   // Called from barrier slow-paths on full buffer.
   // We need to enqueue without filters to force buffer cleanups.
-  ShenandoahBarrierSet::barrier_set()->keepalive_barrier(ON_STRONG_OOP_REF, (oop*)nullptr, obj, /* filter_weak = */ false, /* filter_marked = */ false);
+  ShenandoahBarrierSet::barrier_set()->keepalive_barrier(ON_STRONG_OOP_REF, (oop*)nullptr, obj, ShenandoahBarrierSet::FILTER_NONE);
 JRT_END
 
 JRT_LEAF(oopDesc*, ShenandoahRuntime::load_reference_barrier_strong(oopDesc* src, oop* load_addr))

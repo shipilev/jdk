@@ -180,7 +180,7 @@ void ShenandoahBarrierSet::on_thread_detach(Thread *thread) {
   }
 }
 
-void ShenandoahBarrierSet::keepalive_barrier_slow(oop obj, bool filter) {
+void ShenandoahBarrierSet::keepalive_barrier_slow(oop obj, Filter filter) {
   if (!ShenandoahSATBBarrier) {
     return;
   }
@@ -190,7 +190,7 @@ void ShenandoahBarrierSet::keepalive_barrier_slow(oop obj, bool filter) {
   // Filter marked objects before hitting the SATB queues. The same predicate would
   // be used by SATBMQ::filter to eliminate already marked objects downstream, but
   // filtering here helps to avoid wasteful SATB queueing work to begin with.
-  if (filter && !_heap->requires_marking(obj)) {
+  if (((filter & FILTER_MARKED) != 0) && !_heap->requires_marking(obj)) {
     return;
   }
 

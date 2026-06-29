@@ -169,6 +169,7 @@ inline void ShenandoahBarrierSet::oop_store(DecoratorSet decorators, T* addr, oo
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   shenandoah_assert_not_in_cset_loc_except(addr, !in_heap || heap->cancelled_gc());
   shenandoah_assert_not_in_cset_except(addr, new_value, new_value == nullptr || heap->cancelled_gc());
+  shenandoah_assert_not_forwarded_except(addr, new_value, new_value == nullptr || heap->cancelled_gc());
 
   shenandoah_assert_marked_if(nullptr, new_value,
                               !CompressedOops::is_null(new_value) &&
@@ -194,6 +195,8 @@ inline oop ShenandoahBarrierSet::oop_cmpxchg(DecoratorSet decorators, T* addr, o
   shenandoah_assert_not_in_cset_loc_except(addr, !in_heap || heap->cancelled_gc());
   shenandoah_assert_not_in_cset_except(nullptr, compare_value, compare_value == nullptr || heap->cancelled_gc());
   shenandoah_assert_not_in_cset_except(nullptr, new_value, new_value == nullptr || heap->cancelled_gc());
+  shenandoah_assert_not_forwarded_except(addr, compare_value, compare_value == nullptr || heap->cancelled_gc());
+  shenandoah_assert_not_forwarded_except(addr, new_value, new_value == nullptr || heap->cancelled_gc());
 
   // Handle the previous value through SATB, as we are about to perform the store.
   oop prev = RawAccess<>::oop_load(addr);
@@ -223,6 +226,7 @@ inline oop ShenandoahBarrierSet::oop_xchg(DecoratorSet decorators, T* addr, oop 
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   shenandoah_assert_not_in_cset_loc_except(addr, !in_heap || heap->cancelled_gc());
   shenandoah_assert_not_in_cset_except(nullptr, new_value, new_value == nullptr || heap->cancelled_gc());
+  shenandoah_assert_not_forwarded_except(addr, new_value, new_value == nullptr || heap->cancelled_gc());
 
   // Handle the previous value through SATB, as we are about to perform the store.
   oop prev = RawAccess<>::oop_load(addr);

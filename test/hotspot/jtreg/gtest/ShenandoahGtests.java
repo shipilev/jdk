@@ -25,8 +25,6 @@
 /* @test
  * @summary Run Shenandoah gtests
  * @library /test/lib
- * @modules java.base/jdk.internal.misc
- *          java.xml
  * @requires vm.gc.Shenandoah
  * @requires vm.debug
  * @run main/native GTestWrapper --gtest_filter=Shenandoah*

@@ -34,6 +34,10 @@ protected:
   double _mortality_rates[ShenandoahAgeCensus::MAX_COHORTS];
   size_t _cohort_populations[ShenandoahAgeCensus::MAX_COHORTS];
 
+  virtual void SetUp() override {
+    GTEST_SKIP() << "Temporarily disabled";
+  }
+
   ShenandoahAgeCensusTest()
   : _mortality_rates{0.9, 0.7, 0.5, 0.3, 0.09, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}
   {

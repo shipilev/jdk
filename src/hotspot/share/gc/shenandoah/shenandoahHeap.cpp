@@ -78,7 +78,6 @@
 #include "gc/shenandoah/shenandoahUtils.hpp"
 #include "gc/shenandoah/shenandoahVerifier.hpp"
 #include "gc/shenandoah/shenandoahVMOperations.hpp"
-#include "gc/shenandoah/shenandoahWorkerPolicy.hpp"
 #include "gc/shenandoah/shenandoahWorkGroup.hpp"
 #include "gc/shenandoah/shenandoahYoungGeneration.hpp"
 #include "memory/allocation.hpp"
@@ -2262,7 +2261,6 @@ void ShenandoahHeap::cancel_concurrent_mark() {
 bool ShenandoahHeap::cancel_gc(GCCause::Cause cause) {
   if (try_cancel_gc(cause)) {
     FormatBuffer<> msg("Cancelling GC: %s", GCCause::to_string(cause));
-    log_info(gc,thread)("%s", msg.buffer());
     Events::log(Thread::current(), "%s", msg.buffer());
     _cancel_requested_time = os::elapsedTime();
     return true;
@@ -2755,6 +2753,13 @@ bool ShenandoahHeap::should_inject_alloc_failure() {
 
 void ShenandoahHeap::try_inject_pin() {
   assert(!ShenandoahSafepoint::is_at_shenandoah_safepoint(), "try_inject_pin() must be called outside a safepoint.");
+
+  ShenandoahHeap* heap = ShenandoahHeap::heap();
+  if (!heap->is_concurrent_mark_in_progress() ||
+      (heap->active_generation() == nullptr || !heap->active_generation()->is_mark_complete())) {
+    return;
+  }
+
   assert(active_generation() != nullptr, "Active generation must be set before we inject pins.");
   assert(is_concurrent_mark_in_progress() || active_generation()->is_mark_complete(),
          "try_inject_pin() requires marking is in progress or has completed.");

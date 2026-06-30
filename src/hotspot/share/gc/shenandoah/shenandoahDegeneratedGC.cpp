@@ -40,7 +40,6 @@
 #include "gc/shenandoah/shenandoahUtils.hpp"
 #include "gc/shenandoah/shenandoahVerifier.hpp"
 #include "gc/shenandoah/shenandoahVMOperations.hpp"
-#include "gc/shenandoah/shenandoahWorkerPolicy.hpp"
 #include "gc/shenandoah/shenandoahYoungGeneration.hpp"
 #include "runtime/vmThread.hpp"
 #include "utilities/events.hpp"
@@ -65,21 +64,16 @@ bool ShenandoahDegenGC::collect(GCCause::Cause cause) {
 }
 
 void ShenandoahDegenGC::vmop_degenerated() {
-  TraceCollectorStats tcs(ShenandoahHeap::heap()->monitoring_support()->full_stw_collection_counters());
-  ShenandoahTimingsTracker timing(ShenandoahPhaseTimings::degen_gc_gross);
+  ShenandoahGrossPausePhase phase(ShenandoahPhaseTimings::degen_gc_gross);
   VM_ShenandoahDegeneratedGC degenerated_gc(this);
   VMThread::execute(&degenerated_gc);
 }
 
 void ShenandoahDegenGC::entry_degenerated() {
   const char* msg = degen_event_message(_degen_point);
-  ShenandoahPausePhase gc_phase(msg, ShenandoahPhaseTimings::degen_gc, true /* log_heap_usage */);
-  EventMark em("%s", msg);
-  ShenandoahHeap* const heap = ShenandoahHeap::heap();
-  ShenandoahWorkerScope scope(heap->workers(),
-                              ShenandoahWorkerPolicy::calc_workers_for_stw_degenerated(),
-                              "stw degenerated gc");
+  ShenandoahPausePhase gc_phase(msg, ShenandoahPhaseTimings::degen_gc, /* log_heap_usage = */ true);
 
+  ShenandoahHeap* const heap = ShenandoahHeap::heap();
   heap->set_degenerated_gc_in_progress(true);
   op_degenerated();
   heap->set_degenerated_gc_in_progress(false);
@@ -465,21 +459,35 @@ void ShenandoahDegenGC::op_degenerated_futile() {
 
 const char* ShenandoahDegenGC::degen_event_message(ShenandoahDegenPoint point) const {
   switch (point) {
-    case _degenerated_unset:
-      SHENANDOAH_RETURN_EVENT_MESSAGE(_generation->type(), "Pause Degenerated GC", " (<UNSET>)");
-    case _degenerated_outside_cycle:
-      SHENANDOAH_RETURN_EVENT_MESSAGE(_generation->type(), "Pause Degenerated GC", " (Outside of Cycle)");
-    case _degenerated_roots:
-      SHENANDOAH_RETURN_EVENT_MESSAGE(_generation->type(), "Pause Degenerated GC", " (Roots)");
-    case _degenerated_mark:
-      SHENANDOAH_RETURN_EVENT_MESSAGE(_generation->type(), "Pause Degenerated GC", " (Mark)");
-    case _degenerated_evac:
-      SHENANDOAH_RETURN_EVENT_MESSAGE(_generation->type(), "Pause Degenerated GC", " (Evacuation)");
-    case _degenerated_update_refs:
-      SHENANDOAH_RETURN_EVENT_MESSAGE(_generation->type(), "Pause Degenerated GC", " (Update Refs)");
-    default:
+    case _degenerated_unset: {
+      SHENANDOAH_EVENT_MESSAGE(msg, _generation->type(), "Pause Degenerated GC (<UNSET>)");
+      return msg;
+    }
+    case _degenerated_outside_cycle: {
+      SHENANDOAH_EVENT_MESSAGE(msg, _generation->type(), "Pause Degenerated GC (Outside of Cycle)");
+      return msg;
+    }
+    case _degenerated_roots: {
+      SHENANDOAH_EVENT_MESSAGE(msg, _generation->type(), "Pause Degenerated GC (Roots)");
+      return msg;
+    }
+    case _degenerated_mark: {
+      SHENANDOAH_EVENT_MESSAGE(msg, _generation->type(), "Pause Degenerated GC (Mark)");
+      return msg;
+    }
+    case _degenerated_evac: {
+      SHENANDOAH_EVENT_MESSAGE(msg, _generation->type(), "Pause Degenerated GC (Evacuation)");
+      return msg;
+    }
+    case _degenerated_update_refs: {
+      SHENANDOAH_EVENT_MESSAGE(msg, _generation->type(), "Pause Degenerated GC (Update Refs)");
+      return msg;
+    }
+    default: {
       ShouldNotReachHere();
-      SHENANDOAH_RETURN_EVENT_MESSAGE(_generation->type(), "Pause Degenerated GC", " (?)");
+      SHENANDOAH_EVENT_MESSAGE(msg, _generation->type(), "Pause Degenerated GC (?)");
+      return msg;
+    }
   }
 }
 

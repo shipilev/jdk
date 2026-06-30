@@ -44,23 +44,33 @@
 #include <cmath>
 #include <limits>
 
+#include "utilities/events.hpp"
+
 class GCTimer;
 class ShenandoahGeneration;
 
-#define SHENANDOAH_RETURN_EVENT_MESSAGE(generation_type, prefix, postfix) \
-  switch (generation_type) {                                              \
-    case NON_GEN:                                                         \
-      return prefix postfix;                                              \
-    case GLOBAL:                                                          \
-      return prefix " (Global)" postfix;                                  \
-    case YOUNG:                                                           \
-      return prefix " (Young)" postfix;                                   \
-    case OLD:                                                             \
-      return prefix " (Old)" postfix;                                     \
-    default:                                                              \
-      ShouldNotReachHere();                                               \
-      return prefix " (Unknown)" postfix;                                 \
-  }                                                                       \
+// Messages for GC trace events, they have to be immortal for
+// passing around the logging/tracing systems
+#define SHENANDOAH_EVENT_MESSAGE(local, generation_type, title) \
+  const char* local;                                            \
+  switch (generation_type) {                                    \
+    case NON_GEN:                                               \
+      local = title;                                            \
+      break;                                                    \
+    case GLOBAL:                                                \
+      local = "(Global) " title;                                \
+      break;                                                    \
+    case YOUNG:                                                 \
+      local = "(Young) " title;                                 \
+      break;                                                    \
+    case OLD:                                                   \
+      local = "(Old) " title;                                   \
+      break;                                                    \
+    default:                                                    \
+      ShouldNotReachHere();                                     \
+      local = "(Unknown) " title;                               \
+      break;                                                    \
+  }                                                             \
 
 class ShenandoahGCSession : public StackObj {
 private:
@@ -101,6 +111,14 @@ public:
   static bool is_current_phase_valid();
 };
 
+class ShenandoahGrossPausePhase : public ShenandoahTimingsTracker {
+private:
+  TraceCollectorStats _tcs;
+
+public:
+  ShenandoahGrossPausePhase(ShenandoahPhaseTimings::Phase phase);
+};
+
 /*
  * ShenandoahPausePhase tracks a STW pause and emits Shenandoah timing and
  * a corresponding JFR event
@@ -109,6 +127,8 @@ class ShenandoahPausePhase : public ShenandoahTimingsTracker {
 private:
   GCTraceTimeWrapper<LogLevel::Info, LOG_TAGS(gc)> _tracer;
   ConcurrentGCTimer* const _timer;
+  EventMark _event;
+  ShenandoahWorkerScope _scope;
 
 public:
   ShenandoahPausePhase(const char* title, ShenandoahPhaseTimings::Phase phase, bool log_heap_usage = false);
@@ -121,12 +141,29 @@ public:
  */
 class ShenandoahConcurrentPhase : public ShenandoahTimingsTracker {
 private:
-  GCTraceTimeWrapper<LogLevel::Info, LOG_TAGS(gc)> _tracer;
+  GCTraceTimeWrapper<LogLevel::Info, LOG_TAGS(gc, phases)> _tracer;
   ConcurrentGCTimer* const _timer;
+  TraceCollectorStats _tcs;
+  EventMark _event;
+  ShenandoahWorkerScope _scope;
 
 public:
   ShenandoahConcurrentPhase(const char* title, ShenandoahPhaseTimings::Phase phase, bool log_heap_usage = false);
   ~ShenandoahConcurrentPhase();
+};
+
+/*
+ * ShenandoahConcurrentPhase tracks a concurrent GC phase and emits Shenandoah timing and
+ * a corresponding JFR event
+ */
+class ShenandoahConcurrentRootPhase : public ShenandoahTimingsTracker {
+private:
+  GCTraceTimeWrapper<LogLevel::Info, LOG_TAGS(gc)> _tracer;
+  ConcurrentGCTimer* const _timer;
+
+public:
+  ShenandoahConcurrentRootPhase(const char* title, ShenandoahPhaseTimings::Phase phase, bool log_heap_usage = false);
+  ~ShenandoahConcurrentRootPhase();
 };
 
 /*

@@ -56,7 +56,6 @@
 #include "gc/shenandoah/shenandoahUtils.hpp"
 #include "gc/shenandoah/shenandoahVerifier.hpp"
 #include "gc/shenandoah/shenandoahVMOperations.hpp"
-#include "gc/shenandoah/shenandoahWorkerPolicy.hpp"
 #include "memory/metaspaceUtils.hpp"
 #include "memory/universe.hpp"
 #include "oops/compressedOops.inline.hpp"
@@ -83,24 +82,14 @@ bool ShenandoahFullGC::collect(GCCause::Cause cause) {
 }
 
 void ShenandoahFullGC::vmop_entry_full(GCCause::Cause cause) {
-  ShenandoahHeap* const heap = ShenandoahHeap::heap();
-  TraceCollectorStats tcs(heap->monitoring_support()->full_stw_collection_counters());
-  ShenandoahTimingsTracker timing(ShenandoahPhaseTimings::full_gc_gross);
-
-  heap->try_inject_alloc_failure();
+  ShenandoahGrossPausePhase phase(ShenandoahPhaseTimings::full_gc_gross);
   VM_ShenandoahFullGC op(cause, this);
   VMThread::execute(&op);
 }
 
 void ShenandoahFullGC::entry_full(GCCause::Cause cause) {
   static const char* msg = "Pause Full";
-  ShenandoahPausePhase gc_phase(msg, ShenandoahPhaseTimings::full_gc, true /* log_heap_usage */);
-  EventMark em("%s", msg);
-
-  ShenandoahWorkerScope scope(ShenandoahHeap::heap()->workers(),
-                              ShenandoahWorkerPolicy::calc_workers_for_fullgc(),
-                              "full gc");
-
+  ShenandoahPausePhase gc_phase(msg, ShenandoahPhaseTimings::full_gc, /* log_heap_usage = */ true);
   op_full(cause);
 }
 

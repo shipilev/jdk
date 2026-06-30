@@ -146,6 +146,9 @@ class ShenandoahHeap : public CollectedHeap {
   friend class ShenandoahGCStateResetter;
   friend class ShenandoahParallelObjectIterator;
   friend class ShenandoahSafepoint;
+  friend class ShenandoahGrossPausePhase;
+  friend class ShenandoahPausePhase;
+  friend class ShenandoahConcurrentPhase;
 
   // Supported GC
   friend class ShenandoahConcurrentGC;

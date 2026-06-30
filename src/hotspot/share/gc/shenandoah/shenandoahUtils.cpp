@@ -28,6 +28,7 @@
 #include "gc/shared/gcTrace.hpp"
 #include "gc/shared/referenceProcessorStats.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
+#include "gc/shenandoah/shenandoahMonitoringSupport.hpp"
 #include "gc/shenandoah/shenandoahReferenceProcessor.hpp"
 #include "gc/shenandoah/shenandoahUtils.hpp"
 #include "jfr/jfrEvents.hpp"
@@ -100,25 +101,53 @@ ShenandoahGCPauseMark::ShenandoahGCPauseMark(uint gc_id, const char* notificatio
   );
 }
 
+ShenandoahGrossPausePhase::ShenandoahGrossPausePhase(ShenandoahPhaseTimings::Phase phase) :
+  ShenandoahTimingsTracker(phase),
+  _tcs(ShenandoahHeap::heap()->monitoring_support()->stw_collection_counters())
+{
+  ShenandoahHeap::heap()->try_inject_alloc_failure();
+}
+
 ShenandoahPausePhase::ShenandoahPausePhase(const char* title, ShenandoahPhaseTimings::Phase phase, bool log_heap_usage) :
   ShenandoahTimingsTracker(phase),
   _tracer(title, nullptr, GCCause::_no_gc, log_heap_usage),
-  _timer(ShenandoahHeap::heap()->gc_timer()) {
-  _timer->register_gc_pause_start(title);
+  _timer(ShenandoahHeap::heap()->gc_timer()),
+  _event("%s", title),
+  _scope(ShenandoahHeap::heap()->workers(), ParallelGCThreads, title)
+{
+  _timer->register_gc_phase_start(title, Ticks::now()); // FIXME
 }
 
 ShenandoahPausePhase::~ShenandoahPausePhase() {
-  _timer->register_gc_pause_end();
+  _timer->register_gc_phase_end(Ticks::now());
 }
 
 ShenandoahConcurrentPhase::ShenandoahConcurrentPhase(const char* title, ShenandoahPhaseTimings::Phase phase, bool log_heap_usage) :
+  ShenandoahTimingsTracker(phase),
+  _tracer(title, nullptr, GCCause::_no_gc, log_heap_usage),
+  _timer(ShenandoahHeap::heap()->gc_timer()),
+  _tcs(ShenandoahHeap::heap()->monitoring_support()->concurrent_collection_counters()),
+  _event("%s", title),
+  _scope(ShenandoahHeap::heap()->workers(), ConcGCThreads, title)
+{
+  _timer->register_gc_phase_start(title, Ticks::now());
+  ShenandoahHeap* heap = ShenandoahHeap::heap();
+  heap->try_inject_alloc_failure();
+  heap->try_inject_pin();
+}
+
+ShenandoahConcurrentPhase::~ShenandoahConcurrentPhase() {
+  _timer->register_gc_phase_end(Ticks::now());
+}
+
+ShenandoahConcurrentRootPhase::ShenandoahConcurrentRootPhase(const char* title, ShenandoahPhaseTimings::Phase phase, bool log_heap_usage) :
   ShenandoahTimingsTracker(phase),
   _tracer(title, nullptr, GCCause::_no_gc, log_heap_usage),
   _timer(ShenandoahHeap::heap()->gc_timer()) {
   _timer->register_gc_concurrent_start(title);
 }
 
-ShenandoahConcurrentPhase::~ShenandoahConcurrentPhase() {
+ShenandoahConcurrentRootPhase::~ShenandoahConcurrentRootPhase() {
   _timer->register_gc_concurrent_end();
 }
 

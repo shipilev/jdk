@@ -40,7 +40,6 @@
 #include "gc/shenandoah/shenandoahScanRemembered.inline.hpp"
 #include "gc/shenandoah/shenandoahThreadLocalData.hpp"
 #include "gc/shenandoah/shenandoahUtils.hpp"
-#include "gc/shenandoah/shenandoahWorkerPolicy.hpp"
 #include "gc/shenandoah/shenandoahYoungGeneration.hpp"
 #include "runtime/threads.hpp"
 #include "utilities/events.hpp"
@@ -383,16 +382,8 @@ void ShenandoahOldGeneration::prepare_gc() {
 }
 
 bool ShenandoahOldGeneration::entry_coalesce_and_fill() {
-  ShenandoahHeap* const heap = ShenandoahHeap::heap();
-
-  static const char* msg = "Coalescing and filling (Old)";
+  SHENANDOAH_EVENT_MESSAGE(msg, OLD, "Coalescing and filling");
   ShenandoahConcurrentPhase gc_phase(msg, ShenandoahPhaseTimings::conc_coalesce_and_fill);
-
-  TraceCollectorStats tcs(heap->monitoring_support()->concurrent_collection_counters());
-  EventMark em("%s", msg);
-  ShenandoahWorkerScope scope(heap->workers(),
-                              ShenandoahWorkerPolicy::calc_workers_for_conc_marking(),
-                              msg);
 
   return coalesce_and_fill();
 }

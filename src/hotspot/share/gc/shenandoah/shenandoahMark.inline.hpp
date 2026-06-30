@@ -47,7 +47,7 @@
 #include "utilities/devirtualizer.inline.hpp"
 #include "utilities/powerOfTwo.hpp"
 
-template <class T, ShenandoahGenerationType GENERATION, bool STRING_DEDUP>
+template <class T, class OT, ShenandoahGenerationType GENERATION, bool STRING_DEDUP>
 void ShenandoahMark::do_task(ShenandoahObjToScanQueue* q, T* cl, ShenandoahLiveData* live_data, StringDedup::Requests* const req, ShenandoahMarkTask* task, uint worker_id) {
   oop obj = task->obj();
 
@@ -55,32 +55,38 @@ void ShenandoahMark::do_task(ShenandoahObjToScanQueue* q, T* cl, ShenandoahLiveD
   shenandoah_assert_marked(nullptr, obj);
   shenandoah_assert_not_in_cset_except(nullptr, obj, ShenandoahHeap::heap()->cancelled_gc());
 
+  Klass* klass = obj->klass();
+
   // Are we in weak subgraph scan?
   bool weak = task->is_weak();
   cl->set_weak(weak);
 
   if (task->is_not_chunked()) {
-    Klass* klass = obj->klass();
-    if (klass->is_instance_klass()) {
-      // Case 1: Normal oop, process as usual.
+    // Look up which type of object we are dealing with.
+    // Sorted by assumed frequency, with the most frequent types coming first.
+    if (klass->is_other_instance_klass()) {
+      // Normal oop, process with the inlined call.
       if (STRING_DEDUP && (klass == vmClasses::String_klass())) {
         dedup_string(obj, req);
       }
+      ((InstanceKlass*)klass)->oop_oop_iterate<OT>(obj, cl);
+    } else if (klass->is_objArray_klass()) {
+      // Object array and no chunk is set. Must be the first
+      // time we visit it, start the chunked processing.
+      do_chunked_array_start<T, OT>(q, cl, obj, klass, weak);
+    } else if (klass->is_typeArray_klass()) {
+      // Primitive array. Do nothing, no oops there. We use the same
+      // performance tweak TypeArrayKlass::oop_oop_iterate_impl is using:
+      // We skip iterating over the klass pointer since we know that
+      // Universe::TypeArrayKlass never moves.
+    } else {
+      // The remaining rare cases. Use generic code to traverse.
+      assert(klass->is_instance_klass(), "Should be instance klass");
       if (klass->is_stack_chunk_instance_klass()) {
         // Loom doesn't support mixing of weak marking and strong marking of stack chunks.
         cl->set_weak(false);
       }
       obj->oop_iterate(cl);
-    } else if (klass->is_objArray_klass()) {
-      // Case 2: Object array instance and no chunk is set. Must be the first
-      // time we visit it, start the chunked processing.
-      do_chunked_array_start<T>(q, cl, obj, klass, weak);
-    } else {
-      // Case 3: Primitive array. Do nothing, no oops there. We use the same
-      // performance tweak TypeArrayKlass::oop_oop_iterate_impl is using:
-      // We skip iterating over the klass pointer since we know that
-      // Universe::TypeArrayKlass never moves.
-      assert(klass->is_typeArray_klass(), "should be type array");
     }
     // Count liveness the last: push the outstanding work to the queues first
     // Avoid double-counting objects that are visited twice due to upgrade
@@ -89,8 +95,8 @@ void ShenandoahMark::do_task(ShenandoahObjToScanQueue* q, T* cl, ShenandoahLiveD
       count_liveness<GENERATION>(live_data, obj, klass, worker_id);
     }
   } else {
-    // Case 4: Array chunk, has sensible chunk id. Process it.
-    do_chunked_array<T>(q, cl, obj, task->chunk(), task->pow(), weak);
+    // Object array chunk. Process it.
+    do_chunked_array<T, OT>(q, cl, obj, klass, task->chunk(), task->pow(), weak);
   }
 }
 
@@ -154,10 +160,12 @@ void ShenandoahMark::count_liveness(ShenandoahLiveData* live_data, oop obj, Klas
   }
 }
 
-template <class T>
+template <class T, class OT>
 void ShenandoahMark::do_chunked_array_start(ShenandoahObjToScanQueue* q, T* cl, oop obj, Klass* klass, bool weak) {
   assert(obj->is_objArray(), "expect object array");
   objArrayOop array = objArrayOop(obj);
+  ObjArrayKlass* aklass = (ObjArrayKlass*)klass;
+
   int len = array->length();
 
   // Mark objArray klass metadata
@@ -167,7 +175,7 @@ void ShenandoahMark::do_chunked_array_start(ShenandoahObjToScanQueue* q, T* cl, 
 
   if (len <= (int) ObjArrayMarkingStride*2) {
     // A few slices only, process directly
-    array->oop_iterate_elements_range(cl, 0, len);
+    aklass->oop_oop_iterate_elements_range<OT>(array, cl, 0, len);
   } else {
     int bits = log2i_graceful(len);
     // Compensate for non-power-of-two arrays, cover the array in excess:
@@ -216,15 +224,16 @@ void ShenandoahMark::do_chunked_array_start(ShenandoahObjToScanQueue* q, T* cl, 
     // Process the irregular tail, if present
     int from = last_idx;
     if (from < len) {
-      array->oop_iterate_elements_range(cl, from, len);
+      aklass->oop_oop_iterate_elements_range<OT>(array, cl, from, len);
     }
   }
 }
 
-template <class T>
-void ShenandoahMark::do_chunked_array(ShenandoahObjToScanQueue* q, T* cl, oop obj, int chunk, int pow, bool weak) {
+template <class T, class OT>
+void ShenandoahMark::do_chunked_array(ShenandoahObjToScanQueue* q, T* cl, oop obj, Klass* klass, int chunk, int pow, bool weak) {
   assert(obj->is_objArray(), "expect object array");
   objArrayOop array = objArrayOop(obj);
+  ObjArrayKlass* aklass = (ObjArrayKlass*)klass;
 
   // Split out tasks, as suggested in ShenandoahMarkTask docs. Avoid pushing tasks that
   // are known to start beyond the array.
@@ -246,7 +255,7 @@ void ShenandoahMark::do_chunked_array(ShenandoahObjToScanQueue* q, T* cl, oop ob
   assert (0 < to && to <= len, "to is sane: %d/%d", to, len);
 #endif
 
-  array->oop_iterate_elements_range(cl, from, to);
+  aklass->oop_oop_iterate_elements_range<OT>(array, cl, from, to);
 }
 
 template <ShenandoahGenerationType GENERATION>

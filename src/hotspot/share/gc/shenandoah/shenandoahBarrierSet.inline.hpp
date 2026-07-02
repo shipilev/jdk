@@ -81,7 +81,7 @@ inline oop ShenandoahBarrierSet::load_reference_barrier(DecoratorSet decorators,
   return load_reference_barrier_slow(obj, load_addr);
 }
 
-template<class T>
+template <class T>
 inline void ShenandoahBarrierSet::keepalive_barrier(DecoratorSet decorators, T* addr, oop obj, Filter filter) {
   // Uninitialized and no-keepalive loads/stores do not need barrier.
   if (((decorators & IS_DEST_UNINITIALIZED) != 0) ||
@@ -267,7 +267,7 @@ inline DecoratorSet ShenandoahBarrierSet::AccessBarrier<decorators, BarrierSetT>
   // Reference.referent field, this likely breaks weak reference semantics already.
   // We upgrade the access to strong in (sometimes futile) attempt to maintain heap
   // integrity, and assert in debug builds for better diagnostics.
-  assert(decorators & (ON_STRONG_OOP_REF | ON_UNKNOWN_OOP_REF), "Only strong or unknown expected here");
+  assert((decorators & (ON_STRONG_OOP_REF | ON_UNKNOWN_OOP_REF)) != 0, "Only strong or unknown expected here");
   DecoratorSet resolved_decorators = AccessBarrierSupport::resolve_possibly_unknown_oop_ref_strength<decorators>(base, offset);
   assert((resolved_decorators & ON_STRONG_OOP_REF) != 0, "Application error: Unsupported operation on weak location");
   return (resolved_decorators & ~ON_DECORATOR_MASK) | ON_STRONG_OOP_REF;

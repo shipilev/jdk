@@ -91,9 +91,9 @@ public:
   void on_thread_detach(Thread* thread) override;
 
   enum Filter {
-    FILTER_NONE   = (1 << 0),
-    FILTER_WEAK   = (1 << 1),
-    FILTER_MARKED = (1 << 2),
+    FILTER_NONE   = 0,
+    FILTER_WEAK   = (1 << 0),
+    FILTER_MARKED = (1 << 1),
     FILTER_WEAK_AND_MARKED = FILTER_WEAK | FILTER_MARKED,
   };
 

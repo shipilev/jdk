@@ -254,6 +254,13 @@ inline oop ShenandoahBarrierSet::oop_xchg(DecoratorSet decorators, T* addr, oop 
   return result;
 }
 
+// Unsafe operations sometimes come to this barrier set with ON_UNKNOWN_OOP_REF set.
+// These are normally strong refs, but one can use Unsafe on Reference.referent.
+// We cannot deal with that case. If application does Unsafe operations on
+// Reference.referent field, this likely breaks weak reference semantics already.
+// For writes, we upgrade the access to strong in (sometimes futile) attempt to maintain
+// heap integrity, and assert in debug builds for better diagnostics.
+
 template <DecoratorSet decorators, typename BarrierSetT>
 inline DecoratorSet ShenandoahBarrierSet::AccessBarrier<decorators, BarrierSetT>::resolve_unknown(oop base, ptrdiff_t offset) {
   return AccessBarrierSupport::resolve_possibly_unknown_oop_ref_strength<decorators>(base, offset);
@@ -261,16 +268,13 @@ inline DecoratorSet ShenandoahBarrierSet::AccessBarrier<decorators, BarrierSetT>
 
 template <DecoratorSet decorators, typename BarrierSetT>
 inline DecoratorSet ShenandoahBarrierSet::AccessBarrier<decorators, BarrierSetT>::resolve_unknown_to_strong(oop base, ptrdiff_t offset) {
-  // Unsafe operations come to this barrier set with ON_UNKNOWN_OOP_REF set.
-  // These are normally strong refs, but one can use Unsafe on Reference.referent.
-  // We cannot deal with that case. If application does Unsafe operations on
-  // Reference.referent field, this likely breaks weak reference semantics already.
-  // We upgrade the access to strong in (sometimes futile) attempt to maintain heap
-  // integrity, and assert in debug builds for better diagnostics.
-  assert((decorators & (ON_STRONG_OOP_REF | ON_UNKNOWN_OOP_REF)) != 0, "Only strong or unknown expected here");
-  DecoratorSet resolved_decorators = AccessBarrierSupport::resolve_possibly_unknown_oop_ref_strength<decorators>(base, offset);
-  assert((resolved_decorators & ON_STRONG_OOP_REF) != 0, "Application error: Unsupported operation on weak location");
-  return (resolved_decorators & ~ON_DECORATOR_MASK) | ON_STRONG_OOP_REF;
+  if ((decorators & ON_UNKNOWN_OOP_REF) != 0) {
+    DecoratorSet resolved_decorators = AccessBarrierSupport::resolve_possibly_unknown_oop_ref_strength<decorators>(base, offset);
+    assert((resolved_decorators & ON_STRONG_OOP_REF) != 0, "Application error: Unsupported operation on weak location");
+    return (decorators & ~ON_DECORATOR_MASK) | ON_STRONG_OOP_REF;
+  } else {
+    return decorators;
+  }
 }
 
 template <DecoratorSet decorators, typename BarrierSetT>
@@ -306,7 +310,7 @@ inline void ShenandoahBarrierSet::AccessBarrier<decorators, BarrierSetT>::oop_st
 
 template <DecoratorSet decorators, typename BarrierSetT>
 inline void ShenandoahBarrierSet::AccessBarrier<decorators, BarrierSetT>::oop_store_in_heap_at(oop base, ptrdiff_t offset, oop value) {
-  DecoratorSet resolved_decorators = resolve_unknown(base, offset);
+  DecoratorSet resolved_decorators = resolve_unknown_to_strong(base, offset);
   auto addr = AccessInternal::oop_field_addr<decorators>(base, offset);
   barrier_set()->oop_store(resolved_decorators, addr, value, /* in_heap = */ true);
 }

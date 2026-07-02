@@ -1754,11 +1754,11 @@ private:
     T o = RawAccess<>::oop_load(p);
     if (!CompressedOops::is_null(o)) {
       oop obj = CompressedOops::decode_not_null(o);
-      if (_heap->is_concurrent_weak_root_in_progress() && !_marking_context->is_marked(obj)) {
-        // There may be dead oops in weak roots in concurrent root phase, do not touch them.
+      obj = ShenandoahBarrierSet::barrier_set()->load_reference_barrier(ON_PHANTOM_OOP_REF, obj, (T*)nullptr);
+      if (obj == nullptr) {
+        // Dead oop, cannot touch it.
         return;
       }
-      obj = ShenandoahBarrierSet::barrier_set()->load_reference_barrier(ON_PHANTOM_OOP_REF, obj, (T*)nullptr);
 
       assert(oopDesc::is_oop(obj), "must be a valid oop");
       if (!_bitmap->is_marked(obj)) {
@@ -1866,12 +1866,11 @@ private:
     T o = RawAccess<>::oop_load(p);
     if (!CompressedOops::is_null(o)) {
       oop obj = CompressedOops::decode_not_null(o);
-      if (_heap->is_concurrent_weak_root_in_progress() && !_marking_context->is_marked(obj)) {
-        // There may be dead oops in weak roots in concurrent root phase, do not touch them.
+      obj = ShenandoahBarrierSet::barrier_set()->load_reference_barrier(ON_PHANTOM_OOP_REF, obj, (T*)nullptr);
+      if (obj == nullptr) {
+        // Dead oop, cannot touch it.
         return;
       }
-      obj = ShenandoahBarrierSet::barrier_set()->load_reference_barrier(ON_PHANTOM_OOP_REF, obj, (T*)nullptr);
-
       assert(oopDesc::is_oop(obj), "Must be a valid oop");
       if (_bitmap->par_mark(obj)) {
         _queue->push(ShenandoahMarkTask(obj));

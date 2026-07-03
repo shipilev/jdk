@@ -105,9 +105,7 @@ void ShenandoahMark::do_task(ShenandoahObjToScanQueue* q, T* cl, ShenandoahLiveD
         break;
       }
       default: {
-        assert(false, "Unknown klass kind: %d", klass->kind());
-        // ShouldNotReachHere() would have been useful, but we do not want it
-        // in very hot code in product builds.
+        fatal("Unknown klass kind: %d", klass->kind());
       }
     }
     // Count liveness the last: push the outstanding work to the queues first

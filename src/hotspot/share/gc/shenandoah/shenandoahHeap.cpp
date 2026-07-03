@@ -1747,7 +1747,6 @@ private:
   MarkBitMap* _bitmap;
   ShenandoahScanObjectStack* _oop_stack;
   ShenandoahHeap* const _heap;
-  ShenandoahMarkingContext* const _marking_context;
 
   template <class T>
   void do_oop_work(T* p) {
@@ -1769,8 +1768,7 @@ private:
   }
 public:
   ObjectIterateScanRootClosure(MarkBitMap* bitmap, ShenandoahScanObjectStack* oop_stack) :
-    _bitmap(bitmap), _oop_stack(oop_stack), _heap(ShenandoahHeap::heap()),
-    _marking_context(_heap->marking_context()) {}
+    _bitmap(bitmap), _oop_stack(oop_stack), _heap(ShenandoahHeap::heap()) {}
   void do_oop(oop* p)       { do_oop_work(p); }
   void do_oop(narrowOop* p) { do_oop_work(p); }
 };
@@ -1859,7 +1857,6 @@ private:
   MarkBitMap* _bitmap;
   ShenandoahObjToScanQueue* _queue;
   ShenandoahHeap* const _heap;
-  ShenandoahMarkingContext* const _marking_context;
 
   template <class T>
   void do_oop_work(T* p) {
@@ -1879,8 +1876,7 @@ private:
   }
 public:
   ShenandoahObjectIterateParScanClosure(MarkBitMap* bitmap, ShenandoahObjToScanQueue* q) :
-    _bitmap(bitmap), _queue(q), _heap(ShenandoahHeap::heap()),
-    _marking_context(_heap->marking_context()) {}
+    _bitmap(bitmap), _queue(q), _heap(ShenandoahHeap::heap()) {}
   void do_oop(oop* p)       { do_oop_work(p); }
   void do_oop(narrowOop* p) { do_oop_work(p); }
 };

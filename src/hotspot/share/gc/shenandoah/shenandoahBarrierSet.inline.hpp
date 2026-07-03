@@ -218,7 +218,7 @@ inline void ShenandoahBarrierSet::write_ref_field_post(T* field, oop new_value) 
     return;
   }
 
-  // Only dirty the stores that introduce old -> young references.
+  // Only dirty the cards that relate to old -> young references.
   if (!_heap->is_in_young(field) && _heap->is_in_young(new_value)) {
     *byte = CardTable::dirty_card_val();
   }

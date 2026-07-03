@@ -4152,8 +4152,8 @@ void LoadStoreNode::dump_spec(outputStream *st) const {
 #ifndef ASSERT
   // fake the missing field
   const TypePtr* _adr_type = nullptr;
-  if (in(Address) != nullptr)
-    _adr_type = in(Address)->bottom_type()->isa_ptr();
+  if (in(MemNode::Address) != nullptr)
+    _adr_type = in(MemNode::Address)->bottom_type()->isa_ptr();
 #endif
   MemNode::dump_adr_type(_adr_type, st);
 

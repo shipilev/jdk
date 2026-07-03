@@ -211,17 +211,26 @@ template <DecoratorSet decorators, typename T>
 inline void ShenandoahBarrierSet::write_ref_field_post(T* field, oop new_value) {
   assert(ShenandoahCardBarrier, "Should have been checked by caller");
 
-  volatile CardTable::CardValue* byte = card_table()->byte_for(field);
-
-  // Already dirty?
-  if (UseCondCardMark && (*byte == CardTable::dirty_card_val())) {
+  if (new_value == nullptr) {
+    // Null reference store do not require card mark.
     return;
   }
 
-  // Only dirty the cards that relate to old -> young references.
-  if (!_heap->is_in_young(field) && _heap->is_in_young(new_value)) {
-    *byte = CardTable::dirty_card_val();
+  if (_heap->is_in_young(field)) {
+    // Young field stores do not require card mark.
+    return;
   }
+
+  if (!_heap->is_in_young(new_value)) {
+    // Not an old->young reference store.
+    return;
+  }
+
+  volatile CardTable::CardValue* byte = card_table()->byte_for(field);
+  if (UseCondCardMark && (*byte == CardTable::dirty_card_val())) {
+    return;
+  }
+  *byte = CardTable::dirty_card_val();
 }
 
 template <typename T>

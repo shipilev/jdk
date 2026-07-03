@@ -133,6 +133,16 @@ void ShenandoahMark::mark_loop_work(T* cl, ShenandoahLiveData* live_data, uint w
   ShenandoahObjToScanQueue* old_q = get_old_queue(worker_id);
   ShenandoahMarkTask t;
 
+  // Take outstanding work from queues not covered by current workers.
+  // We expect there is little work in those queues.
+  ShenandoahObjToScanQueue* rq = queues->claim_next();
+  while (rq != nullptr) {
+    while (rq->pop(t)) {
+      q->push(t);
+    }
+    rq = queues->claim_next();
+  }
+
   ShenandoahSATBBufferClosure<GENERATION> drain_satb(q, old_q);
   SATBMarkQueueSet& satb_mq_set = ShenandoahBarrierSet::satb_mark_queue_set();
 

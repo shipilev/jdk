@@ -208,6 +208,11 @@ void ShenandoahArguments::initialize() {
         ShenandoahAllocRateSampleWindow));
   }
 
+  // Disable to measure costs
+  if (ShenandoahEvacTracking) {
+    FLAG_SET_DEFAULT(ShenandoahEvacTracking, false);
+  }
+
   FullGCForwarding::initialize_flags(MaxHeapSize);
 }
 

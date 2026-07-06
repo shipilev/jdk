@@ -212,7 +212,7 @@ inline void ShenandoahBarrierSet::write_ref_field_post(T* field, oop new_value) 
   assert(ShenandoahCardBarrier, "Should have been checked by caller");
 
   if (new_value == nullptr) {
-    // Null reference store do not require card mark.
+    // Null reference stores do not require card mark.
     return;
   }
 

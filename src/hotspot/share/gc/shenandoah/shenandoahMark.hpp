@@ -110,7 +110,7 @@ private:
   void mark_loop_work(T* cl, ShenandoahLiveData* live_data, uint worker_id, TaskTerminator *t, StringDedup::Requests* const req);
 
   template <bool CANCELLABLE>
-  NOINLINE // Utility, do not inline
+  NOINLINE // Utility loop, maybe hot, start inlining from here
   void mark_drain_extra_queues(ShenandoahObjToScanQueueSet* queues, ShenandoahObjToScanQueue* local_q);
 
 protected:

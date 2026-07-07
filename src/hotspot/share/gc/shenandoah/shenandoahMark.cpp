@@ -58,10 +58,8 @@ ShenandoahMark::ShenandoahMark(ShenandoahGeneration* generation) :
 template <ShenandoahGenerationType GENERATION, bool CANCELLABLE, bool STRING_DEDUP>
 void ShenandoahMark::mark_loop_prework(uint w, TaskTerminator *t, StringDedup::Requests* const req, bool update_refs) {
   ShenandoahObjToScanQueueSet* queues = task_queues();
-  ShenandoahObjToScanQueueSet* old_queues = old_task_queues();
   ShenandoahObjToScanQueue* q = get_queue(w);
   ShenandoahObjToScanQueue* old_q = get_old_queue(w);
-
   ShenandoahReferenceProcessor *rp = _generation->ref_processor();
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
   ShenandoahLiveData* ld = heap->get_liveness_cache(w);
@@ -69,9 +67,6 @@ void ShenandoahMark::mark_loop_prework(uint w, TaskTerminator *t, StringDedup::R
   // Take outstanding work from queues not covered by current workers.
   // We expect there is little work in those queues.
   mark_drain_extra_queues<CANCELLABLE>(queues, q);
-  if (old_queues != nullptr) {
-    mark_drain_extra_queues<CANCELLABLE>(old_queues, old_q);
-  }
 
   // TODO: We can clean up this if we figure out how to do templated oop closures that
   // play nice with specialized_oop_iterators.

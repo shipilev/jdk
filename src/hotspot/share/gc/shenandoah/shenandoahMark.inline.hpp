@@ -365,6 +365,10 @@ inline void ShenandoahMark::mark_ref(ShenandoahObjToScanQueue* q,
     marked = mark_context->mark_strong(obj, /* was_upgraded = */ skip_live);
   }
   if (marked) {
+    // The klass and oop fields are going to be used soon.
+    // Prefetch current and next cache line to get them hot.
+    Prefetch::read(obj->base_addr(), 0);
+    Prefetch::read(obj->base_addr(), 64);
     bool pushed = q->push(ShenandoahMarkTask(obj, skip_live, weak));
     assert(pushed, "overflow queue should always succeed pushing");
   }

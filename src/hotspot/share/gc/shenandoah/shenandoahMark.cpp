@@ -135,14 +135,28 @@ void ShenandoahMark::mark_loop_work(T* cl, ShenandoahLiveData* live_data, uint w
 
   // Take outstanding work from queues not covered by current workers.
   // We expect there is little work in those queues.
+  assert(queues->get_reserved() == heap->workers()->active_workers(),
+         "Safety: claimable queues do not intersect with worker queues: %u == %u",
+         queues->get_reserved(), heap->workers()->active_workers());
+
   ShenandoahObjToScanQueue* rq = queues->claim_next();
   while (rq != nullptr) {
-    while (rq->pop(t)) {
-      q->push(t);
+    while (!rq->is_empty()) {
+      if (CANCELLABLE && heap->check_cancelled_gc_and_yield()) {
+        return;
+      }
+      for (uint i = 0; i < stride; i++) {
+        if (rq->pop(t)) {
+          q->push(t);
+        } else {
+          break;
+        }
+      }
     }
     rq = queues->claim_next();
   }
 
+  // Normal, hot marking loop.
   ShenandoahSATBBufferClosure<GENERATION> drain_satb(q, old_q);
   SATBMarkQueueSet& satb_mq_set = ShenandoahBarrierSet::satb_mark_queue_set();
 

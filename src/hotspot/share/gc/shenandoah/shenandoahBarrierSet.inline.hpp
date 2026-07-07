@@ -117,8 +117,13 @@ inline void ShenandoahBarrierSet::keepalive_barrier(DecoratorSet decorators, T* 
 }
 
 template <typename T>
-inline void ShenandoahBarrierSet::card_barrier(T* field) {
+inline void ShenandoahBarrierSet::card_barrier(T* field, oop new_value) {
   if (!ShenandoahCardBarrier) {
+    return;
+  }
+
+  if (new_value == nullptr) {
+    // Null reference stores do not require card mark.
     return;
   }
 
@@ -126,17 +131,16 @@ inline void ShenandoahBarrierSet::card_barrier(T* field) {
     // Young field stores do not require card mark.
     return;
   }
-  T heap_oop = RawAccess<>::oop_load(field);
-  if (CompressedOops::is_null(heap_oop)) {
-    // Null reference store do not require card mark.
-    return;
-  }
-  oop obj = CompressedOops::decode_not_null(heap_oop);
-  if (!_heap->is_in_young(obj)) {
+
+  if (!_heap->is_in_young(new_value)) {
     // Not an old->young reference store.
     return;
   }
+
   volatile CardTable::CardValue* byte = card_table()->byte_for(field);
+  if (UseCondCardMark && (*byte == CardTable::dirty_card_val())) {
+    return;
+  }
   *byte = CardTable::dirty_card_val();
 }
 
@@ -188,7 +192,7 @@ inline void ShenandoahBarrierSet::oop_store(DecoratorSet decorators, T* addr, oo
 
   // Handle card table updates if needed.
   if (in_heap) {
-    card_barrier(addr);
+    card_barrier(addr, new_value);
   }
 }
 
@@ -218,7 +222,7 @@ inline oop ShenandoahBarrierSet::oop_cmpxchg(DecoratorSet decorators, T* addr, o
 
   // Handle card table updates if needed.
   if (in_heap) {
-    card_barrier(addr);
+    card_barrier(addr, new_value);
   }
 
   return result;
@@ -248,7 +252,7 @@ inline oop ShenandoahBarrierSet::oop_xchg(DecoratorSet decorators, T* addr, oop 
 
   // Handle card table updates if needed.
   if (in_heap) {
-    card_barrier(addr);
+    card_barrier(addr, new_value);
   }
 
   return result;

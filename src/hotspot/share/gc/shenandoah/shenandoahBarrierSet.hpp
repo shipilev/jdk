@@ -140,7 +140,7 @@ private:
   void clone_work(oop src);
 
   template <typename T>
-  inline void card_barrier(T* field);
+  inline void card_barrier(T* field, oop new_value);
 
   inline void card_barrier_array(HeapWord* start, size_t count);
 

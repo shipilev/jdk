@@ -132,8 +132,6 @@ void ShenandoahMark::mark_drain_extra_queues(ShenandoahObjToScanQueueSet* queues
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   ShenandoahMarkTask t;
 
-  // Take outstanding work from queues not covered by current workers.
-  // We expect there is little work in those queues.
   assert(queues->get_reserved() == heap->workers()->active_workers(),
          "Safety: claimable queues do not intersect with worker queues: %u == %u",
          queues->get_reserved(), heap->workers()->active_workers());

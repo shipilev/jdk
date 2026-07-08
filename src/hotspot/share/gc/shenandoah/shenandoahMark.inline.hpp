@@ -366,10 +366,10 @@ inline void ShenandoahMark::mark_ref(ShenandoahObjToScanQueue* q,
   }
   if (marked) {
     // The klass and probably oop fields are going to be used soon, prefetch them.
-    // The object can straddle two cache lines, so prefetch the adjacent cache line too.
+    // The object can straddle two cache lines, so prefetch at small offset as well.
     // Since this is very hot code, prefer to use just the constant offsets.
     Prefetch::read(obj->base_addr(), 0);
-    Prefetch::read(obj->base_addr(), DEFAULT_CACHE_LINE_SIZE);
+    Prefetch::read(obj->base_addr(), 32);
     bool pushed = q->push(ShenandoahMarkTask(obj, skip_live, weak));
     assert(pushed, "overflow queue should always succeed pushing");
   }

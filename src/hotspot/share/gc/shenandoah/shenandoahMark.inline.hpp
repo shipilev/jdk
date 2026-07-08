@@ -369,7 +369,7 @@ inline void ShenandoahMark::mark_ref(ShenandoahObjToScanQueue* q,
     // Prefetch current and next cache line to get them hot.
     // Since this is very hot code, prefer to use just the constant offsets.
     Prefetch::read(obj->base_addr(), 0);
-    Prefetch::read(obj->base_addr(), 64);
+    Prefetch::read(obj->base_addr(), DEFAULT_CACHE_LINE_SIZE);
     bool pushed = q->push(ShenandoahMarkTask(obj, skip_live, weak));
     assert(pushed, "overflow queue should always succeed pushing");
   }

@@ -365,8 +365,8 @@ inline void ShenandoahMark::mark_ref(ShenandoahObjToScanQueue* q,
     marked = mark_context->mark_strong(obj, /* was_upgraded = */ skip_live);
   }
   if (marked) {
-    // The klass and probably oop fields are going to be used soon.
-    // Prefetch current and next cache line to get them hot.
+    // The klass and probably oop fields are going to be used soon, prefetch them.
+    // The object can straddle two cache lines, so prefetch the adjacent cache line too.
     // Since this is very hot code, prefer to use just the constant offsets.
     Prefetch::read(obj->base_addr(), 0);
     Prefetch::read(obj->base_addr(), DEFAULT_CACHE_LINE_SIZE);

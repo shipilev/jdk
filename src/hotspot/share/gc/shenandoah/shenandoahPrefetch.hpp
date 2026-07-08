@@ -25,6 +25,7 @@
 #ifndef SHARE_GC_SHENANDOAH_SHENANDOAHPREFETCH_HPP
 #define SHARE_GC_SHENANDOAH_SHENANDOAHPREFETCH_HPP
 
+#include "memory/allStatic.hpp"
 #include "runtime/prefetch.inline.hpp"
 
 // Utility to centralize prefetching decisions.
@@ -62,13 +63,13 @@
 // If prefetch hits another cache line, it likely means the object crosses
 // the cache line, and that the second prefetch is profitable.
 //
-class ShenandoahPrefetch {
+class ShenandoahPrefetch : AllStatic {
 public:
-  static void prefetch_obj(oop obj) {
+  static void prefetch(oop obj) {
     void* addr = obj->base_addr();
     Prefetch::read(addr, 0);
     Prefetch::read(addr, 32);
   }
 };
 
-#endif // SHARE_GC_SHENANDOAH_SHENANDOAHUTILS_HPP
+#endif // SHARE_GC_SHENANDOAH_SHENANDOAHPREFETCH_HPP

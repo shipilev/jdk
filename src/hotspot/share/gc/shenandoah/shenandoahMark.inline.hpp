@@ -37,13 +37,13 @@
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahMarkingContext.inline.hpp"
 #include "gc/shenandoah/shenandoahOldGeneration.hpp"
+#include "gc/shenandoah/shenandoahPrefetch.hpp"
 #include "gc/shenandoah/shenandoahScanRemembered.inline.hpp"
 #include "gc/shenandoah/shenandoahTaskqueue.inline.hpp"
 #include "gc/shenandoah/shenandoahUtils.hpp"
 #include "memory/iterator.inline.hpp"
 #include "oops/compressedOops.inline.hpp"
 #include "oops/oop.inline.hpp"
-#include "runtime/prefetch.inline.hpp"
 #include "utilities/devirtualizer.inline.hpp"
 #include "utilities/powerOfTwo.hpp"
 
@@ -366,10 +366,7 @@ inline void ShenandoahMark::mark_ref(ShenandoahObjToScanQueue* q,
   }
   if (marked) {
     // The klass and probably oop fields are going to be used soon, prefetch them.
-    // The object can straddle two cache lines, so prefetch at small offset as well.
-    // Since this is very hot code, prefer to use just the constant offsets.
-    Prefetch::read(obj->base_addr(), 0);
-    Prefetch::read(obj->base_addr(), 32);
+    ShenandoahPrefetch::prefetch_obj(obj);
     bool pushed = q->push(ShenandoahMarkTask(obj, skip_live, weak));
     assert(pushed, "overflow queue should always succeed pushing");
   }

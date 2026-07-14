@@ -34,8 +34,8 @@
 #include "runtime/globals.hpp"
 
 // For UseCompressedOops.
-address CompressedOops::_base = nullptr;
-int CompressedOops::_shift = 0;
+CompressedOops::Base CompressedOops::_base = {0};
+CompressedOops::Shift CompressedOops::_shift = {0};
 bool CompressedOops::_use_implicit_null_checks = true;
 MemRegion CompressedOops::_heap_address_range;
 
@@ -88,11 +88,11 @@ void CompressedOops::initialize(const ReservedHeapSpace& heap_space) {
 
 void CompressedOops::set_base(address base) {
   assert(UseCompressedOops, "no compressed oops?");
-  _base = base;
+  _base._value = (uintptr_t)base;
 }
 
 void CompressedOops::set_shift(int shift) {
-  _shift = shift;
+  _shift._value = shift;
 }
 
 void CompressedOops::set_use_implicit_null_checks(bool use) {
@@ -148,14 +148,14 @@ bool CompressedOops::is_disjoint_heap_base_address(address addr) {
 
 // Check for disjoint base compressed oops.
 bool CompressedOops::base_disjoint() {
-  return _base != nullptr && is_disjoint_heap_base_address(_base);
+  return _base._value != 0 && is_disjoint_heap_base_address((address)_base._value);
 }
 
 // Check for real heapbased compressed oops.
 // We must subtract the base as the bits overlap.
 // If we negate above function, we also get unscaled and zerobased.
 bool CompressedOops::base_overlaps() {
-  return _base != nullptr && !is_disjoint_heap_base_address(_base);
+  return _base._value != 0 && !is_disjoint_heap_base_address((address)_base._value);
 }
 
 void CompressedOops::print_mode(outputStream* st) {

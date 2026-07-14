@@ -39,11 +39,11 @@ class CompressedOops : public AllStatic {
 
   // Base address for oop-within-java-object materialization.
   // null if using wide oops or zero based narrow oops.
-  static address _base;
+  struct Base { uintptr_t _value; } static _base;
   // Number of shift bits for encoding/decoding narrow ptrs.
   // 0 if using wide oops or zero based unscaled narrow oops,
   // LogMinObjAlignmentInBytes otherwise.
-  static int _shift;
+  struct Shift { int _value; } static _shift;
   // Generate code with implicit null checks for narrow oops.
   static bool _use_implicit_null_checks;
 
@@ -81,12 +81,12 @@ public:
   static void set_shift(int shift);
   static void set_use_implicit_null_checks(bool use);
 
-  static address  base()                     { return _base; }
+  static address  base()                     { return reinterpret_cast<address>(_base._value); }
   static address  base_addr()                { return (address)&_base; }
   static address  begin()                    { return (address)_heap_address_range.start(); }
   static address  end()                      { return (address)_heap_address_range.end(); }
   static bool     is_base(void* addr)        { return (base() == (address)addr); }
-  static int      shift()                    { return _shift; }
+  static int      shift()                    { return _shift._value; }
   static bool     use_implicit_null_checks() { return _use_implicit_null_checks; }
 
   static bool is_in(void* addr);

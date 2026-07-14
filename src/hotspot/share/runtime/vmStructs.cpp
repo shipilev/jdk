@@ -311,8 +311,6 @@
   /* CompressedOops */                                                                                                               \
   /******************/                                                                                                               \
                                                                                                                                      \
-     static_field(CompressedOops,              _base,                                         address)                               \
-     static_field(CompressedOops,              _shift,                                        int)                                   \
      static_field(CompressedOops,              _use_implicit_null_checks,                     bool)                                  \
                                                                                                                                      \
   /***************************/                                                                                                      \

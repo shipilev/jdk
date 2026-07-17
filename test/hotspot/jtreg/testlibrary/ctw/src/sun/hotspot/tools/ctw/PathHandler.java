@@ -209,12 +209,13 @@ public class PathHandler implements Closeable {
      */
     public final void process() {
         CompileTheWorld.OUT.println(entry.description());
-        entry.classes()
+        List<String> list = entry.classes()
              .distinct()
              .sorted()
              .skip(Utils.COMPILE_THE_WORLD_START_AT)
              .limit(Utils.COMPILE_THE_WORLD_STOP_AT - Utils.COMPILE_THE_WORLD_START_AT)
-             .parallel()
+             .toList();
+        list.parallelStream()
              .forEach(s -> processClass(s));
     }
 

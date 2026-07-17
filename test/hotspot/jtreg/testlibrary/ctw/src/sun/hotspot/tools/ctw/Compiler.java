@@ -39,6 +39,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.Executor;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ForkJoinTask;
 import java.util.concurrent.RecursiveAction;
 import java.util.concurrent.atomic.AtomicLong;
@@ -90,12 +91,9 @@ public class Compiler {
         // Attempt to initialize the class. Avoid class init deadlocks: only one class init at a time.
         // If initialization is not possible due to NCDFE, accept this, and try compile anyway.
         try {
-            synchronized (Compiler.class) {
-                UNSAFE.ensureClassInitialized(aClass);
-            }
-        } catch (NoClassDefFoundError e) {
-            CompileTheWorld.OUT.printf("[%d]\t%s\tNOTE unable to init class : %s%n",
-                id, className, e);
+            ForkJoinPool.managedBlock(new ClassInitBlocker(aClass, id));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
 
         // Getting constructor/methods with unresolvable signatures would fail with NCDFE.
@@ -175,6 +173,83 @@ public class Compiler {
         }
     }
 
+    static class ClassInitBlocker implements ForkJoinPool.ManagedBlocker {
+        final Class<?> klass;
+        final long id;
+        volatile boolean done;
+
+        public ClassInitBlocker(Class<?> klass, long id) {
+            this.klass = klass;
+            this.id = id;
+        }
+
+        @Override
+        public boolean block() throws InterruptedException {
+            try {
+                synchronized (Compiler.class) {
+                    UNSAFE.ensureClassInitialized(klass);
+                }
+            } catch (NoClassDefFoundError e) {
+                CompileTheWorld.OUT.printf("[%d]\t%s\tNOTE unable to init class : %s%n",
+                    id, klass.getName(), e);
+            }
+            done = true;
+            return true;
+        }
+
+        @Override
+        public boolean isReleasable() {
+            return done;
+        }
+    }
+
+    static class CompileMethodBlocker implements ForkJoinPool.ManagedBlocker {
+        final Executable method;
+        final int level;
+        volatile boolean done;
+
+        public CompileMethodBlocker(Executable method, int level) {
+            this.method = method;
+            this.level = level;
+        }
+
+        @Override
+        public boolean block() throws InterruptedException {
+            WHITE_BOX.enqueueMethodForCompilation(method, level);
+            done = true;
+            return true;
+        }
+
+        @Override
+        public boolean isReleasable() {
+            return done;
+        }
+    }
+
+    static class CompileInitBlocker implements ForkJoinPool.ManagedBlocker {
+        final Class<?> klass;
+        final int level;
+        volatile boolean done;
+
+        public CompileInitBlocker(Class<?> klass, int level) {
+            this.klass = klass;
+            this.level = level;
+        }
+
+        @Override
+        public boolean block() throws InterruptedException {
+            WHITE_BOX.enqueueInitializerForCompilation(klass, level);
+            done = true;
+            return true;
+        }
+
+        @Override
+        public boolean isReleasable() {
+            return done;
+        }
+    }
+
+
     static class CompileTask extends RecursiveAction {
         final String className;
         final Executable method;
@@ -197,7 +272,8 @@ public class Compiler {
                 }
 
                 try {
-                    WHITE_BOX.enqueueMethodForCompilation(method, compLevel);
+                    ForkJoinPool.managedBlock(new CompileMethodBlocker(method, compLevel));
+//                     WHITE_BOX.enqueueMethodForCompilation(method, compLevel);
 
                     if (!Utils.BACKGROUND_COMPILATION) {
                         for (int i = 0;
@@ -240,7 +316,7 @@ public class Compiler {
             int endLevel = Utils.TIERED_COMPILATION ? Utils.TIERED_STOP_AT_LEVEL : startLevel;
             for (int i = startLevel; i <= endLevel; ++i) {
                 try {
-                    WHITE_BOX.enqueueInitializerForCompilation(klass, i);
+                    ForkJoinPool.managedBlock(new CompileInitBlocker(klass, i));
                 } catch (Throwable t) {
                     CompileTheWorld.OUT.println(String.format("[%d]\t%s::<clinit>\tERROR at level %d : %s",
                         id, klass.getName(), i, t));

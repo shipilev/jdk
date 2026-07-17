@@ -64,6 +64,24 @@ public class CompileTheWorld {
             OUT = os;
         }
 
+        int parallelism = Runtime.getRuntime().availableProcessors();
+        int cap = parallelism;
+
+        ForkJoinPool fjp = new ForkJoinPool(
+            parallelism,
+            ForkJoinPool.defaultForkJoinWorkerThreadFactory,
+            null,
+            true, // async
+            parallelism,
+            parallelism + cap,
+            parallelism,
+            pool -> true,
+            60L, TimeUnit.SECONDS);
+
+        fjp.invoke(ForkJoinTask.adapt(() -> work(targets)));
+    }
+
+    public static void work(String[] targets) {
         boolean passed = false;
 
         try {

@@ -127,9 +127,6 @@ bool ShenandoahConcurrentGC::collect(GCCause::Cause cause) {
   _generation->ref_processor()->set_soft_reference_policy(
       GCCause::should_clear_all_soft_refs(cause));
 
-  SHENANDOAH_EVENT_MESSAGE(msg, _generation->type(), "Concurrent GC");
-  ShenandoahConcurrentRootPhase gc_phase(msg, ShenandoahPhaseTimings::conc_gc, /* log_heap_usage = */ true);
-
   ShenandoahBreakpointGCScope breakpoint_gc_scope(cause);
 
   // Reset for upcoming marking
@@ -422,7 +419,7 @@ void ShenandoahConcurrentGC::entry_strong_roots() {
 
 void ShenandoahConcurrentGC::entry_cleanup_early() {
   SHENANDOAH_EVENT_MESSAGE(msg, _generation->type(), "Concurrent cleanup");
-  ShenandoahConcurrentPhase gc_phase(msg, ShenandoahPhaseTimings::conc_cleanup_early);
+  ShenandoahConcurrentPhase gc_phase(msg, ShenandoahPhaseTimings::conc_cleanup_early, true);
   op_cleanup_early();
 }
 
@@ -446,7 +443,7 @@ void ShenandoahConcurrentGC::entry_update_refs() {
 
 void ShenandoahConcurrentGC::entry_cleanup_complete() {
   SHENANDOAH_EVENT_MESSAGE(msg, _generation->type(), "Concurrent cleanup");
-  ShenandoahConcurrentPhase gc_phase(msg, ShenandoahPhaseTimings::conc_cleanup_complete);
+  ShenandoahConcurrentPhase gc_phase(msg, ShenandoahPhaseTimings::conc_cleanup_complete, true);
   op_cleanup_complete();
 }
 

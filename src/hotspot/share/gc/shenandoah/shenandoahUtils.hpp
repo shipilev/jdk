@@ -141,7 +141,7 @@ public:
  */
 class ShenandoahConcurrentPhase : public ShenandoahTimingsTracker {
 private:
-  GCTraceTimeWrapper<LogLevel::Info, LOG_TAGS(gc, phases)> _tracer;
+  GCTraceTimeWrapper<LogLevel::Info, LOG_TAGS(gc)> _tracer;
   ConcurrentGCTimer* const _timer;
   TraceCollectorStats _tcs;
   EventMark _event;
@@ -150,20 +150,6 @@ private:
 public:
   ShenandoahConcurrentPhase(const char* title, ShenandoahPhaseTimings::Phase phase, bool log_heap_usage = false);
   ~ShenandoahConcurrentPhase();
-};
-
-/*
- * ShenandoahConcurrentPhase tracks a concurrent GC phase and emits Shenandoah timing and
- * a corresponding JFR event
- */
-class ShenandoahConcurrentRootPhase : public ShenandoahTimingsTracker {
-private:
-  GCTraceTimeWrapper<LogLevel::Info, LOG_TAGS(gc)> _tracer;
-  ConcurrentGCTimer* const _timer;
-
-public:
-  ShenandoahConcurrentRootPhase(const char* title, ShenandoahPhaseTimings::Phase phase, bool log_heap_usage = false);
-  ~ShenandoahConcurrentRootPhase();
 };
 
 /*

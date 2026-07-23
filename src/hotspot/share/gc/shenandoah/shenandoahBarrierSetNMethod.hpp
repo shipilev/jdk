@@ -40,6 +40,8 @@ public:
   }
 
   virtual bool nmethod_entry_barrier(nmethod* nm);
+
+  void finalize_relocations(nmethod* nm) override;
 };
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHBARRIERSETNMETHOD_HPP

@@ -127,6 +127,15 @@ public:
   void doit() override;
 };
 
+class VM_ShenandoahFinalRoots: public VM_ShenandoahOperation {
+  ShenandoahConcurrentGC* const _gc;
+public:
+  explicit VM_ShenandoahFinalRoots(ShenandoahConcurrentGC* gc);
+  VM_Operation::VMOp_Type type() const override { return VMOp_ShenandoahFinalRoots; }
+  const char* name()             const override { return "Shenandoah Final Roots"; }
+  void doit() override;
+};
+
 class VM_ShenandoahFinalVerify: public VM_ShenandoahOperation {
   ShenandoahConcurrentGC* const _gc;
 public:

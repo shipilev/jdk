@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2025, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2026, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -269,6 +269,7 @@ class relocInfo {
     post_call_nop_type      = 16, // A tag for post call nop relocations
     entry_guard_type        = 17, // A tag for an nmethod entry barrier guard value
     barrier_type            = 18, // GC barrier data
+    patchable_barrier_type  = 19, // Patchable GC barrier
     type_mask               = 31  // A mask which selects only the above values
   };
 
@@ -311,6 +312,7 @@ class relocInfo {
     visitor(post_call_nop) \
     visitor(entry_guard) \
     visitor(barrier) \
+    visitor(patchable_barrier) \
 
 
  public:
@@ -1071,6 +1073,43 @@ class barrier_Relocation : public Relocation {
   barrier_Relocation() : Relocation(relocInfo::barrier_type) { }
 };
 
+class patchable_barrier_Relocation : public Relocation {
+ private:
+  static const int32_t unresolved = INT32_MAX;
+
+  int32_t _target_offset;
+  uint16_t _metadata;
+
+ public:
+  static RelocationHolder spec(uint16_t metadata) {
+    return RelocationHolder::construct<patchable_barrier_Relocation>(metadata);
+  }
+
+  patchable_barrier_Relocation(uint16_t metadata) : Relocation(relocInfo::patchable_barrier_type),
+    _target_offset(unresolved), _metadata(metadata) { }
+
+  void pack_data_to(CodeSection* dest) override;
+  void unpack_data() override;
+
+  void copy_into(RelocationHolder& holder) const override;
+
+  uint16_t metadata() const {
+    return _metadata;
+  }
+  bool is_target_offset_resolved() const {
+    return _target_offset != unresolved;
+  }
+  int32_t target_offset() const {
+    assert(is_target_offset_resolved(), "Should be");
+    return _target_offset;
+  }
+  void set_target_offset(int32_t target_offset);
+
+ private:
+  friend class RelocIterator;
+  friend class RelocationHolder;
+  patchable_barrier_Relocation() : Relocation(relocInfo::patchable_barrier_type) { }
+};
 
 class virtual_call_Relocation : public CallRelocation {
 

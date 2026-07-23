@@ -52,6 +52,7 @@
 #include "gc/shenandoah/shenandoahPhaseTimings.hpp"
 #include "gc/shenandoah/shenandoahReferenceProcessor.hpp"
 #include "gc/shenandoah/shenandoahRootProcessor.inline.hpp"
+#include "gc/shenandoah/shenandoahStackWatermark.hpp"
 #include "gc/shenandoah/shenandoahSTWMark.hpp"
 #include "gc/shenandoah/shenandoahUtils.hpp"
 #include "gc/shenandoah/shenandoahVerifier.hpp"
@@ -127,6 +128,9 @@ void ShenandoahFullGC::op_full(GCCause::Cause cause) {
   // Regardless if progress was made, we record that we completed a "successful" full GC.
   _generation->heuristics()->record_success_full();
   heap->shenandoah_policy()->record_success_full();
+
+  // Leaving full GC, we need to flip barriers back to idle.
+  ShenandoahCodeRoots::arm_nmethods();
 
   {
     ShenandoahTimingsTracker timing(ShenandoahPhaseTimings::full_gc_propagate_gc_state);

@@ -37,6 +37,13 @@
 typedef ShenandoahReentrantLock<ShenandoahSimpleLock> ShenandoahNMethodLock;
 typedef ShenandoahLocker<ShenandoahNMethodLock>       ShenandoahNMethodLocker;
 
+struct ShenandoahNMethodBarrier {
+  int32_t _rel_pc;
+  int32_t _rel_target_pc;
+  char _gc_state;
+  bool _jump_when_state;
+};
+
 // ShenandoahNMethod tuple records the internal locations of oop slots within reclocation stream in
 // the nmethod. This allows us to quickly scan the oops without doing the nmethod-internal scans,
 // that sometimes involves parsing the machine code. Note it does not record the oops themselves,
@@ -46,14 +53,31 @@ private:
   nmethod* const          _nm;
   oop**                   _oops;
   int                     _oops_count;
+  ShenandoahNMethodBarrier* _barriers;
+  int                     _barriers_count;
   bool                    _has_non_immed_oops;
   bool                    _unregistered;
   ShenandoahNMethodLock   _lock;
   ShenandoahNMethodLock   _ic_lock;
 
 public:
-  ShenandoahNMethod(nmethod *nm, GrowableArray<oop*>& oops, bool has_non_immed_oops);
+  ShenandoahNMethod(nmethod *nm);
   ~ShenandoahNMethod();
+
+  static bool decode_reloc_jump_when_state(uint16_t reloc) {
+    return (reloc & (1 << 8)) != 0;
+  }
+
+  static char decode_reloc_gc_state(uint16_t reloc) {
+    return (reloc & 0xFF);
+  }
+
+  static uint16_t encode_to_reloc(char gc_state, bool jump_when_state) {
+    uint16_t res = (gc_state & 0xFF) | (jump_when_state ? (1 << 8) : 0);
+    assert(decode_reloc_jump_when_state(res) == jump_when_state, "Round-trip");
+    assert(decode_reloc_gc_state(res) == gc_state, "Round-trip");
+    return res;
+  }
 
   inline nmethod* nm() const;
   inline ShenandoahNMethodLock* lock();
@@ -68,7 +92,8 @@ public:
   static inline ShenandoahNMethodLock* lock_for_nmethod(nmethod* nm);
   static inline ShenandoahNMethodLock* ic_lock_for_nmethod(nmethod* nm);
 
-  static void heal_nmethod(nmethod* nm);
+  static bool handle_oops(nmethod* nm);
+  static bool handle_barriers(nmethod* nm);
   static inline void heal_nmethod_metadata(ShenandoahNMethod* nmethod_data);
   static inline void disarm_nmethod(nmethod* nm);
 
@@ -78,8 +103,14 @@ public:
   void assert_correct() NOT_DEBUG_RETURN;
   void assert_same_oops() NOT_DEBUG_RETURN;
 
+  bool has_barriers() {
+    return _barriers_count > 0;
+  }
+
 private:
-  static void detect_reloc_oops(nmethod* nm, GrowableArray<oop*>& oops, bool& _has_non_immed_oops);
+  void init_from(nmethod* nm);
+  static void parse(nmethod* nm, GrowableArray<oop*>& oops, bool& _has_non_immed_oops, GrowableArray<ShenandoahNMethodBarrier>& barriers);
+  static bool patch_barrier(address pc, address target_pc, bool should_jump);
 };
 
 class ShenandoahNMethodTable;

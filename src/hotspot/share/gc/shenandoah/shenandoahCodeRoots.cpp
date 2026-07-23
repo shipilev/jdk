@@ -29,6 +29,7 @@
 #include "gc/shenandoah/shenandoahClosures.inline.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahNMethod.inline.hpp"
+#include "gc/shenandoah/shenandoahStackWatermark.hpp"
 #include "gc/shenandoah/shenandoahUtils.hpp"
 #include "memory/resourceArea.hpp"
 #include "memory/universe.hpp"
@@ -55,36 +56,11 @@ void ShenandoahCodeRoots::unregister_nmethod(nmethod* nm) {
 
 void ShenandoahCodeRoots::arm_nmethods() {
   BarrierSet::barrier_set()->barrier_set_nmethod()->arm_all_nmethods();
-}
 
-class ShenandoahDisarmNMethodClosure : public NMethodClosure {
-public:
-  virtual void do_nmethod(nmethod* nm) {
-    ShenandoahNMethod::disarm_nmethod(nm);
-  }
-};
-
-class ShenandoahDisarmNMethodsTask : public WorkerTask {
-private:
-  ShenandoahDisarmNMethodClosure      _cl;
-  ShenandoahConcurrentNMethodIterator _iterator;
-
-public:
-  ShenandoahDisarmNMethodsTask() :
-    WorkerTask("Shenandoah Disarm NMethods"),
-    _iterator(ShenandoahCodeRoots::table()) {
-    assert(SafepointSynchronize::is_at_safepoint(), "Only at a safepoint");
-  }
-
-  virtual void work(uint worker_id) {
-    ShenandoahParallelWorkerSession worker_session(worker_id);
-    _iterator.nmethods_do(&_cl);
-  }
-};
-
-void ShenandoahCodeRoots::disarm_nmethods() {
-  ShenandoahDisarmNMethodsTask task;
-  ShenandoahHeap::heap()->workers()->run_task(&task);
+  // nmethod entry barriers are used to update nmethods. In order to guarantee
+  // that nmethod execution is not interleaved with nmethod entry barrier fixups,
+  // we need to also activate stack watermark machinery.
+  ShenandoahStackWatermark::change_epoch_id();
 }
 
 class ShenandoahNMethodUnlinkClosure : public NMethodClosure {

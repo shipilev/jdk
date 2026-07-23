@@ -93,11 +93,11 @@ inline void ShenandoahHeapRegion::increase_live_data_gc_words(size_t s) {
 }
 
 inline void ShenandoahHeapRegion::internal_increase_live_data(size_t s) {
-  _live_data.add_then_fetch(s, memory_order_relaxed);
+  _live_data.add_then_fetch(checked_cast<uint32_t>(s), memory_order_relaxed);
 }
 
 inline void ShenandoahHeapRegion::clear_live_data() {
-  _live_data.store_relaxed((size_t)0);
+  _live_data.store_relaxed(0);
   _promoted_in_place = false;
 }
 

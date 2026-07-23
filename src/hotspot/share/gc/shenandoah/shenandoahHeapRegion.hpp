@@ -239,49 +239,65 @@ private:
   static size_t MaxTLABSizeBytes;
   static size_t MaxTLABSizeWords;
 
-  // Never updated fields
-  size_t const _index;
+  // NOTE: This class is allocated specially by ShenandoahHeap, starting on cache line
+  // boundary. We have to carefully manage the order of these fields and the total density
+  // of the instance. Sometimes we arrange the fields in "unnatural" order to get more
+  // compact memory representation. If you change/rearrange the fields here, check the new
+  // layout with pahole.
+
+  // -------------  Never updated fields
+  // These are the fastest to access, without contention with other updated fields.
+
   HeapWord* const _bottom;
   HeapWord* const _end;
+  uint32_t const _index;
 
-  // Rarely updated fields
+  // -------------  Seldom updated fields
+  // These fields are updated rarely, and can afford introducing some contention.
+
+  float _empty_time;
   HeapWord* _new_top;
-  double _empty_time;
-
   HeapWord* _top_before_promoted;
   HeapWord* _top_at_evac_start;
 
-  // Seldom updated fields
+  // For old regions not selected as collection set candidates
+  HeapWord* _coalesce_and_fill_boundary;
+
+  uint32_t _mixed_candidate_garbage_words;
+
   Atomic<RegionState> _state;
-  HeapWord* _coalesce_and_fill_boundary; // for old regions not selected as collection set candidates.
-
-  // Frequently updated fields
-  HeapWord* _top;
-
-  size_t _tlab_allocs;
-  size_t _gclab_allocs;
-  size_t _plab_allocs;
-
-  Atomic<size_t> _live_data;
-  Atomic<size_t> _critical_pins;
-
-  size_t _mixed_candidate_garbage_words;
-
-  Atomic<HeapWord*> _update_watermark;
-
-  uint _age;
-  bool _promoted_in_place;
-  CENSUS_NOISE(uint _youth;)   // tracks epochs of retrograde ageing (rejuvenation)
-
-  ShenandoahSharedFlag _recycling; // Used to indicate that the region is being recycled; see try_recycle*().
 
   // Set when an evacuation failure self-forwarded at least one object in this
   // region. The drain at degen/full GC entry scans flagged regions and CAS-
   // clears the self_fwd bits. Safety-net reset on region recycle.
-  ShenandoahSharedFlag _has_self_forwards;
+  Atomic<bool> _has_self_forwards;
+
+  // Used to indicate that the region is being recycled; see try_recycle*()
+  Atomic<bool> _recycling;
+
+  // Aging and census data
+  uint8_t _age;
+  CENSUS_NOISE(uint8_t _youth;)
 
   // This is only read/written by a gc worker to avoid unnecessary bitmap resets
   bool _needs_bitmap_reset;
+
+  bool _promoted_in_place;
+
+  // -------------  Frequently updated fields
+  // We expect lots of writes to these fields, so they must be farther away
+  // from the hot fields above. These fields are used in hot GC code,
+  // e.g. allocation, pinning, marking.
+
+  HeapWord* _top;
+  Atomic<HeapWord*> _update_watermark;
+
+  uint32_t _tlab_allocs;
+  uint32_t _gclab_allocs;
+  uint32_t _plab_allocs;
+
+  Atomic<uint32_t> _live_data;
+  Atomic<uint32_t> _critical_pins;
 
 public:
   ShenandoahHeapRegion(HeapWord* start, size_t index, bool committed);
@@ -535,9 +551,9 @@ public:
   // Self-forward accounting: set by an evacuating thread after it successfully
   // installs a self-forward mark on an object in this region. Tested and cleared
   // at the drain phase (degen/full GC entry) and again on region recycle.
-  bool has_self_forwards() const { return _has_self_forwards.is_set(); }
-  void set_has_self_forwards()   { _has_self_forwards.set(); }
-  void clear_has_self_forwards() { _has_self_forwards.unset(); }
+  bool has_self_forwards() const { return _has_self_forwards.load_acquire(); }
+  void set_has_self_forwards()   { _has_self_forwards.release_store(true); }
+  void clear_has_self_forwards() { _has_self_forwards.release_store(false); }
 
 private:
   void decrement_humongous_waste();

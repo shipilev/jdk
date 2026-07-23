@@ -85,8 +85,8 @@ ShenandoahHeapRegion::ShenandoahHeapRegion(HeapWord* start, size_t index, bool c
   if (ZapUnusedHeapArea && committed) {
     SpaceMangler::mangle_region(MemRegion(_bottom, _end));
   }
-  _recycling.unset();
-  _has_self_forwards.unset();
+  _recycling.store_relaxed(false);
+  _has_self_forwards.store_relaxed(false);
 }
 
 void ShenandoahHeapRegion::report_illegal_transition(const char *method) {
@@ -569,7 +569,7 @@ ShenandoahHeapRegion* ShenandoahHeapRegion::humongous_start_region() const {
 
 
 void ShenandoahHeapRegion::recycle_internal() {
-  assert(_recycling.is_set() && is_trash(), "Wrong state");
+  assert(_recycling.load_relaxed() && is_trash(), "Wrong state");
   ShenandoahHeap* heap = ShenandoahHeap::heap();
 
   _top_at_evac_start = _bottom;
@@ -600,7 +600,7 @@ void ShenandoahHeapRegion::try_recycle_under_lock() {
   if (!is_trash()) {
     return;
   }
-  if (_recycling.try_set()) {
+  if (_recycling.compare_set(false, true)) {
     if (is_trash()) {
       // At freeset rebuild time, which precedes recycling of collection set, we treat all cset regions as
       // part of capacity, as empty, as fully available, and as unaffiliated.  This provides short-lived optimism
@@ -608,12 +608,12 @@ void ShenandoahHeapRegion::try_recycle_under_lock() {
       // by more time-precise accounting of these details.
       recycle_internal();
     }
-    _recycling.unset();
+    _recycling.store_relaxed(false);
   } else {
     // Ensure recycling is unset before returning to mutator to continue memory allocation.
     // Otherwise, the mutator might see region as fully recycled and might change its affiliation only to have
     // the racing GC worker thread overwrite its affiliation to FREE.
-    while (_recycling.is_set()) {
+    while (_recycling.load_relaxed()) {
       if (os::is_MP()) {
         SpinPause();
       } else {
@@ -631,7 +631,7 @@ void ShenandoahHeapRegion::try_recycle() {
   if (!is_trash()) {
     return;
   }
-  if (_recycling.try_set()) {
+  if (_recycling.compare_set(false, true)) {
     // Double check region state after win the race to set recycling flag
     if (is_trash()) {
       // At freeset rebuild time, which precedes recycling of collection set, we treat all cset regions as
@@ -640,7 +640,7 @@ void ShenandoahHeapRegion::try_recycle() {
       // by more time-precise accounting of these details.
       recycle_internal();
     }
-    _recycling.unset();
+    _recycling.store_relaxed(false);
   }
 }
 

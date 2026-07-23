@@ -356,6 +356,7 @@ jint ShenandoahHeap::initialize() {
   // Create regions and region sets
   //
   size_t region_align = align_up(sizeof(ShenandoahHeapRegion), SHENANDOAH_CACHE_LINE_SIZE);
+  log_info(gc,init)("Region size: %zu", sizeof(ShenandoahHeapRegion));
   size_t region_storage_size_orig = region_align * _num_regions;
   size_t region_storage_size = align_up(region_storage_size_orig,
                                         MAX2(region_page_size, os::vm_allocation_granularity()));

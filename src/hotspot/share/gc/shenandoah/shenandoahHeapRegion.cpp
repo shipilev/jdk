@@ -85,8 +85,8 @@ ShenandoahHeapRegion::ShenandoahHeapRegion(HeapWord* start, size_t index, bool c
   if (ZapUnusedHeapArea && committed) {
     SpaceMangler::mangle_region(MemRegion(_bottom, _end));
   }
-  _recycling.store_relaxed(false);
-  _has_self_forwards.store_relaxed(false);
+  _recycling.release_store(false);
+  _has_self_forwards.release_store(false);
 }
 
 void ShenandoahHeapRegion::report_illegal_transition(const char *method) {
@@ -569,7 +569,7 @@ ShenandoahHeapRegion* ShenandoahHeapRegion::humongous_start_region() const {
 
 
 void ShenandoahHeapRegion::recycle_internal() {
-  assert(_recycling.load_relaxed() && is_trash(), "Wrong state");
+  assert(_recycling.load_acquire() && is_trash(), "Wrong state");
   ShenandoahHeap* heap = ShenandoahHeap::heap();
 
   _top_at_evac_start = _bottom;
@@ -608,12 +608,12 @@ void ShenandoahHeapRegion::try_recycle_under_lock() {
       // by more time-precise accounting of these details.
       recycle_internal();
     }
-    _recycling.store_relaxed(false);
+    _recycling.release_store(false);
   } else {
     // Ensure recycling is unset before returning to mutator to continue memory allocation.
     // Otherwise, the mutator might see region as fully recycled and might change its affiliation only to have
     // the racing GC worker thread overwrite its affiliation to FREE.
-    while (_recycling.load_relaxed()) {
+    while (_recycling.load_acquire()) {
       if (os::is_MP()) {
         SpinPause();
       } else {
@@ -640,7 +640,7 @@ void ShenandoahHeapRegion::try_recycle() {
       // by more time-precise accounting of these details.
       recycle_internal();
     }
-    _recycling.store_relaxed(false);
+    _recycling.release_store(false);
   }
 }
 

@@ -535,9 +535,9 @@ public:
   // Self-forward accounting: set by an evacuating thread after it successfully
   // installs a self-forward mark on an object in this region. Tested and cleared
   // at the drain phase (degen/full GC entry) and again on region recycle.
-  bool has_self_forwards() const { return _has_self_forwards.load_relaxed(); }
-  void set_has_self_forwards()   { _has_self_forwards.store_relaxed(true); }
-  void clear_has_self_forwards() { _has_self_forwards.store_relaxed(false); }
+  bool has_self_forwards() const { return _has_self_forwards.load_acquire(); }
+  void set_has_self_forwards()   { _has_self_forwards.release_store(true); }
+  void clear_has_self_forwards() { _has_self_forwards.release_store(false); }
 
 private:
   void decrement_humongous_waste();

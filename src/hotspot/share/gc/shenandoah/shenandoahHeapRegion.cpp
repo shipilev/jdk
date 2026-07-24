@@ -60,26 +60,26 @@ ShenandoahHeapRegion::ShenandoahHeapRegion(HeapWord* start, size_t index, bool c
   _bottom(start),
   _end(start + RegionSizeWords),
   _index(checked_cast<uint32_t>(index)),
-  _empty_time(os::elapsedTime()),
+  _state(committed ? _empty_committed : _empty_uncommitted),
   _new_top(nullptr),
   _top_before_promoted(nullptr),
   _top_at_evac_start(start),
   _coalesce_and_fill_boundary(start),
   _mixed_candidate_garbage_words(0),
-  _state(committed ? _empty_committed : _empty_uncommitted),
+  _live_data(0),
+  _critical_pins(0),
+  _update_watermark(start),
+  _top(start),
+  _tlab_allocs(0),
+  _gclab_allocs(0),
+  _plab_allocs(0),
+  _empty_time(os::elapsedTime()),
   _age(0),
   #ifdef SHENANDOAH_CENSUS_NOISE
   _youth(0),
   #endif
   _needs_bitmap_reset(false),
-  _promoted_in_place(false),
-  _top(start),
-  _update_watermark(start),
-  _tlab_allocs(0),
-  _gclab_allocs(0),
-  _plab_allocs(0),
-  _live_data(0),
-  _critical_pins(0)
+  _promoted_in_place(false)
 {
   assert(Universe::on_page_boundary(_bottom) && Universe::on_page_boundary(_end),
          "invalid space boundaries");
@@ -819,12 +819,12 @@ void ShenandoahHeapRegion::set_state(RegionState to) {
 }
 
 void ShenandoahHeapRegion::record_pin() {
-  _critical_pins.add_then_fetch((uint32_t)1);
+  _critical_pins.add_then_fetch((size_t)1);
 }
 
 void ShenandoahHeapRegion::record_unpin() {
   assert(pin_count() > 0, "Region %zu should have non-zero pins", index());
-  _critical_pins.sub_then_fetch((uint32_t)1);
+  _critical_pins.sub_then_fetch((size_t)1);
 }
 
 size_t ShenandoahHeapRegion::pin_count() const {

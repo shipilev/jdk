@@ -97,7 +97,7 @@ inline void ShenandoahHeapRegion::internal_increase_live_data(size_t s) {
 }
 
 inline void ShenandoahHeapRegion::clear_live_data() {
-  _live_data.store_relaxed(0);
+  _live_data.store_relaxed((size_t)0);
   _promoted_in_place = false;
 }
 

@@ -245,17 +245,16 @@ private:
   // compact memory representation. If you change/rearrange the fields here, check the new
   // layout with pahole.
 
-  // -------------  Never updated fields
-  // These are the fastest to access, without contention with other updated fields.
+  // We split fields in two groups to hit two different cache lines. The first cache line
+  // contains never/seldom updated fields, and also the fields we consult very often, like
+  // region state. The second cache line contains heavily updated fields, where contention
+  // is unfortunate but at least contained.
 
   HeapWord* const _bottom;
   HeapWord* const _end;
   uint32_t const _index;
 
-  // -------------  Seldom updated fields
-  // These fields are updated rarely, and can afford introducing some contention.
-
-  float _empty_time;
+  Atomic<RegionState> _state;
   HeapWord* _new_top;
   HeapWord* _top_before_promoted;
   HeapWord* _top_at_evac_start;
@@ -265,7 +264,23 @@ private:
 
   size_t _mixed_candidate_garbage_words;
 
-  Atomic<RegionState> _state;
+  // --- cache line boundary here --
+
+  // Live data can include humongous region size.
+  Atomic<size_t> _live_data;
+
+  Atomic<size_t> _critical_pins;
+
+  Atomic<HeapWord*> _update_watermark;
+
+  HeapWord* _top;
+
+  // These are only for regular allocs, so they cannot be larger than a single region.
+  uint32_t _tlab_allocs;
+  uint32_t _gclab_allocs;
+  uint32_t _plab_allocs;
+
+  float _empty_time;
 
   // Set when an evacuation failure self-forwarded at least one object in this
   // region. The drain at degen/full GC entry scans flagged regions and CAS-
@@ -283,24 +298,6 @@ private:
   bool _needs_bitmap_reset;
 
   bool _promoted_in_place;
-
-  // -------------  Frequently updated fields
-  // We expect lots of writes to these fields, so they must be farther away
-  // from the hot fields above. These fields are used in hot GC code,
-  // e.g. allocation, pinning, marking.
-
-  HeapWord* _top;
-  Atomic<HeapWord*> _update_watermark;
-
-  // These are only for regular allocs, so they cannot be larger than a single region.
-  uint32_t _tlab_allocs;
-  uint32_t _gclab_allocs;
-  uint32_t _plab_allocs;
-
-  // Live data can include humongous region size.
-  Atomic<size_t> _live_data;
-
-  Atomic<uint32_t> _critical_pins;
 
 public:
   ShenandoahHeapRegion(HeapWord* start, size_t index, bool committed);

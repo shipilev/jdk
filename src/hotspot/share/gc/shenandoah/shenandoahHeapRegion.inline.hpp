@@ -75,11 +75,11 @@ inline void ShenandoahHeapRegion::adjust_alloc_metadata(const ShenandoahAllocReq
   // Only need to update alloc metadata for lab alloc, shared alloc is counted implicitly by tlab/gclab allocs
   if (req.is_lab_alloc()) {
     if (req.is_mutator_alloc()) {
-      _tlab_allocs += size;
+      _tlab_allocs = checked_cast<uint32_t>(_tlab_allocs + size);
     } else if (req.is_old()) {
-      _plab_allocs += size;
+      _plab_allocs = checked_cast<uint32_t>(_plab_allocs + size);
     } else {
-      _gclab_allocs += size;
+      _gclab_allocs = checked_cast<uint32_t>(_gclab_allocs + size);
     }
   }
 }
@@ -93,7 +93,7 @@ inline void ShenandoahHeapRegion::increase_live_data_gc_words(size_t s) {
 }
 
 inline void ShenandoahHeapRegion::internal_increase_live_data(size_t s) {
-  _live_data.add_then_fetch(checked_cast<uint32_t>(s), memory_order_relaxed);
+  _live_data.add_then_fetch(s, memory_order_relaxed);
 }
 
 inline void ShenandoahHeapRegion::clear_live_data() {

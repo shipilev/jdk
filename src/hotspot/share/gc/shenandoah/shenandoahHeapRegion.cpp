@@ -59,7 +59,7 @@ size_t ShenandoahHeapRegion::MaxTLABSizeWords = 0;
 ShenandoahHeapRegion::ShenandoahHeapRegion(HeapWord* start, size_t index, bool committed) :
   _bottom(start),
   _end(start + RegionSizeWords),
-  _index(index),
+  _index(checked_cast<uint32_t>(index)),
   _empty_time(os::elapsedTime()),
   _new_top(nullptr),
   _top_before_promoted(nullptr),

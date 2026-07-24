@@ -263,7 +263,7 @@ private:
   // For old regions not selected as collection set candidates
   HeapWord* _coalesce_and_fill_boundary;
 
-  uint32_t _mixed_candidate_garbage_words;
+  size_t _mixed_candidate_garbage_words;
 
   Atomic<RegionState> _state;
 
@@ -292,11 +292,14 @@ private:
   HeapWord* _top;
   Atomic<HeapWord*> _update_watermark;
 
+  // These are only for regular allocs, so they cannot be larger than a single region.
   uint32_t _tlab_allocs;
   uint32_t _gclab_allocs;
   uint32_t _plab_allocs;
 
-  Atomic<uint32_t> _live_data;
+  // Live data can include humongous region size.
+  Atomic<size_t> _live_data;
+
   Atomic<uint32_t> _critical_pins;
 
 public:

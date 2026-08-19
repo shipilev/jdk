@@ -25,6 +25,7 @@
  */
 
 #include "c1/c1_IR.hpp"
+#include "ci/ciInlineKlass.hpp"
 #include "gc/shared/satbMarkQueue.hpp"
 #include "gc/shenandoah/c1/shenandoahBarrierSetC1.hpp"
 #include "gc/shenandoah/mode/shenandoahMode.hpp"
@@ -171,17 +172,42 @@ void ShenandoahBarrierSetC1::store_at_resolved(LIRAccess& access, LIR_Opr value)
   DecoratorSet decorators = access.decorators();
   LIRGenerator* gen = access.gen();
 
+  bool is_array = (decorators & IS_ARRAY) != 0;
+  bool on_anonymous = (decorators & ON_UNKNOWN_OOP_REF) != 0;
+  bool precise = is_array || on_anonymous;
+  LIR_Opr post_addr = precise ? access.resolved_addr() : access.base().opr();
+
+  ciInlineKlass* vk = access.vk();
+  if (vk != nullptr && vk->has_object_fields()) {
+    // This is potentially atomic access to flat object, which needs separate barriers
+    // for each individual flattened oop field.
+    assert(!access.is_oop(), "Taking over the real oop barriers");
+
+    for (int i = 0; i < vk->nof_nonstatic_fields(); i++) {
+      ciField* field = vk->nonstatic_field_at(i);
+      if (!field->type()->is_primitive_type()) {
+        int off = access.offset().opr().as_jint() + field->offset_in_bytes() - vk->payload_offset();
+        CodeEmitInfo* info = access.patch_emit_info();
+        if (info != nullptr) {
+          info = new CodeEmitInfo(info);
+        }
+        LIRAccess inner_access(access.gen(), decorators, access.base(), LIR_OprFact::intConst(off), field->type()->basic_type(), info, access.access_emit_info());
+        LIR_Opr addr = resolve_address(inner_access, false);
+
+        keepalive_barrier(gen, /* obj = */ LIR_OprFact::illegalOpr, /* addr = */ addr, decorators);
+        if (ShenandoahCardBarrier) {
+          card_barrier(gen, post_addr, decorators);
+        }
+      }
+    }
+  }
+
   if (ShenandoahSATBBarrier && access.is_oop()) {
     keepalive_barrier(gen, /* obj = */ LIR_OprFact::illegalOpr, /* addr = */ access.resolved_addr(), decorators);
   }
   BarrierSetC1::store_at_resolved(access, value);
 
   if (ShenandoahCardBarrier && access.is_oop()) {
-    bool is_array = (decorators & IS_ARRAY) != 0;
-    bool on_anonymous = (decorators & ON_UNKNOWN_OOP_REF) != 0;
-
-    bool precise = is_array || on_anonymous;
-    LIR_Opr post_addr = precise ? access.resolved_addr() : access.base().opr();
     card_barrier(gen, post_addr, decorators);
   }
 }
@@ -195,14 +221,40 @@ LIR_Opr ShenandoahBarrierSetC1::resolve_address(LIRAccess& access, bool resolve_
 }
 
 void ShenandoahBarrierSetC1::load_at_resolved(LIRAccess& access, LIR_Opr result) {
+  LIRGenerator* gen = access.gen();
+  DecoratorSet decorators = access.decorators();
+
+  // 0: Handle flat classes, which need separate barriers for each individual flattened oop field.
+  ciInlineKlass *vk = access.vk();
+  if (ShenandoahLoadRefBarrier && vk != nullptr && vk->has_object_fields()) {
+    assert(!access.is_oop(), "Taking over the real oop barriers");
+
+    for (int i = 0; i < vk->nof_nonstatic_fields(); i++) {
+      ciField* field = vk->nonstatic_field_at(i);
+      if (!field->type()->is_primitive_type()) {
+        int off = access.offset().opr().as_jint() + field->offset_in_bytes() - vk->payload_offset();
+        CodeEmitInfo *info = access.patch_emit_info();
+        if (info != nullptr) {
+          info = new CodeEmitInfo(info);
+        }
+        LIRAccess inner_access(access.gen(), decorators, access.base(), LIR_OprFact::intConst(off),
+                               field->type()->basic_type(), info, access.access_emit_info());
+        LIR_Opr addr = resolve_address(inner_access, false);
+
+        // Executing this LRB for the sake of in-memory fixups.
+        LIR_Opr tmp = gen->new_register(T_OBJECT);
+        BarrierSetC1::load_at_resolved(inner_access, tmp);
+        load_reference_barrier(gen, tmp, addr, decorators);
+      }
+    }
+  }
+
   // 1: non-reference load, no additional barrier is needed
   if (!access.is_oop()) {
     BarrierSetC1::load_at_resolved(access, result);
     return;
   }
 
-  LIRGenerator* gen = access.gen();
-  DecoratorSet decorators = access.decorators();
   BasicType type = access.type();
 
   // 2: load a reference from src location and apply LRB if ShenandoahLoadRefBarrier is set

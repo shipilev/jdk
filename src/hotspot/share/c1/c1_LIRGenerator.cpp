@@ -1688,7 +1688,7 @@ void LIRGenerator::do_StoreField(StoreField* x) {
       }
       // Load payload (if not empty) and set null marker (if not null-free)
       if (!vk->is_empty()) {
-        access_load_at(decorators, bt, value, LIR_OprFact::intConst(vk->payload_offset()), payload);
+        access_load_at(decorators, bt, value, LIR_OprFact::intConst(vk->payload_offset()), payload, nullptr, nullptr, vk);
       }
       if (!field->is_null_free()) {
         __ logical_or(payload, null_marker_mask(bt, field), payload);
@@ -2035,7 +2035,7 @@ void LIRGenerator::access_load_at(DecoratorSet decorators, BasicType type,
                                   CodeEmitInfo* patch_info, CodeEmitInfo* load_emit_info,
                                   ciInlineKlass* vk) {
   decorators |= ACCESS_READ;
-  LIRAccess access(this, decorators, base, offset, type, patch_info, load_emit_info);
+  LIRAccess access(this, decorators, base, offset, type, patch_info, load_emit_info, vk);
   if (access.is_raw()) {
     _barrier_set->BarrierSetC1::load_at(access, result);
   } else {

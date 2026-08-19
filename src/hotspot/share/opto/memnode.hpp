@@ -510,6 +510,33 @@ public:
   virtual int Opcode() const;
 };
 
+//------------------------------LoadLSpecialNode--------------------------------------
+// Special LoadL for flat loads that emits GC barriers for field at 'oop_off' in the backend
+class LoadLSpecialNode : public LoadNode {
+  const int _oop_off;
+public:
+  LoadLSpecialNode(Node *c, Node *mem, Node *adr, const TypePtr* at,
+            int oop_off, MemOrd mo, ControlDependency control_dependency = DependsOnlyOnTest)
+    : LoadNode(c, mem, adr, at, TypeLong::LONG, mo, control_dependency), _oop_off(oop_off) {
+    set_mismatched_access();
+
+  }
+  virtual int Opcode() const;
+  virtual BasicType value_basic_type() const { return T_LONG; }
+
+  virtual int store_Opcode() const { return Op_StoreLSpecial; }
+
+  virtual uint match_edge(uint idx) const { return idx == MemNode::Address; }
+
+  virtual uint size_of() const { return sizeof(*this); }
+
+  virtual bool cmp(const Node &n ) const {
+    return (_oop_off == ((LoadLSpecialNode&)n)._oop_off) && LoadNode::cmp(n);
+  }
+
+  int oop_offset() const { return _oop_off; }
+};
+
 //------------------------------LoadFNode--------------------------------------
 // Load a float (64 bits) from memory
 class LoadFNode : public LoadNode {

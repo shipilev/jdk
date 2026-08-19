@@ -379,6 +379,15 @@ void ShenandoahBarrierSetC2::final_refinement(Compile* compile) const {
       }
     }
 
+    // Hack in the bits for special nodes.
+    if (opc == Op_LoadLSpecial) {
+      if (ShenandoahLoadRefBarrier) bd |= ShenandoahBitStrong;
+    }
+    if (opc == Op_StoreLSpecial) {
+      if (ShenandoahSATBBarrier) bd |= ShenandoahBitKeepAlive;
+      if (ShenandoahCardBarrier) bd |= ShenandoahBitCardMark;
+    }
+
     // If there are no real barrier flags on the node, strip away additional fluff.
     // Matcher does not care about this, and we would like to avoid invoking "barrier_data() != 0"
     // rules when the only flags are the irrelevant fluff.
@@ -782,7 +791,7 @@ void ShenandoahBarrierSetC2::verify_gc_barriers(Compile* compile, CompilePhase p
     } else if (is_LoadStore(opc)) {
       bd = n->as_LoadStore()->barrier_data();
       adr_type = n->as_LoadStore()->out_adr_type();
-    } else if (n->is_Mem()) {
+    } else if (n->is_Mem() && (opc != Op_LoadLSpecial && opc != Op_StoreLSpecial)) {
       bd = MemNode::barrier_data(n);
       verify_gc_barrier_assert(bd == 0, "Other mem nodes should have no barrier data", bd, n);
     }

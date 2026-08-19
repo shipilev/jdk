@@ -1225,6 +1225,11 @@ void FieldLayoutBuilder::compute_inline_class_layout() {
 
   bool vm_uses_flattening = UseFieldFlattening || UseArrayFlattening;
 
+  if (((_nonstatic_oopmap_count > 0) ||  _super_klass->nonstatic_oop_map_count() > 0) && UseShenandoahGC) {
+    // Do not flatten oop-containing inline klasses if GC cannot handle separate barriers for their fields.
+    vm_uses_flattening = false;
+  }
+
   if (!_is_abstract_value && vm_uses_flattening) { // Flat layouts are only for concrete value classes
     // Validation of the non atomic layout
     if (UseNullFreeNonAtomicValueFlattening && (!_must_be_atomic || _is_naturally_atomic)) {

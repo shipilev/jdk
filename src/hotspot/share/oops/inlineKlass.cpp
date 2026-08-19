@@ -151,6 +151,10 @@ bool InlineKlass::maybe_flat_in_array() {
   if (!has_nullable_atomic_layout() && !has_null_free_atomic_layout() && !has_null_free_non_atomic_layout()) {
     return false;
   }
+  if (contains_oops() && UseShenandoahGC) {
+    // Do not flatten oop-containing inline klasses if GC cannot handle separate barriers for their fields.
+    return false;
+  }
   return true;
 }
 

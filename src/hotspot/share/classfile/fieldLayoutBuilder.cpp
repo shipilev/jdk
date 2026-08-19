@@ -73,11 +73,6 @@ static LayoutKind field_layout_selection(FieldInfo field_info, Array<InlineLayou
   InlineLayoutInfo* inline_field_info = inline_layout_info_array->adr_at(field_info.index());
   InlineKlass* vk = inline_field_info->klass();
 
-  if (vk->contains_oops() && UseShenandoahGC) {
-    // Do not flatten oop-containing inline klasses if GC cannot handle separate barriers for their fields.
-    return LayoutKind::REFERENCE;
-  }
-
   if (field_info.field_flags().is_null_free_inline_type()) {
     assert(field_info.access_flags().is_strict(), "null-free fields must be strict");
     if (vk->must_be_atomic()) {
@@ -1224,11 +1219,6 @@ void FieldLayoutBuilder::compute_inline_class_layout() {
   // Once those additional layouts are computed, the raw layout might need some adjustments.
 
   bool vm_uses_flattening = UseFieldFlattening || UseArrayFlattening;
-
-  if (((_nonstatic_oopmap_count > 0) ||  _super_klass->nonstatic_oop_map_count() > 0) && UseShenandoahGC) {
-    // Do not flatten oop-containing inline klasses if GC cannot handle separate barriers for their fields.
-    vm_uses_flattening = false;
-  }
 
   if (!_is_abstract_value && vm_uses_flattening) { // Flat layouts are only for concrete value classes
     // Validation of the non atomic layout

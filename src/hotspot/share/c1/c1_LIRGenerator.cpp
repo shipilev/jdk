@@ -2032,7 +2032,8 @@ void LIRGenerator::do_StoreIndexed(StoreIndexed* x) {
 
 void LIRGenerator::access_load_at(DecoratorSet decorators, BasicType type,
                                   LIRItem& base, LIR_Opr offset, LIR_Opr result,
-                                  CodeEmitInfo* patch_info, CodeEmitInfo* load_emit_info) {
+                                  CodeEmitInfo* patch_info, CodeEmitInfo* load_emit_info,
+                                  ciInlineKlass* vk) {
   decorators |= ACCESS_READ;
   LIRAccess access(this, decorators, base, offset, type, patch_info, load_emit_info);
   if (access.is_raw()) {
@@ -2186,7 +2187,7 @@ void LIRGenerator::do_LoadField(LoadField* x) {
     LIR_Opr payload = new_register((bt == T_LONG) ? bt : T_INT);
     access_load_at(decorators, bt, object, LIR_OprFact::intConst(field->offset_in_bytes()), payload,
                    // Make sure to emit an implicit null check
-                   info ? new CodeEmitInfo(info) : nullptr, info);
+                   info ? new CodeEmitInfo(info) : nullptr, info, vk);
 
     if (assert_null) {
       // Deoptimize on non-null because buffering requires the value class to be initialized

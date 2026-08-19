@@ -1790,7 +1790,7 @@ LIR_Opr LIRGenerator::access_flat_array(bool is_load, LIRItem& array, LIRItem& i
     LIRItem elm_item(elm_resolved_addr, this);
     DecoratorSet decorators = IN_HEAP;
     if (is_load) {
-      access_load_at(decorators, bt, elm_item, LIR_OprFact::intConst(0), payload, nullptr, nullptr);
+      access_load_at(decorators, bt, elm_item, LIR_OprFact::intConst(0), payload, nullptr, nullptr, elem_klass);
       access_store_at(decorators, bt, obj_item, LIR_OprFact::intConst(elem_klass->payload_offset()), payload,
                       nullptr, nullptr, elem_klass);
       // Null check is performed in the caller
@@ -1801,7 +1801,8 @@ LIR_Opr LIRGenerator::access_flat_array(bool is_load, LIRItem& array, LIRItem& i
 
       if (null_free) {
         if (!elem_klass->is_empty()) {
-          access_load_at(decorators, bt, obj_item, LIR_OprFact::intConst(elem_klass->payload_offset()), payload);
+          access_load_at(decorators, bt, obj_item, LIR_OprFact::intConst(elem_klass->payload_offset()), payload,
+                         nullptr, nullptr, elem_klass);
         }
       } else {
         bool is_constant_null = obj_item.is_constant() && obj_item.value()->is_null_obj();
@@ -1814,7 +1815,8 @@ LIR_Opr LIRGenerator::access_flat_array(bool is_load, LIRItem& array, LIRItem& i
           }
           // Load payload (if not empty) and set null marker.
           if (!elem_klass->is_empty()) {
-            access_load_at(decorators, bt, obj_item, LIR_OprFact::intConst(elem_klass->payload_offset()), payload);
+            access_load_at(decorators, bt, obj_item, LIR_OprFact::intConst(elem_klass->payload_offset()), payload,
+                           nullptr, nullptr, elem_klass);
           }
           __ logical_or(payload, null_marker_mask(bt, elem_klass->null_marker_offset_in_payload()), payload);
           if (needs_null_check) {

@@ -25,6 +25,7 @@
 source %{
 #include "gc/shenandoah/shenandoahBarrierSet.hpp"
 #include "gc/shenandoah/shenandoahBarrierSetAssembler_x86.hpp"
+#include "opto/memnode.hpp"
 %}
 
 // ---------------------------------- LOADS ---------------------------------------
@@ -67,6 +68,69 @@ instruct loadN_shenandoah(rRegN dst, memory mem, rFlagsReg cr)
   ins_cost(125);
   ins_pipe(ialu_cr_reg_mem);
 %}
+
+instruct loadLSpecial_off0_shenandoah(memory mem, rRegL dst, rRegP tmp, rFlagsReg cr)
+%{
+  match(Set dst (LoadLSpecial mem));
+  predicate(UseShenandoahGC && ((LoadLSpecialNode*)n)->oop_offset() == 0);
+  effect(TEMP_DEF dst, TEMP tmp, KILL cr);
+  // The main load is a candidate to implement implicit null checks.
+  ins_is_late_expanded_null_check_candidate(true);
+  format %{ "shenandoah_load $dst, $mem\t# special load (oop at offset=0)" %}
+  ins_encode %{
+    ShenandoahBarrierSet::assembler()->load_c2_special(this, masm,
+      $dst$$Register,
+      $mem$$Address,
+      0,
+      $tmp$$Register
+    );
+  %}
+  ins_cost(125);
+  ins_pipe(ialu_cr_reg_mem);
+%}
+
+
+instruct loadLSpecial_off4_shenandoah(memory mem, rRegL dst, rRegP tmp, rFlagsReg cr)
+%{
+  match(Set dst (LoadLSpecial mem));
+  predicate(UseShenandoahGC && ((LoadLSpecialNode*)n)->oop_offset() == 4);
+  effect(TEMP_DEF dst, TEMP tmp, KILL cr);
+  // The main load is a candidate to implement implicit null checks.
+  ins_is_late_expanded_null_check_candidate(true);
+  format %{ "shenandoah_load $dst, $mem\t# special load (oop at offset=4)" %}
+  ins_encode %{
+    ShenandoahBarrierSet::assembler()->load_c2_special(this, masm,
+      $dst$$Register,
+      $mem$$Address,
+      4,
+      $tmp$$Register
+    );
+  %}
+  ins_cost(125);
+  ins_pipe(ialu_cr_reg_mem);
+%}
+
+
+instruct loadLSpecial_both_shenandoah(memory mem, rRegL dst, rRegP tmp, rFlagsReg cr)
+%{
+  match(Set dst (LoadLSpecial mem));
+  predicate(UseShenandoahGC && ((LoadLSpecialNode*)n)->oop_offset() == -1);
+  effect(TEMP_DEF dst, TEMP tmp, KILL cr);
+  // The main load is a candidate to implement implicit null checks.
+  ins_is_late_expanded_null_check_candidate(true);
+  format %{ "shenandoah_load $dst, $mem\t# special load (both oops)" %}
+  ins_encode %{
+    ShenandoahBarrierSet::assembler()->load_c2_special(this, masm,
+      $dst$$Register,
+      $mem$$Address,
+      -1,
+      $tmp$$Register
+    );
+  %}
+  ins_cost(125);
+  ins_pipe(ialu_cr_reg_mem);
+%}
+
 
 // ---------------------------------- STORES ---------------------------------------
 //
@@ -114,6 +178,42 @@ instruct encodePAndStoreN_shenandoah(memory mem, any_RegP src, rRegP tmp, rFlags
     ShenandoahBarrierSet::assembler()->store_c2(this, masm,
       $mem$$Address,  /* dst_narrow = */ true,
       $src$$Register, /* src_narrow = */ false,
+      $tmp$$Register
+    );
+  %}
+  ins_cost(125);
+  ins_pipe(ialu_cr_reg_mem);
+%}
+
+instruct storeLSpecial_both_shenandoah(memory mem, rRegL src, rRegP tmp, rFlagsReg cr)
+%{
+  match(Set mem (StoreLSpecial mem src));
+  predicate(UseShenandoahGC);
+  effect(TEMP tmp, KILL cr);
+  format %{ "shenandoah_store $mem, $src\t# special store (two oops)" %}
+  ins_encode %{
+    ShenandoahBarrierSet::assembler()->store_c2_special(this, masm,
+      $mem$$Address,
+      $src$$Register,
+      (int)-1,
+      $tmp$$Register
+    );
+  %}
+  ins_cost(125);
+  ins_pipe(ialu_cr_reg_mem);
+%}
+
+instruct storeLSpecial_single_shenandoah(memory mem, rRegL src, immI off, rRegP tmp, rFlagsReg cr)
+%{
+  match(Set mem (StoreLSpecial mem (Binary src off)));
+  predicate(UseShenandoahGC);
+  effect(TEMP tmp, KILL cr);
+  format %{ "shenandoah_store_special $mem, $src\t# special store (single oop)" %}
+  ins_encode %{
+    ShenandoahBarrierSet::assembler()->store_c2_special(this, masm,
+      $mem$$Address,
+      $src$$Register,
+      (int)$off$$constant,
       $tmp$$Register
     );
   %}

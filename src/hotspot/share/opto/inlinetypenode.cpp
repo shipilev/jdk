@@ -2099,6 +2099,7 @@ void LoadFlatNode::expand_atomic(PhaseIterGVN& igvn) const {
 
   BasicType payload_bt = _vk->atomic_size_to_basic_type(_null_free);
   kit.insert_mem_bar(Op_MemBarCPUOrder);
+  assert(!_vk->contains_oops() || !UseShenandoahGC, "Cannot do it now");
   Node* payload = kit.access_load_at(base, ptr, TypeRawPtr::BOTTOM, Type::get_const_basic_type(payload_bt), payload_bt,
                                      _decorators | C2_MISMATCHED | C2_CONTROL_DEPENDENT_LOAD | C2_UNKNOWN_CONTROL_LOAD, kit.control());
   kit.insert_mem_bar(Op_MemBarCPUOrder);
@@ -2311,6 +2312,7 @@ void StoreFlatNode::expand_atomic(PhaseIterGVN& igvn) const {
   assert(oop_off_2 == -1 || oop_off_2 == 4, "invalid layout for %s, second oop at offset %d", vk->name()->as_utf8(), oop_off_2);
   BasicType payload_bt = vk->atomic_size_to_basic_type(_null_free);
   kit.insert_mem_bar(Op_MemBarCPUOrder);
+  assert(!vk->contains_oops() || !UseShenandoahGC, "Cannot do it now");
   if (!UseG1GC || oop_off_1 == -1) {
     // No oop fields or no late barrier expansion. Emit an atomic store of the payload and add GC barriers if needed.
     assert(oop_off_2 == -1 || !UseG1GC, "sanity");

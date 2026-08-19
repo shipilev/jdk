@@ -73,6 +73,11 @@ static LayoutKind field_layout_selection(FieldInfo field_info, Array<InlineLayou
   InlineLayoutInfo* inline_field_info = inline_layout_info_array->adr_at(field_info.index());
   InlineKlass* vk = inline_field_info->klass();
 
+  if (vk->contains_oops() && UseShenandoahGC) {
+    // Do not flatten oop-containing inline klasses if GC cannot handle separate barriers for their fields.
+    return LayoutKind::REFERENCE;
+  }
+
   if (field_info.field_flags().is_null_free_inline_type()) {
     assert(field_info.access_flags().is_strict(), "null-free fields must be strict");
     if (vk->must_be_atomic()) {

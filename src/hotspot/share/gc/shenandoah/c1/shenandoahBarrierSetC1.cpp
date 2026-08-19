@@ -195,7 +195,9 @@ void ShenandoahBarrierSetC1::store_at_resolved(LIRAccess& access, LIR_Opr value)
         LIR_Opr addr = resolve_address(inner_access, false);
         inner_access.set_resolved_addr(addr);
 
-        keepalive_barrier(gen, /* obj = */ LIR_OprFact::illegalOpr, /* addr = */ addr, decorators);
+        LIR_Opr tmp = gen->new_register(T_OBJECT);
+        BarrierSetC1::load_at_resolved(inner_access, tmp);
+        keepalive_barrier(gen, /* obj = */ tmp, /* addr = */ LIR_OprFact::illegalOpr, decorators);
         if (ShenandoahCardBarrier) {
           card_barrier(gen, post_addr, decorators);
         }

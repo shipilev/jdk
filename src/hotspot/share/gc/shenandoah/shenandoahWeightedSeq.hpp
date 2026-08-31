@@ -118,13 +118,6 @@ public:
     slope = _slope;
     intercept = predict_y(x_absolute);
   }
-
-private:
-  // Removes about to be overwritten sample from x accumulators and rebases x origin
-  void deduct_oldest_and_rebase(double x, double y, double weight);
-
-  // Record the sample into the sequence, update x, y accumulators
-  void add_latest(double x, double y, double weight);
 };
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHWEIGHTEDSEQ_HPP

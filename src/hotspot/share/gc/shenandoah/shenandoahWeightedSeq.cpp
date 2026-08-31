@@ -46,7 +46,8 @@ ShenandoahWeightedSeq::ShenandoahWeightedSeq(uint size)
   _yy_sum(0),
   _slope(0.0),
   _y_intercept(0.0),
-  _residual_sd(0.0) {
+  _residual_sd(0.0),
+  _slope_se(0.0) {
 }
 
 ShenandoahWeightedSeq::~ShenandoahWeightedSeq() {
@@ -126,6 +127,7 @@ void ShenandoahWeightedSeq::add(double x, double y, double weight) {
   const double sum_of_cross_deviations = _xy_sum - _x_sum * _y_sum / _num_samples;
   const double residual_sum_of_squares = total_sum_of_squares - _slope * sum_of_cross_deviations;
   _residual_sd = std::sqrt(MAX2(residual_sum_of_squares, 0.0) / _num_samples);
+  _slope_se = std::sqrt(MAX2(residual_sum_of_squares, 0.0) / _num_samples) / _xx_sum;
 }
 
 double ShenandoahWeightedSeq::predict(double x_absolute, double margin_of_error) const {

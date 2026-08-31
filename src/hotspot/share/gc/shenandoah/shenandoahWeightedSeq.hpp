@@ -61,6 +61,7 @@ class ShenandoahWeightedSeq {
   double _slope;            // slope
   double _y_intercept;      // y-intercept
   double _residual_sd;      // sd on deviance from prediction
+  double _slope_se;         // slope error estimate
 
 public:
 
@@ -107,6 +108,9 @@ public:
 
   // The slope for a line of best fit through the samples
   double slope() const { return _slope; }
+
+  // The slope for a line of best fit through the samples
+  double slope_se() const { return _slope_se; }
 
   // Predict the y-value for the given x value based on linear reg
   double predict_y(double x_absolute) const {

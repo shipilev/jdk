@@ -93,14 +93,12 @@ void ShenandoahArguments::initialize() {
     vm_exit_during_initialization("Shenandoah expects ConcGCThreads > 0, check -XX:ConcGCThreads=#");
   }
 
-  // Set up default number of parallel threads. We want to have decent pauses performance
-  // which would use parallel threads, but we also do not want to do too many threads
-  // that will overwhelm the OS scheduler. Using 1/2 of available threads seems to be a fair
-  // compromise here. Due to implementation constraints, it should not be lower than
-  // the number of concurrent threads.
+  // Set up default number of parallel threads. There is hardly any parallel work at pauses,
+  // so it pays off to set the same number of threads as we have in concurrent phases.
+  // This allows allocating the same number of task queues and avoid queue rebalancing.
   bool ergo_parallel = FLAG_IS_DEFAULT(ParallelGCThreads);
   if (ergo_parallel) {
-    FLAG_SET_DEFAULT(ParallelGCThreads, MAX2(1, os::initial_active_processor_count() / 2));
+    FLAG_SET_DEFAULT(ParallelGCThreads, ConcGCThreads);
   }
 
   if (ParallelGCThreads == 0) {

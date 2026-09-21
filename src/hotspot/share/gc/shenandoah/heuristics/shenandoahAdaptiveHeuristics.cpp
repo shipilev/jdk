@@ -393,7 +393,7 @@ bool ShenandoahAdaptiveHeuristics::trigger_accelerating_allocation_rate(const Sh
     return true;
   }
 
-  if (rate.accelerated_consumption() > allocatable_bytes) {
+  if (false && rate.accelerated_consumption() > allocatable_bytes) {
     const ShenandoahSignedSize predicted_rate = ShenandoahSignedSize::get(rate.predicted_rate());
     const ShenandoahSignedSize acceleration = ShenandoahSignedSize::get(rate.acceleration());
     assert(rate.momentary_consumption() == 0, "Acceleration trigger is meant to exclude momentary trigger");

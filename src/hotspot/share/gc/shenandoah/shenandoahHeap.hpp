@@ -836,6 +836,9 @@ public:
   // Checks if object is in the collection set.
   inline bool in_collection_set(oop obj) const;
 
+  // Checks if object is in the collection set.
+  inline bool in_collection_set(narrowOop obj) const;
+
   // Checks if location is in the collection set. Can be interior pointer, not the oop itself.
   inline bool in_collection_set_loc(void* loc) const;
 

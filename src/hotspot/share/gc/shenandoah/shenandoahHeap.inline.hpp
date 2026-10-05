@@ -106,8 +106,8 @@ template <class T>
 inline void ShenandoahHeap::non_conc_update_with_forwarded(T* p) {
   T o = RawAccess<>::oop_load(p);
   if (!CompressedOops::is_null(o)) {
-    oop obj = CompressedOops::decode_not_null(o);
-    if (in_collection_set(obj)) {
+    if (in_collection_set(o)) {
+      oop obj = CompressedOops::decode_not_null(o);
       // Corner case: when evacuation fails, there are objects in collection
       // set that are not really forwarded. We can still go and try and update them
       // (uselessly) to simplify the common path.
@@ -125,8 +125,8 @@ template <class T>
 inline void ShenandoahHeap::conc_update_with_forwarded(T* p) {
   T o = RawAccess<>::oop_load(p);
   if (!CompressedOops::is_null(o)) {
-    oop obj = CompressedOops::decode_not_null(o);
-    if (in_collection_set(obj)) {
+    if (in_collection_set(o)) {
+      oop obj = CompressedOops::decode_not_null(o);
       // Corner case: when evacuation fails, there are objects in collection
       // set that are not really forwarded. We can still go and try CAS-update them
       // (uselessly) to simplify the common path.
@@ -452,6 +452,11 @@ inline bool ShenandoahHeap::requires_marking(const void* entry) const {
 }
 
 inline bool ShenandoahHeap::in_collection_set(oop p) const {
+  assert(collection_set() != nullptr, "Sanity");
+  return collection_set()->is_in(p);
+}
+
+inline bool ShenandoahHeap::in_collection_set(narrowOop p) const {
   assert(collection_set() != nullptr, "Sanity");
   return collection_set()->is_in(p);
 }

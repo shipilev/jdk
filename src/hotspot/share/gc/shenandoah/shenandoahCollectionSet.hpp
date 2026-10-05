@@ -39,11 +39,13 @@ class ShenandoahCollectionSet : public CHeapObj<mtGC> {
 
 private:
   size_t const          _map_size;
-  size_t const          _region_size_bytes_shift;
+  size_t const          _full_shift;
+  size_t const          _narrow_shift;
   ReservedSpace         _map_space;
   char* const           _cset_map;
   // Bias cset map's base address for fast test if an oop is in cset
   char* const           _biased_cset_map;
+  char* const           _narrow_biased_cset_map;
 
   ShenandoahHeap* const _heap;
 
@@ -94,6 +96,7 @@ public:
   inline bool is_in(ShenandoahHeapRegion* r) const;
   inline bool is_in(size_t region_idx)       const;
   inline bool is_in(oop obj)                 const;
+  inline bool is_in(narrowOop obj)           const;
   inline bool is_in_loc(void* loc)           const;
 
   // Prints a detailed accounting of all regions in the collection set when gc+cset=debug

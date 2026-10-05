@@ -46,9 +46,17 @@ bool ShenandoahCollectionSet::is_in(oop p) const {
   return is_in_loc(cast_from_oop<void*>(p));
 }
 
+bool ShenandoahCollectionSet::is_in(narrowOop p) const {
+  assert(UseCompressedOops, "Only when enabled");
+  assert(!CompressedOops::is_null(p), "This check does not tolerate nulls");
+  shenandoah_assert_in_heap_bounds(nullptr, CompressedOops::decode_not_null(p));
+  uintx index = ((uintx) p) >> _narrow_shift;
+  return _narrow_biased_cset_map[index] == 1;
+}
+
 bool ShenandoahCollectionSet::is_in_loc(void* p) const {
   assert(p == nullptr || _heap->is_in_reserved(p), "Must be in the heap");
-  uintx index = ((uintx) p) >> _region_size_bytes_shift;
+  uintx index = ((uintx) p) >> _full_shift;
   // no need to subtract the bottom of the heap from p,
   // _biased_cset_map is biased
   return _biased_cset_map[index] == 1;

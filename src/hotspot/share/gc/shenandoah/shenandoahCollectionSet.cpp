@@ -38,10 +38,12 @@
 
 ShenandoahCollectionSet::ShenandoahCollectionSet(ShenandoahHeap* heap, ReservedSpace space, char* heap_base) :
   _map_size(heap->num_regions()),
-  _region_size_bytes_shift(ShenandoahHeapRegion::region_size_bytes_shift()),
+  _full_shift(ShenandoahHeapRegion::region_size_bytes_shift()),
+  _narrow_shift(_full_shift - CompressedOops::shift()),
   _map_space(space),
-  _cset_map(_map_space.base() + ((uintx)heap_base >> _region_size_bytes_shift)),
+  _cset_map(_map_space.base() + ((uintx)heap_base >> _full_shift)),
   _biased_cset_map(_map_space.base()),
+  _narrow_biased_cset_map(_biased_cset_map + ((uintx)CompressedOops::base() >> _full_shift)),
   _heap(heap),
   _has_old_regions(false),
   _garbage(0),

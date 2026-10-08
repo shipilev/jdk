@@ -27,6 +27,7 @@
 #include "gc/shenandoah/shenandoahFreeSet.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc/shenandoah/shenandoahHeapRegion.hpp"
+#include "runtime/interfaceSupport.inline.hpp"
 
 ShenandoahAllocator::ShenandoahAllocator(ShenandoahFreeSet* free_set)
   : _free_set(free_set),
@@ -35,6 +36,10 @@ ShenandoahAllocator::ShenandoahAllocator(ShenandoahFreeSet* free_set)
     _old_collector_alloc(free_set) {}
 
 HeapWord* ShenandoahAllocator::allocate(ShenandoahAllocRequest& req, bool& in_new_region) {
+  if (req.is_mutator_alloc() && !ShenandoahHeap::heap()->is_idle()) {
+    ThreadBlockInVM tbivm(JavaThread::current());
+    os::naked_short_nanosleep(MAX2<jlong>(100000, req.size())); // 1ns per word ~= 8 GB/sec
+  }
   if (ShenandoahHeapRegion::requires_humongous(req.size())) {
     ShenandoahHeapLocker locker(ShenandoahHeap::heap()->lock(), req.is_mutator_alloc());
     switch (req.type()) {

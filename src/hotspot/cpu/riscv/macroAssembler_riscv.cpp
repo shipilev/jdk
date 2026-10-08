@@ -494,9 +494,8 @@ void MacroAssembler::clinit_barrier(Register klass, Register tmp, Label* L_fast_
     L_slow_path = &L_fallthrough;
   }
 
-  // Fast path check: class is fully initialized
-  lbu(tmp, Address(klass, InstanceKlass::init_state_offset()));
-  membar(MacroAssembler::LoadLoad | MacroAssembler::LoadStore);
+  la(tmp, Address(klass, InstanceKlass::init_state_offset()));
+  lbu_acquire(tmp, tmp);
   sub(tmp, tmp, InstanceKlass::fully_initialized);
   beqz(tmp, *L_fast_path);
 
@@ -3804,28 +3803,6 @@ void MacroAssembler::mov_metadata(Register dst, Metadata* obj, Register tmp) {
   movptr(dst, Address((address)obj, rspec), tmp);
 }
 
-void MacroAssembler::value_field_layout_info(Register holder_klass, Register index, Register layout_info) {
-  assert_different_registers(holder_klass, index, layout_info);
-  ValueFieldLayoutInfo array[2];
-  int size = (char*)&array[1] - (char*)&array[0]; // computing size of array elements
-  if (is_power_of_2(size)) {
-    slli(index, index, log2i_exact(size)); // Scale index by power of 2
-  } else {
-    mv(layout_info, size);
-    mul(index, index, layout_info); // Scale the index to be the entry index * array_element_size
-  }
-  ld(layout_info, Address(holder_klass, InstanceKlass::value_field_layout_info_array_offset()));
-  add(layout_info, layout_info, Array<ValueFieldLayoutInfo>::base_offset_in_bytes());
-  add(layout_info, layout_info, index);
-  la(layout_info, Address(layout_info));
-}
-
-void MacroAssembler::flat_field_copy(DecoratorSet decorators, Register src, Register dst,
-                                     Register value_field_layout_info) {
-  BarrierSetAssembler* bs = BarrierSet::barrier_set()->barrier_set_assembler();
-  bs->flat_field_copy(this, decorators, src, dst, value_field_layout_info);
-}
-
 void MacroAssembler::payload_offset(Register value_klass, Register offset) {
   ld(offset, Address(value_klass, ValueKlass::adr_members_offset()));
   lwu(offset, Address(offset, ValueKlass::payload_offset_offset()));
@@ -4620,7 +4597,16 @@ void MacroAssembler::cmpxchg_narrow_value(Register addr, Register expected,
   Label retry, fail, done;
 
   if (UseZacas) {
-    lw(result, aligned_addr);
+    // This word load pre-checks the target byte/short. A mismatch branches
+    // directly to fail, so the acquiring amocas below is never executed.
+    // When Zalasr has elided a preceding volatile store's trailing StoreLoad
+    // fence, make the pre-check acquiring so s*.rl -> lw.aq still provides
+    // the required RCsc ordering on this failure path.
+    if (UseZalasr && (acquire == Assembler::aq)) {
+      lw_aq(result, aligned_addr);
+    } else {
+      lw(result, aligned_addr);
+    }
 
     bind(retry); // amocas loads the current value into result
     notr(scratch1, mask);
@@ -4635,7 +4621,7 @@ void MacroAssembler::cmpxchg_narrow_value(Register addr, Register expected,
     // Or in the new value to create complete new value.
     orr(scratch0, scratch0, new_val);
 
-    mv(scratch1, result); // save our expected value
+    // scratch1 holds the expected word.
     atomic_cas(result, scratch0, aligned_addr, operand_size::int32, acquire, release);
     bne(scratch1, result, retry);
   } else {
@@ -4695,7 +4681,16 @@ void MacroAssembler::weak_cmpxchg_narrow_value(Register addr, Register expected,
   Label fail, done;
 
   if (UseZacas) {
-    lw(result, aligned_addr);
+    // This word load pre-checks the target byte/short. A mismatch branches
+    // directly to fail, so the acquiring amocas below is never executed.
+    // When Zalasr has elided a preceding volatile store's trailing StoreLoad
+    // fence, make the pre-check acquiring so s*.rl -> lw.aq still provides
+    // the required RCsc ordering on this failure path.
+    if (UseZalasr && (acquire == Assembler::aq)) {
+      lw_aq(result, aligned_addr);
+    } else {
+      lw(result, aligned_addr);
+    }
 
     notr(scratch1, mask);
 
@@ -4709,7 +4704,7 @@ void MacroAssembler::weak_cmpxchg_narrow_value(Register addr, Register expected,
     // Or in the new value to create complete new value.
     orr(scratch0, scratch0, new_val);
 
-    mv(scratch1, result); // save our expected value
+    // scratch1 holds the expected word.
     atomic_cas(result, scratch0, aligned_addr, operand_size::int32, acquire, release);
     bne(scratch1, result, fail); // This weak, so just bail-out.
   } else {
@@ -7012,6 +7007,26 @@ void MacroAssembler::sext(Register dst, Register src, int bits) {
 
   slli(dst, src, XLEN - bits);
   srai(dst, dst, XLEN - bits);
+}
+
+void MacroAssembler::narrow_subword_type(Register reg, BasicType bt) {
+  assert(is_subword_type(bt), "expected subword type");
+  switch (bt) {
+    case T_SHORT:
+      sext(reg, reg, 16);
+      break;
+    case T_CHAR:
+      zext(reg, reg, 16);
+      break;
+    case T_BYTE:
+      sext(reg, reg, 8);
+      break;
+    case T_BOOLEAN:
+      andi(reg, reg, 1);
+      break;
+    default:
+      ShouldNotReachHere();
+  }
 }
 
 void MacroAssembler::cmp_x2i(Register dst, Register src1, Register src2,

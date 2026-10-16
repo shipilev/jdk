@@ -733,7 +733,7 @@ void ShenandoahBarrierSetAssembler::load_c2(const MachNode* node, MacroAssembler
 }
 
 void ShenandoahBarrierSetAssembler::load_c2_special(const MachNode* node, MacroAssembler* masm,
-                                                    Register dst, Address src, int offset, Register tmp1, Register tmp2) {
+                                                    Register dst, Address src, int offset, Register tmp) {
 
   // Do the actual load. This load is the candidate for implicit null check, and MUST come first.
   // We must perform a single load for atomicity reasons.
@@ -742,37 +742,21 @@ void ShenandoahBarrierSetAssembler::load_c2_special(const MachNode* node, MacroA
   bool first_oop = offset == 0 || offset == -1;
   bool second_oop = offset == 4 || offset == -1;
 
+  // Separate words into tmp1 and dst
+  __ movl(tmp, dst);
+  __ shrq(dst, 32);
+
+  // Do barriers if needed.
   if (first_oop) {
-    // Extract the oop.
-    __ movq(tmp1, dst);
-    __ shlq(tmp1, 32);
-    __ shrq(tmp1, 32);
-
-    ShenandoahBarrierStubC2::load_post(masm, node, tmp1, src, noreg, noreg, /* narrow = */ true);
-
-    // Encode the barrier result back to dst.
-    __ shrq(dst, 32);
-    __ shlq(dst, 32);
-    __ orq(dst, tmp1);
+    ShenandoahBarrierStubC2::load_post(masm, node, tmp, src, noreg, noreg, /* narrow = */ true);
   }
-
   if (second_oop) {
-    // Extract the oop.
-    __ movq(tmp1, dst);
-    __ shrq(tmp1, 32);
-
-    // Compute the new address of oop slot.
-    __ lea(tmp2, src);
-    __ addq(tmp2, 4);
-
-    ShenandoahBarrierStubC2::load_post(masm, node, tmp1, Address(tmp2), noreg, noreg, /* narrow = */ true);
-
-    // Encode the barrier result back to dst.
-    __ shlq(dst, 32);
-    __ shrq(dst, 32);
-    __ shlq(tmp1, 32);
-    __ orq(dst, tmp1);
+    ShenandoahBarrierStubC2::load_post(masm, node, dst, src.plus_disp(4), noreg, noreg, /* narrow = */ true);
   }
+
+  // Recombine barrier results into dst.
+  __ shlq(dst, 32);
+  __ orq(dst, tmp);
 }
 
 void ShenandoahBarrierSetAssembler::store_c2(const MachNode* node, MacroAssembler* masm,
@@ -804,31 +788,25 @@ void ShenandoahBarrierSetAssembler::store_c2(const MachNode* node, MacroAssemble
 }
 
 void ShenandoahBarrierSetAssembler::store_c2_special(const MachNode* node, MacroAssembler* masm,
-                                                     Address dst, Register src, int offset, Register tmp1, Register tmp2) {
+                                                     Address dst, Register src, int offset, Register tmp) {
   bool first_oop = offset == 0 || offset == -1;
   bool second_oop = offset == 4 || offset == -1;
 
-  // Compute the new address of second oop slot.
-  if (second_oop) {
-    __ lea(tmp1, dst);
-    __ addptr(tmp1, 4);
-  }
-
   if (first_oop) {
-    ShenandoahBarrierStubC2::store_pre(masm, node, dst, tmp2, noreg, noreg, true);
+    ShenandoahBarrierStubC2::store_pre(masm, node, dst, tmp, noreg, noreg, true);
   }
   if (second_oop) {
-    ShenandoahBarrierStubC2::store_pre(masm, node, Address(tmp1), tmp2, noreg, noreg, true);
+    ShenandoahBarrierStubC2::store_pre(masm, node, dst.plus_disp(4), tmp, noreg, noreg, true);
   }
 
   // Do the actual store
   __ movq(dst, src);
 
   if (first_oop) {
-    ShenandoahBarrierStubC2::store_post(masm, node, dst, tmp2, noreg);
+    ShenandoahBarrierStubC2::store_post(masm, node, dst, tmp, noreg);
   }
   if (second_oop) {
-    ShenandoahBarrierStubC2::store_post(masm, node, Address(tmp1), tmp2, noreg);
+    ShenandoahBarrierStubC2::store_post(masm, node, dst.plus_disp(4), tmp, noreg);
   }
 }
 

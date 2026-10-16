@@ -735,14 +735,14 @@ void ShenandoahBarrierSetAssembler::load_c2(const MachNode* node, MacroAssembler
 void ShenandoahBarrierSetAssembler::load_c2_special(const MachNode* node, MacroAssembler* masm,
                                                     Register dst, Address src, int offset, Register tmp) {
 
+  bool first_oop = offset == 0 || offset == -1;
+  bool second_oop = offset == 4 || offset == -1;
+
   // Do the actual load. This load is the candidate for implicit null check, and MUST come first.
   // We must perform a single load for atomicity reasons.
   __ movq(dst, src);
 
-  bool first_oop = offset == 0 || offset == -1;
-  bool second_oop = offset == 4 || offset == -1;
-
-  // Separate words into tmp1 and dst
+  // Separate words into tmp and dst.
   __ movl(tmp, dst);
   __ shrq(dst, 32);
 

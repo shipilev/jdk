@@ -118,7 +118,7 @@ instruct loadLSpecial_both_shenandoah(memory mem, rRegL dst, rRegP tmp, rFlagsRe
   effect(TEMP_DEF dst, TEMP tmp, KILL cr);
   // The main load is a candidate to implement implicit null checks.
   ins_is_late_expanded_null_check_candidate(true);
-  format %{ "shenandoah_load $dst, $mem\t# special load (both oops)" %}
+  format %{ "shenandoah_load $dst, $mem\t# special load (oop at both offsets)" %}
   ins_encode %{
     ShenandoahBarrierSet::assembler()->load_c2_special(this, masm,
       $dst$$Register,

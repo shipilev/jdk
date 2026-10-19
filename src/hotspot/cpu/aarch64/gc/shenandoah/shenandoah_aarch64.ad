@@ -122,6 +122,84 @@ instruct load_N_Volatile_shenandoah(iRegNNoSp dst, indirect mem, rFlagsReg cr)
   ins_pipe(pipe_class_memory);
 %}
 
+instruct load_LSpecial_off0_shenandoah(iRegPNoSp dst, memory8 mem, iRegPNoSp tmp, rFlagsReg cr)
+%{
+  match(Set dst (LoadLSpecial mem));
+  predicate(UseShenandoahGC && ((LoadLSpecialNode*)n)->oop_offset() == 0);
+  effect(TEMP_DEF dst, TEMP tmp, KILL cr);
+  // The main load is a candidate to implement implicit null checks.
+  ins_is_late_expanded_null_check_candidate(opnd_array(1)->opcode() == INDOFFL8);
+  format %{ "shenandoah_load $dst, $mem\t# special load (oop at offset=0)" %}
+  ins_encode %{
+    Address addr = mem2address($mem->opcode(), as_Register($mem$$base), $mem$$index, $mem$$scale, $mem$$disp);
+    if (addr.getMode() == Address::base_plus_offset) {
+      addr = __ legitimize_address(addr, /* size_in_memory */ 8, $tmp$$Register);
+    }
+    ShenandoahBarrierSet::assembler()->load_c2_special(this, masm,
+        $dst$$Register,
+        addr,
+        0,
+        rscratch1,
+        rscratch2,
+        $tmp$$Register
+    );
+  %}
+  ins_cost(3*INSN_COST);
+  ins_pipe(pipe_class_memory);
+%}
+
+instruct load_LSpecial_off4_shenandoah(iRegPNoSp dst, memory8 mem, iRegPNoSp tmp, rFlagsReg cr)
+%{
+  match(Set dst (LoadLSpecial mem));
+  predicate(UseShenandoahGC && ((LoadLSpecialNode*)n)->oop_offset() == 4);
+  effect(TEMP_DEF dst, TEMP tmp, KILL cr);
+  // The main load is a candidate to implement implicit null checks.
+  ins_is_late_expanded_null_check_candidate(opnd_array(1)->opcode() == INDOFFL8);
+  format %{ "shenandoah_load $dst, $mem\t# special load (oop at offset=4)" %}
+  ins_encode %{
+    Address addr = mem2address($mem->opcode(), as_Register($mem$$base), $mem$$index, $mem$$scale, $mem$$disp);
+    if (addr.getMode() == Address::base_plus_offset) {
+      addr = __ legitimize_address(addr, /* size_in_memory */ 8, $tmp$$Register);
+    }
+    ShenandoahBarrierSet::assembler()->load_c2_special(this, masm,
+        $dst$$Register,
+        addr,
+        4,
+        rscratch1,
+        rscratch2,
+        $tmp$$Register
+    );
+  %}
+  ins_cost(3*INSN_COST);
+  ins_pipe(pipe_class_memory);
+%}
+
+instruct load_LSpecial_both_shenandoah(iRegPNoSp dst, memory8 mem, iRegPNoSp tmp, rFlagsReg cr)
+%{
+  match(Set dst (LoadLSpecial mem));
+  predicate(UseShenandoahGC && ((LoadLSpecialNode*)n)->oop_offset() == -1);
+  effect(TEMP_DEF dst, TEMP tmp, KILL cr);
+  // The main load is a candidate to implement implicit null checks.
+  ins_is_late_expanded_null_check_candidate(opnd_array(1)->opcode() == INDOFFL8);
+  format %{ "shenandoah_load $dst, $mem\t# special load (oop at both offsets)" %}
+  ins_encode %{
+    Address addr = mem2address($mem->opcode(), as_Register($mem$$base), $mem$$index, $mem$$scale, $mem$$disp);
+    if (addr.getMode() == Address::base_plus_offset) {
+      addr = __ legitimize_address(addr, /* size_in_memory */ 8, $tmp$$Register);
+    }
+    ShenandoahBarrierSet::assembler()->load_c2_special(this, masm,
+        $dst$$Register,
+        addr,
+        -1,
+        rscratch1,
+        rscratch2,
+        $tmp$$Register
+    );
+  %}
+  ins_cost(3*INSN_COST);
+  ins_pipe(pipe_class_memory);
+%}
+
 
 // ---------------------------------- STORES ---------------------------------------
 //

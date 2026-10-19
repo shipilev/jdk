@@ -639,6 +639,34 @@ void ShenandoahBarrierSetAssembler::load_c2(const MachNode* node, MacroAssembler
   ShenandoahBarrierStubC2::load_post(masm, node, dst, src, tmp1, tmp2, is_narrow);
 }
 
+void ShenandoahBarrierSetAssembler::load_c2_special(const MachNode* node, MacroAssembler* masm,
+                                                    Register dst, Address src, int offset, Register tmp1, Register tmp2, Register tmp3) {
+
+  bool first_oop = offset == 0 || offset == -1;
+  bool second_oop = offset == 4 || offset == -1;
+
+  // Do the actual load. This load is the candidate for implicit null check, and MUST come first.
+  // We must perform a single load for atomicity reasons.
+  __ ldr(dst, src);
+
+  // Separate words into tmp and dst.
+  __ uxtw(tmp1, dst);
+  __ lsr(dst, dst, 32);
+
+  // Do barriers if needed.
+  if (first_oop) {
+    Address slot0(src.base(), src.offset());
+    ShenandoahBarrierStubC2::load_post(masm, node, tmp1, slot0, tmp2, tmp3, /* narrow = */ true);
+  }
+  if (second_oop) {
+    Address slot4(src.base(), src.offset() + 4);
+    ShenandoahBarrierStubC2::load_post(masm, node, dst, slot4, tmp2, tmp3, /* narrow = */ true);
+  }
+
+  // Recombine barrier results into dst.
+  __ orr(dst, tmp1, dst, Assembler::LSL, 32);
+}
+
 void ShenandoahBarrierSetAssembler::store_c2(const MachNode* node, MacroAssembler* masm, Address dst, bool dst_narrow,
     Register src, bool src_narrow, Register tmp1, Register tmp2, Register tmp3, bool is_volatile) {
 

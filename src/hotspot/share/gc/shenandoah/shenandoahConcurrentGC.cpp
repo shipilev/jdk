@@ -932,6 +932,29 @@ public:
 void ShenandoahConcurrentGC::op_thread_roots() {
   const ShenandoahHeap* const heap = ShenandoahHeap::heap();
   assert(heap->is_evacuation_in_progress(), "Checked by caller");
+
+  {
+    size_t evac_marked = 0;
+    size_t evac_allocated = 0;
+
+    for (uint i = 0; i < heap->num_regions(); i++) {
+      ShenandoahHeapRegion* r = heap->get_region(i);
+      if (!r->is_cset()) continue;
+
+      HeapWord* top = r->top();
+      HeapWord* tams = heap->marking_context()->top_at_mark_start(r);
+
+      evac_allocated += pointer_delta(top, tams);
+      evac_marked += r->get_live_data_words_explicit();
+    }
+
+    size_t total = (evac_marked + evac_allocated);
+    if (total == 0) total = 1;
+    log_info(gc, ergo)("Evacuations:       %10zuK", total * HeapWordSize / K);
+    log_info(gc, ergo)("  Explicitly Live: %10zuK, %3zu%%", evac_marked * HeapWordSize / K,    evac_marked    * 100 / total);
+    log_info(gc, ergo)("  Implicitly Live: %10zuK, %3zu%%", evac_allocated * HeapWordSize / K, evac_allocated * 100 / total);
+  }
+
   ShenandoahGCWorkerPhase worker_phase(ShenandoahPhaseTimings::conc_thread_roots);
   ShenandoahConcurrentEvacUpdateThreadTask task(heap->workers()->active_workers());
   heap->workers()->run_task(&task);

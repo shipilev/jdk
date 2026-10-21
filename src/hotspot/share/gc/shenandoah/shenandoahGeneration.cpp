@@ -163,23 +163,18 @@ void ShenandoahGeneration::log_status(const char *msg) const {
   // Not under a lock here, so read each of these once to make sure
   // byte size in proper unit and proper unit for byte size are consistent.
   const size_t v_used = used();
-  const size_t v_used_regions = used_regions_size();
-  const size_t v_soft_max_capacity = ShenandoahHeap::heap()->soft_max_capacity();
+  const size_t v_used_regions = used_regions();
   const size_t v_max_capacity = max_capacity();
-  const size_t v_available = available();
   const size_t v_humongous_waste = get_humongous_waste();
 
   const LogGcInfo target;
   LogStream ls(target);
-  ls.print("%s: ", msg);
   if (_type != NON_GEN) {
-    ls.print("%s generation ", name());
+    ls.print("  %6s: ", name());
   }
 
-  ls.print_cr("used: " PROPERFMT ", used regions: " PROPERFMT ", humongous waste: " PROPERFMT
-              ", soft capacity: " PROPERFMT ", max capacity: " PROPERFMT ", available: " PROPERFMT,
-              PROPERFMTARGS(v_used), PROPERFMTARGS(v_used_regions), PROPERFMTARGS(v_humongous_waste),
-              PROPERFMTARGS(v_soft_max_capacity), PROPERFMTARGS(v_max_capacity), PROPERFMTARGS(v_available));
+  ls.print_cr("%10zuK used, %4zu regions, %10zuK wasted, %10zuK max capacity",
+              v_used / K, v_used_regions, v_humongous_waste / K, v_max_capacity / K);
 }
 
 template <bool PREPARE_FOR_CURRENT_CYCLE, bool FULL_GC>

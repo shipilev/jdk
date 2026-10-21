@@ -88,9 +88,9 @@ void ShenandoahYoungHeuristics::choose_young_collection_set(ShenandoahCollection
   const size_t free_target = (capacity * ShenandoahMinFreeThreshold) / 100 + max_cset;
   const size_t min_garbage = (free_target > actual_free) ? (free_target - actual_free) : 0;
 
-  log_info(gc, ergo)(
-          "Adaptive CSet Selection for YOUNG. Max Evacuation: " PROPERFMT ", Actual Free: " PROPERFMT,
-          PROPERFMTARGS(max_cset), PROPERFMTARGS(actual_free));
+  log_info(gc, ergo)("Collection Set Selection:");
+  log_info(gc, ergo)("  Max Evacuation:   %10zuK", max_cset / K);
+  log_info(gc, ergo)("  Min Garbage:      %10zuK", min_garbage / K);
 
   for (size_t idx = 0; idx < size; idx++) {
     ShenandoahHeapRegion* r = data[idx].get_region();

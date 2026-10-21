@@ -322,10 +322,10 @@ bool ShenandoahOldHeuristics::finalize_mixed_evacs() {
   }
   decrease_unprocessed_old_collection_candidates_live_memory(_evacuated_old_bytes);
   if (_included_old_regions > 0) {
-    log_info(gc, ergo)("Old-gen mixed evac (%zu regions, evacuating %zu%s, reclaiming: %zu%s)",
-                 _included_old_regions,
-                 byte_size_in_proper_unit(_evacuated_old_bytes), proper_unit_for_byte_size(_evacuated_old_bytes),
-                 byte_size_in_proper_unit(_collected_old_bytes), proper_unit_for_byte_size(_collected_old_bytes));
+    log_info(gc, ergo)("Old-gen mixed evac: evacuating %zuK, reclaiming %zuK in %zu regions",
+                 _evacuated_old_bytes/K,
+                 _collected_old_bytes/K,
+                 _included_old_regions);
   }
 
   if (unprocessed_old_collection_candidates() == 0) {
@@ -383,7 +383,7 @@ bool ShenandoahOldHeuristics::top_off_collection_set(ShenandoahCollectionSet* co
       regions_for_old_expansion = 0;
     }
     if (regions_for_old_expansion > 0) {
-      log_info(gc, ergo)("Augmenting old-gen evacuation budget from unexpended young-generation reserve by %zu regions",
+      log_info(gc, ergo)("%zu regions moved from unexpended young-generation reserve to old-gen evacuation budget",
                    regions_for_old_expansion);
       add_regions_to_old = regions_for_old_expansion;
       size_t budget_supplement = region_size_bytes * regions_for_old_expansion;

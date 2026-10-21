@@ -218,33 +218,45 @@ void ShenandoahCollectionSet::summarize(size_t total_garbage, size_t immediate_g
   const LogTarget(Info, gc, ergo) lt;
   LogStream ls(lt);
   if (lt.is_enabled()) {
-    const size_t cset_percent = (total_garbage == 0) ? 0 : (garbage() * 100 / total_garbage);
-    const size_t collectable_garbage = garbage() + immediate_garbage;
-    const size_t collectable_garbage_percent = (total_garbage == 0) ? 0 : (collectable_garbage * 100 / total_garbage);
-    const size_t immediate_percent = (total_garbage == 0) ? 0 : (immediate_garbage * 100 / total_garbage);
+    const size_t used = ShenandoahHeap::heap()->used();
+    const size_t cset_garbage = garbage();
+    const size_t collectable_garbage = cset_garbage + immediate_garbage;
 
-    ls.print_cr("Collectable Garbage: " PROPERFMT " (%zu%%), "
-                 "Immediate: " PROPERFMT " (%zu%%), %zu regions, "
-                 "CSet: " PROPERFMT " (%zu%%), %zu regions",
-                 PROPERFMTARGS(collectable_garbage),
-                 collectable_garbage_percent,
+    ls.print_cr("Garbage:            %10zuK, %3zu%% of used",
+                total_garbage / K,
+                total_garbage * 100 / used
+  );
 
-                 PROPERFMTARGS(immediate_garbage),
-                 immediate_percent,
-                 immediate_regions,
+    ls.print_cr("  Collectable:      %10zuK, %3zu%% of used, %3zu%% of garbage",
+                collectable_garbage / K,
+                collectable_garbage * 100 / used,
+                total_garbage == 0 ? 0 : collectable_garbage * 100 / total_garbage
+    );
 
-                 PROPERFMTARGS(garbage()),
-                 cset_percent,
-                 count());
+    ls.print_cr("    Immediate:      %10zuK, %3zu%% of used, %3zu%% of garbage, %4zu regions",
+                immediate_garbage / K,
+                immediate_garbage * 100 / used,
+                total_garbage == 0 ? 0 : immediate_garbage * 100 / total_garbage,
+                immediate_regions);
 
-    if (garbage() > 0) {
+    ls.print_cr("    Collection Set: %10zuK, %3zu%% of used, %3zu%% of garbage, %4zu regions",
+                cset_garbage / K,
+                cset_garbage * 100 / used,
+                total_garbage == 0 ? 0 : cset_garbage * 100 / total_garbage,
+                count());
+
+    if (cset_garbage > 0) {
       const size_t young_evac_bytes = get_live_bytes_in_untenurable_regions();
       const size_t promote_evac_bytes = get_live_bytes_in_tenurable_regions();
       const size_t old_evac_bytes = get_live_bytes_in_old_regions();
       const size_t total_evac_bytes = young_evac_bytes + promote_evac_bytes + old_evac_bytes;
-      ls.print_cr("Evacuation Targets: "
-                  "YOUNG: " PROPERFMT ", " "PROMOTE: " PROPERFMT ", " "OLD: " PROPERFMT ", " "TOTAL: " PROPERFMT,
-                  PROPERFMTARGS(young_evac_bytes), PROPERFMTARGS(promote_evac_bytes), PROPERFMTARGS(old_evac_bytes), PROPERFMTARGS(total_evac_bytes));
+      ls.print_cr("Evacuations: %10zuK, %3zu%% of used, %3zu%% of cset",
+        total_evac_bytes / K,
+        total_evac_bytes * 100 / used,
+        total_evac_bytes * 100 / (count() * ShenandoahHeapRegion::region_size_bytes()));
+      ls.print_cr("  Young:     %10zuK", young_evac_bytes / K);
+      ls.print_cr("  Promoted:  %10zuK", promote_evac_bytes / K);
+      ls.print_cr("  Old:       %10zuK", old_evac_bytes / K);
     }
   }
 }

@@ -2329,11 +2329,8 @@ void ShenandoahFreeSet::move_regions_from_collector_to_mutator(size_t max_xfer_r
   }
 
   size_t total_xfer = collector_xfer + old_collector_xfer;
-  log_info(gc, ergo)("At start of update refs, moving %zu%s to Mutator free set from Collector Reserve ("
-                     "%zu%s) and from Old Collector Reserve (%zu%s)",
-                     byte_size_in_proper_unit(total_xfer), proper_unit_for_byte_size(total_xfer),
-                     byte_size_in_proper_unit(collector_xfer), proper_unit_for_byte_size(collector_xfer),
-                     byte_size_in_proper_unit(old_collector_xfer), proper_unit_for_byte_size(old_collector_xfer));
+  log_info(gc, ergo)("Moving %zuK to Mutator free set from Collector Reserve (%zuK) and from Old Collector Reserve (%zuK)",
+                     total_xfer / K, collector_xfer / K, old_collector_xfer / K);
 }
 
 // Overwrite arguments to represent the amount of memory in each generation that is about to be recycled

@@ -2878,6 +2878,7 @@ ShenandoahGeneration* ShenandoahHeap::generation_for(ShenandoahAffiliation affil
 }
 
 void ShenandoahHeap::log_heap_status(const char* msg) const {
+  log_info(gc, ergo)("Heap:");
   if (mode()->is_generational()) {
     young_generation()->log_status(msg);
     old_generation()->log_status(msg);

@@ -460,6 +460,8 @@ void ShenandoahGenerationalControlThread::service_concurrent_cycle(ShenandoahGen
   assert(!generation->is_old(), "Old GC takes a different control path");
 
   ShenandoahConcurrentGC gc(this, generation, do_old_gc_bootstrap);
+  _heap->log_heap_status("");
+
   _heap->increment_total_collections(false);
   if (gc.collect(cause)) {
     // Cycle is complete

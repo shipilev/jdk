@@ -389,7 +389,7 @@ size_t ShenandoahGenerationalHeuristics::compute_promotion_potential(ShenandoahG
   const size_t remaining = tenurable_next_cycle > tenurable_this_cycle ? tenurable_next_cycle - tenurable_this_cycle : 0;
   const size_t promo_potential = remaining * ShenandoahPromoEvacWaste;
   heap->old_generation()->set_promotion_potential(promo_potential);
-  log_info(gc, ergo)("Promotion potential of aged regions with sufficient garbage: " PROPERFMT, PROPERFMTARGS(promo_potential));
+  log_info(gc, ergo)("  Promotion potential: %10zuK", promo_potential/K);
   return tenurable_this_cycle * ShenandoahPromoEvacWaste;
 }
 

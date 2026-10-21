@@ -103,8 +103,8 @@ void ShenandoahMmuTracker::update_utilization(size_t gcid, const char* msg) {
     double mutator_time = mutator_thread_time - _most_recent_mutator_time;
     _most_recent_mutator_time = mutator_thread_time;
     _most_recent_mu = mutator_time / (_active_processors * gc_cycle_period);
-    log_info(gc, ergo)("At end of %s: GCU: %.1f%%, MU: %.1f%% during period of %.3fs",
-                       msg, _most_recent_gcu * 100, _most_recent_mu * 100, gc_cycle_period);
+    log_info(gc, ergo)("GCU: %.1f%%, MU: %.1f%% during period of %.3fs",
+      _most_recent_gcu * 100, _most_recent_mu * 100, gc_cycle_period);
   }
 }
 
@@ -130,8 +130,7 @@ void ShenandoahMmuTracker::record_old_marking_increment(bool old_marking_done) {
   fetch_cpu_times(gc_time, mutator_time);
   double gcu = (gc_time - _most_recent_gc_time) / duration;
   double mu = (mutator_time - _most_recent_mutator_time) / duration;
-  log_info(gc, ergo)("At end of %s: GCU: %.1f%%, MU: %.1f%% for duration %.3fs (totals to be subsumed in next gc report)",
-                     old_marking_done? "last OLD marking increment": "OLD marking increment",
+  log_info(gc, ergo)("GCU: %.1f%%, MU: %.1f%% for duration %.3fs (totals to be subsumed in next gc report)",
                      gcu * 100, mu * 100, duration);
 }
 

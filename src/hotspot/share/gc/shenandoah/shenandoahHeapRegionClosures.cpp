@@ -74,7 +74,7 @@ void ShenandoahFinalMarkUpdateRegionStateClosure::heap_region_do(ShenandoahHeapR
       HeapWord* tams = _ctx->top_at_mark_start(r);
       HeapWord* top = r->top();
       if (top > tams) {
-        r->increase_live_data_alloc_words(pointer_delta(top, tams));
+        r->increase_live_data_implicit(pointer_delta(top, tams));
       }
     }
 

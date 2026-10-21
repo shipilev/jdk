@@ -165,7 +165,7 @@ public:
       ShenandoahHeapRegion* region = heap->heap_region_containing(invisible_root);
       if (region->is_regular_or_regular_pinned()) {
         assert(!ShenandoahHeapRegion::requires_humongous(invisible_root_word_size), "Must not be humongous.");
-        region->increase_live_data_alloc_words(invisible_root_word_size);
+        region->increase_live_data_explicit(invisible_root_word_size);
       } else if (region->is_humongous_start()) {
         DEBUG_ONLY(size_t total_live_words = 0;)
         do {
@@ -174,7 +174,7 @@ public:
           DEBUG_ONLY(total_live_words += region_used_words;)
           assert(current == 0 || current == region_used_words, "Must be");
           if (current == 0) {
-            region->increase_live_data_alloc_words(region_used_words);
+            region->increase_live_data_explicit(region_used_words);
           }
           region = heap->get_region(region->index() + 1);
         } while (region != nullptr && region->is_humongous_continuation());

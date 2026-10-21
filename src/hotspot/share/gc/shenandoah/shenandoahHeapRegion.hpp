@@ -263,7 +263,8 @@ private:
   size_t _gclab_allocs;
   size_t _plab_allocs;
 
-  Atomic<size_t> _live_data;
+  Atomic<uint32_t> _live_data_explicit;
+  Atomic<uint32_t> _live_data_implicit;
   Atomic<size_t> _critical_pins;
 
   size_t _mixed_candidate_garbage_words;
@@ -400,10 +401,10 @@ public:
   void set_live_data(size_t s);
 
   // Increase live data for newly allocated region
-  inline void increase_live_data_alloc_words(size_t s);
+  inline void increase_live_data_implicit(size_t s);
 
   // Increase live data for region scanned with GC
-  inline void increase_live_data_gc_words(size_t s);
+  inline void increase_live_data_explicit(size_t s);
 
   inline bool has_live() const;
 
@@ -414,6 +415,8 @@ public:
   // Represents the number of live words identified by most recent marking effort.  Does not include the words
   // above TAMS.
   inline size_t get_live_data_words() const;
+
+  inline size_t get_live_data_words_explicit();
 
   inline size_t get_mixed_candidate_live_data_bytes() const;
   inline size_t get_mixed_candidate_live_data_words() const;
@@ -545,8 +548,6 @@ private:
   void decrement_humongous_waste();
   void do_commit();
   void do_uncommit();
-
-  inline void internal_increase_live_data(size_t s);
 
   void set_state(RegionState to);
 };

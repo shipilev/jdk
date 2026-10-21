@@ -69,7 +69,8 @@ ShenandoahHeapRegion::ShenandoahHeapRegion(HeapWord* start, size_t index, bool c
   _tlab_allocs(0),
   _gclab_allocs(0),
   _plab_allocs(0),
-  _live_data(0),
+  _live_data_explicit(0),
+  _live_data_implicit(0),
   _critical_pins(0),
   _mixed_candidate_garbage_words(0),
   _update_watermark(start),
@@ -390,7 +391,8 @@ size_t ShenandoahHeapRegion::get_plab_allocs() const {
 
 void ShenandoahHeapRegion::set_live_data(size_t s) {
   assert(Thread::current()->is_VM_thread(), "by VM thread");
-  _live_data.store_relaxed(s >> LogHeapWordSize);
+  _live_data_explicit.store_relaxed(s >> LogHeapWordSize);
+  _live_data_implicit.store_relaxed(0);
 }
 
 void ShenandoahHeapRegion::print_on(outputStream* st) const {

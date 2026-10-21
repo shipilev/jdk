@@ -173,7 +173,7 @@ void ShenandoahMark::count_liveness(ShenandoahLiveData* live_data, oop obj, Klas
     size_t new_val = size + cur;
     if (new_val >= SHENANDOAH_LIVEDATA_MAX) {
       // overflow, flush to region data
-      region->increase_live_data_gc_words(new_val);
+      region->increase_live_data_explicit(new_val);
       live_data[region_idx] = 0;
     } else {
       // still good, remember in locals
@@ -188,7 +188,7 @@ void ShenandoahMark::count_liveness(ShenandoahLiveData* live_data, oop obj, Klas
       ShenandoahHeapRegion* chain_reg = heap->get_region(i);
       assert(chain_reg->is_humongous(), "Expecting a humongous region");
       assert(chain_reg->is_affiliated(), "Do not count live data within FREE Humongous Continuation Region %zu", i);
-      chain_reg->increase_live_data_gc_words(chain_reg->used() >> LogHeapWordSize);
+      chain_reg->increase_live_data_explicit(chain_reg->used() >> LogHeapWordSize);
     }
   }
 }

@@ -1314,6 +1314,26 @@ void ShenandoahHeap::concurrent_prepare_for_update_refs() {
 
   // Now retire gclabs and plabs and propagate gc_state for mutator threads
   Handshake::execute(&prepare_for_update_refs);
+
+  size_t update_marked = 0;
+  size_t update_allocated = 0;
+
+  for (uint i = 0; i < _num_regions; i++) {
+    ShenandoahHeapRegion* r = _regions[i];
+    HeapWord* urwm = r->get_update_watermark();
+    HeapWord* tams = marking_context()->top_at_mark_start(r);
+
+    guarantee(urwm >= tams, "Should be");
+
+    update_allocated += pointer_delta(urwm, tams);
+    update_marked += r->get_live_data_words_explicit();
+  }
+
+  size_t total = (update_marked + update_allocated);
+  if (total == 0) total = 1;
+  log_info(gc, ergo)("Update References: %10zuK", total * HeapWordSize / K);
+  log_info(gc, ergo)("  Explicitly Live: %10zuK, %3zu%%", update_marked * HeapWordSize / K,    update_marked    * 100 / total);
+  log_info(gc, ergo)("  Implicitly Live: %10zuK, %3zu%%", update_allocated * HeapWordSize / K, update_allocated * 100 / total);
 }
 
 void ShenandoahHeap::op_final_roots() {
@@ -2779,7 +2799,7 @@ void ShenandoahHeap::flush_liveness_cache(uint worker_id) {
     ShenandoahLiveData live = ld[i];
     if (live > 0) {
       ShenandoahHeapRegion* r = get_region(i);
-      r->increase_live_data_gc_words(live);
+      r->increase_live_data_explicit(live);
       ld[i] = 0;
     }
   }

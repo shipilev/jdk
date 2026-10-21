@@ -84,25 +84,26 @@ inline void ShenandoahHeapRegion::adjust_alloc_metadata(const ShenandoahAllocReq
   }
 }
 
-inline void ShenandoahHeapRegion::increase_live_data_alloc_words(size_t s) {
-  internal_increase_live_data(s);
+inline void ShenandoahHeapRegion::increase_live_data_implicit(size_t s) {
+  _live_data_implicit.add_then_fetch((uint32_t)s, memory_order_relaxed);
 }
 
-inline void ShenandoahHeapRegion::increase_live_data_gc_words(size_t s) {
-  internal_increase_live_data(s);
-}
-
-inline void ShenandoahHeapRegion::internal_increase_live_data(size_t s) {
-  _live_data.add_then_fetch(s, memory_order_relaxed);
+inline void ShenandoahHeapRegion::increase_live_data_explicit(size_t s) {
+  _live_data_explicit.add_then_fetch((uint32_t)s, memory_order_relaxed);
 }
 
 inline void ShenandoahHeapRegion::clear_live_data() {
-  _live_data.store_relaxed((size_t)0);
+  _live_data_explicit.store_relaxed((uint32_t)0);
+  _live_data_implicit.store_relaxed((uint32_t)0);
   _promoted_in_place = false;
 }
 
 inline size_t ShenandoahHeapRegion::get_live_data_words() const {
-  return _live_data.load_relaxed();
+  return _live_data_implicit.load_relaxed() + _live_data_explicit.load_relaxed();
+}
+
+inline size_t ShenandoahHeapRegion::get_live_data_words_explicit() {
+  return _live_data_explicit.load_relaxed();
 }
 
 inline size_t ShenandoahHeapRegion::get_live_data_bytes() const {

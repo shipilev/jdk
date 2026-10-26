@@ -934,25 +934,40 @@ void ShenandoahConcurrentGC::op_thread_roots() {
   assert(heap->is_evacuation_in_progress(), "Checked by caller");
 
   {
+    size_t total_marked = 0;
+    size_t total_allocated = 0;
     size_t evac_marked = 0;
     size_t evac_allocated = 0;
 
     for (uint i = 0; i < heap->num_regions(); i++) {
       ShenandoahHeapRegion* r = heap->get_region(i);
-      if (!r->is_cset()) continue;
 
       HeapWord* top = r->top();
       HeapWord* tams = heap->marking_context()->top_at_mark_start(r);
 
-      evac_allocated += pointer_delta(top, tams);
-      evac_marked += r->get_live_data_words_explicit();
+      size_t allocated = pointer_delta(top, tams);
+      size_t marked = r->get_live_data_words_explicit();
+
+      total_allocated += allocated;
+      total_marked += marked;
+
+      if (r->is_cset()) {
+        evac_allocated += allocated;
+        evac_marked += marked;
+      }
     }
 
-    size_t total = (evac_marked + evac_allocated);
+    size_t total = (total_marked + total_allocated);
     if (total == 0) total = 1;
-    log_info(gc, ergo)("Evacuations:       %10zuK", total * HeapWordSize / K);
-    log_info(gc, ergo)("  Explicitly Live: %10zuK, %3zu%%", evac_marked * HeapWordSize / K,    evac_marked    * 100 / total);
-    log_info(gc, ergo)("  Implicitly Live: %10zuK, %3zu%%", evac_allocated * HeapWordSize / K, evac_allocated * 100 / total);
+    log_info(gc, ergo)("Live Set:       %10zuK", total * HeapWordSize / K);
+    log_info(gc, ergo)("  Marked:       %10zuK, %3zu%%", total_marked * HeapWordSize / K,    total_marked    * 100 / total);
+    log_info(gc, ergo)("  New:          %10zuK, %3zu%%", total_allocated * HeapWordSize / K, total_allocated * 100 / total);
+
+    size_t total_evac = (evac_marked + evac_allocated);
+    if (total_evac == 0) total_evac = 1;
+    log_info(gc, ergo)("Collection Set: %10zuK", total_evac * HeapWordSize / K);
+    log_info(gc, ergo)("  Marked:       %10zuK, %3zu%%", evac_marked * HeapWordSize / K,    evac_marked    * 100 / total_evac);
+    log_info(gc, ergo)("  New:          %10zuK, %3zu%%", evac_allocated * HeapWordSize / K, evac_allocated * 100 / total_evac);
   }
 
   ShenandoahGCWorkerPhase worker_phase(ShenandoahPhaseTimings::conc_thread_roots);

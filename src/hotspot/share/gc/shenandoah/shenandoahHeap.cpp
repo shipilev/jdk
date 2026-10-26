@@ -1331,9 +1331,9 @@ void ShenandoahHeap::concurrent_prepare_for_update_refs() {
 
   size_t total = (update_marked + update_allocated);
   if (total == 0) total = 1;
-  log_info(gc, ergo)("Update References: %10zuK", total * HeapWordSize / K);
-  log_info(gc, ergo)("  Explicitly Live: %10zuK, %3zu%%", update_marked * HeapWordSize / K,    update_marked    * 100 / total);
-  log_info(gc, ergo)("  Implicitly Live: %10zuK, %3zu%%", update_allocated * HeapWordSize / K, update_allocated * 100 / total);
+  log_info(gc, ergo)("Update Ref Set: %10zuK", total * HeapWordSize / K);
+  log_info(gc, ergo)("  Marked:       %10zuK, %3zu%%", update_marked * HeapWordSize / K,    update_marked    * 100 / total);
+  log_info(gc, ergo)("  New:          %10zuK, %3zu%%", update_allocated * HeapWordSize / K, update_allocated * 100 / total);
 }
 
 void ShenandoahHeap::op_final_roots() {

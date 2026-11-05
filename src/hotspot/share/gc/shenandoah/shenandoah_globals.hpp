@@ -294,13 +294,13 @@
           "Heuristics may trigger collections more frequently. Time is in " \
           "milliseconds. Setting this to 0 disables the feature.")          \
                                                                             \
-  product(double, ShenandoahGCDutyCycleLimit, 0, EXPERIMENTAL,              \
+  product(double, ShenandoahGCDutyCycleLimit, 0.1, EXPERIMENTAL,              \
           "")                                                               \
                                                                             \
-  product(double, ShenandoahYoungGCDutyCycleLimit, 0, EXPERIMENTAL,         \
+  product(double, ShenandoahYoungGCDutyCycleLimit, 0.1, EXPERIMENTAL,         \
           "")                                                               \
                                                                             \
-  product(double, ShenandoahOldGCDutyCycleLimit, 0, EXPERIMENTAL,           \
+  product(double, ShenandoahOldGCDutyCycleLimit, 0.1, EXPERIMENTAL,           \
           "")                                                               \
                                                                             \
   product(bool, ShenandoahAlwaysClearSoftRefs, false, EXPERIMENTAL,         \

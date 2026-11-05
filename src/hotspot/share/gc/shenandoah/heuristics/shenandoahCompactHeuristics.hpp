@@ -47,9 +47,6 @@ protected:
   void choose_collection_set_from_regiondata(ShenandoahCollectionSet* cset,
                                              RegionData* data, size_t size,
                                              size_t actual_free) override;
-
-private:
-  size_t _bytes_used_at_end_of_gc;
 };
 
 #endif // SHARE_GC_SHENANDOAH_HEURISTICS_SHENANDOAHCOMPACTHEURISTICS_HPP

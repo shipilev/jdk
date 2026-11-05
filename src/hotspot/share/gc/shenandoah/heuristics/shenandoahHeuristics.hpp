@@ -187,6 +187,9 @@ protected:
   RegionData* _region_data;
 
   size_t _guaranteed_gc_interval;
+  double _gc_duty_cycle_limit;
+
+  size_t _bytes_used_at_end_of_gc;
 
   double _cycle_start;
   double _last_cycle_end;
@@ -231,6 +234,10 @@ public:
 
   void set_guaranteed_gc_interval(size_t guaranteed_gc_interval) {
     _guaranteed_gc_interval = guaranteed_gc_interval;
+  }
+
+  void set_gc_duty_cycle_limit(double val) {
+    _gc_duty_cycle_limit = val;
   }
 
   virtual void start_idle_span();

@@ -58,6 +58,8 @@ ShenandoahHeuristics::ShenandoahHeuristics(ShenandoahSpaceInfo* space_info) :
   _space_info(space_info),
   _region_data(nullptr),
   _guaranteed_gc_interval(0),
+  _gc_duty_cycle_limit(0),
+  _bytes_used_at_end_of_gc(0),
   _cycle_start(os::elapsedTime()),
   _last_cycle_end(0),
   _gc_times_learned(0),
@@ -170,6 +172,7 @@ void ShenandoahHeuristics::record_cycle_start() {
 
 void ShenandoahHeuristics::record_cycle_end() {
   _last_cycle_end = os::elapsedTime();
+  _bytes_used_at_end_of_gc = _space_info->used();
 
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   if (!heap->mode()->is_generational()) {
@@ -200,6 +203,26 @@ bool ShenandoahHeuristics::should_start_gc() {
       return true;
     }
   }
+
+  if (_gc_duty_cycle_limit > 0) {
+    const size_t used = _space_info->used();
+    const size_t capacity = ShenandoahHeap::heap()->soft_max_capacity();
+    const size_t bytes_allocated = used > _bytes_used_at_end_of_gc ? used - _bytes_used_at_end_of_gc : 0;
+    const size_t alloc_threshold = capacity * ShenandoahAllocationThreshold / 100;
+
+    double last_gc_time = _last_cycle_end - _cycle_start;
+    double last_check_time = os::elapsedTime() - _cycle_start;
+
+    double duty_cycle = last_gc_time / last_check_time;
+    if (bytes_allocated > alloc_threshold &&
+        duty_cycle < _gc_duty_cycle_limit) {
+      log_trigger("Footprint. Allocated %zuM, %3.1f%% duty cycle",
+                   bytes_allocated / M, duty_cycle * 100);
+      accept_trigger();
+      return true;
+    }
+  }
+
   decline_trigger();
   return false;
 }

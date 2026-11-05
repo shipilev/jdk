@@ -32,8 +32,7 @@
 #include "logging/logTag.hpp"
 
 ShenandoahCompactHeuristics::ShenandoahCompactHeuristics(ShenandoahSpaceInfo* space_info) :
-  ShenandoahHeuristics(space_info),
-  _bytes_used_at_end_of_gc(0) {
+  ShenandoahHeuristics(space_info) {
   SHENANDOAH_ERGO_ENABLE_FLAG(ExplicitGCInvokesConcurrent);
   SHENANDOAH_ERGO_ENABLE_FLAG(ShenandoahUncommit);
   SHENANDOAH_ERGO_ENABLE_FLAG(ShenandoahAlwaysClearSoftRefs);
@@ -77,7 +76,6 @@ bool ShenandoahCompactHeuristics::should_start_gc() {
 
 void ShenandoahCompactHeuristics::record_cycle_end() {
   ShenandoahHeuristics::record_cycle_end();
-  _bytes_used_at_end_of_gc = _space_info->used();
 }
 
 void ShenandoahCompactHeuristics::choose_collection_set_from_regiondata(ShenandoahCollectionSet* cset,

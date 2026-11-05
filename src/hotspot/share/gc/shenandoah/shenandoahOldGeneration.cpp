@@ -591,6 +591,7 @@ bool ShenandoahOldGeneration::validate_idle() {
 ShenandoahHeuristics* ShenandoahOldGeneration::initialize_heuristics(ShenandoahMode* gc_mode) {
   _old_heuristics = new ShenandoahOldHeuristics(this, ShenandoahGenerationalHeap::heap());
   _old_heuristics->set_guaranteed_gc_interval(ShenandoahGuaranteedOldGCInterval);
+  _old_heuristics->set_gc_duty_cycle_limit(ShenandoahOldGCDutyCycleLimit);
   _heuristics = _old_heuristics;
   return _heuristics;
 }

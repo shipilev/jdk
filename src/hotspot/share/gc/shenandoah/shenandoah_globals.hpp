@@ -245,7 +245,7 @@
           "size.")                                                          \
           range(0,100)                                                      \
                                                                             \
-  product(uintx, ShenandoahAllocationThreshold, 0, EXPERIMENTAL,            \
+  product(uintx, ShenandoahAllocationThreshold, 5, EXPERIMENTAL,            \
           "How many bytes may be allocated since the last GC cycle started "\
           "before some heuristics trigger the collection. In percents of "  \
           "(soft) max heap size. Set to zero to effectively disable.")      \
@@ -293,6 +293,15 @@
           "Run a collection of the young generation at least this often. "  \
           "Heuristics may trigger collections more frequently. Time is in " \
           "milliseconds. Setting this to 0 disables the feature.")          \
+                                                                            \
+  product(double, ShenandoahGCDutyCycleLimit, 0, EXPERIMENTAL,              \
+          "")                                                               \
+                                                                            \
+  product(double, ShenandoahYoungGCDutyCycleLimit, 0, EXPERIMENTAL,         \
+          "")                                                               \
+                                                                            \
+  product(double, ShenandoahOldGCDutyCycleLimit, 0, EXPERIMENTAL,           \
+          "")                                                               \
                                                                             \
   product(bool, ShenandoahAlwaysClearSoftRefs, false, EXPERIMENTAL,         \
           "Unconditionally clear soft references, instead of using any "    \

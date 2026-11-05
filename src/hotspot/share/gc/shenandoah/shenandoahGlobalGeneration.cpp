@@ -116,6 +116,7 @@ ShenandoahHeuristics* ShenandoahGlobalGeneration::initialize_heuristics(Shenando
   }
 
   _heuristics->set_guaranteed_gc_interval(ShenandoahGuaranteedGCInterval);
+  _heuristics->set_gc_duty_cycle_limit(ShenandoahGCDutyCycleLimit);
   confirm_heuristics_mode();
   return _heuristics;
 }

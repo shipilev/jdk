@@ -69,10 +69,10 @@ size_t ShenandoahTaskQueueChunk::size() {
   return _index;
 }
 
-ShenandoahTaskQueueOverflow::ShenandoahTaskQueueOverflow() : _head(nullptr) {
+ShenandoahTaskChunkStack::ShenandoahTaskChunkStack() : _head(nullptr) {
 }
 
-ShenandoahTaskQueueChunk* ShenandoahTaskQueueOverflow::pop() {
+ShenandoahTaskQueueChunk* ShenandoahTaskChunkStack::pop() {
   // FIXME: ABA here!
   while (true) {
     auto head = AtomicAccess::load(&_head);
@@ -86,7 +86,7 @@ ShenandoahTaskQueueChunk* ShenandoahTaskQueueOverflow::pop() {
   }
 }
 
-void ShenandoahTaskQueueOverflow::push(ShenandoahTaskQueueChunk *chunk) {
+void ShenandoahTaskChunkStack::push(ShenandoahTaskQueueChunk *chunk) {
   while (true) {
     auto head = AtomicAccess::load(&_head);
     chunk->set_next(head);
@@ -97,11 +97,11 @@ void ShenandoahTaskQueueOverflow::push(ShenandoahTaskQueueChunk *chunk) {
   }
 }
 
-bool ShenandoahTaskQueueOverflow::is_empty() {
+bool ShenandoahTaskChunkStack::is_empty() {
   return AtomicAccess::load(&_head) == nullptr;
 }
 
-void ShenandoahTaskQueueOverflow::clear() {
+void ShenandoahTaskChunkStack::clear() {
   while (true) {
     auto chunk = pop();
     if (chunk != nullptr) {
@@ -112,6 +112,14 @@ void ShenandoahTaskQueueOverflow::clear() {
   }
 }
 
+ShenandoahTaskQueue::ShenandoahTaskQueue(ShenandoahTaskChunkStack *free, ShenandoahTaskChunkStack *overflow) : _free(free), _overflow(overflow) {
+  auto free_chunk = _free->pop();
+  if (free_chunk == nullptr) {
+    free_chunk = new ShenandoahTaskQueueChunk();
+  }
+  _chunk = free_chunk;
+}
+
 ShenandoahTaskQueue::~ShenandoahTaskQueue() {
   delete _chunk;
 }
@@ -119,7 +127,11 @@ ShenandoahTaskQueue::~ShenandoahTaskQueue() {
 void ShenandoahTaskQueue::push(ShenandoahMarkTask task) {
   if (!_chunk->push(task)) {
     _overflow->push(_chunk);
-    _chunk = new ShenandoahTaskQueueChunk();
+    auto free_chunk = _free->pop();
+    if (free_chunk == nullptr) {
+      free_chunk = new ShenandoahTaskQueueChunk();
+    }
+    _chunk = free_chunk;
     bool succ = _chunk->push(task);
     assert(succ, "Must succeed");
   }
@@ -132,7 +144,7 @@ bool ShenandoahTaskQueue::pop(ShenandoahMarkTask& task) {
 
   auto chunk = _overflow->pop();
   if (chunk != nullptr) {
-    delete _chunk;
+    _free->push(_chunk);
     _chunk = chunk;
     return _chunk->pop(task);
   }
@@ -148,20 +160,25 @@ void ShenandoahTaskQueue::clear() {
   _chunk->clear();
 }
 
-ShenandoahTaskQueueChunk * ShenandoahTaskQueue::disown_chunk() {
+ShenandoahTaskQueueChunk* ShenandoahTaskQueue::disown_chunk() {
   if (_chunk->is_empty()) {
     return nullptr;
   }
   auto chunk = _chunk;
-  _chunk = new ShenandoahTaskQueueChunk();
+  auto free_chunk = _free->pop();
+  if (free_chunk == nullptr) {
+    free_chunk = new ShenandoahTaskQueueChunk();
+  }
+  _chunk = free_chunk;
   return chunk;
 }
 
 ShenandoahTaskQueueSet::ShenandoahTaskQueueSet(uint size) : _size(size) {
-  _overflow = new ShenandoahTaskQueueOverflow();
+  _free = new ShenandoahTaskChunkStack();
+  _overflow = new ShenandoahTaskChunkStack();
   _queues = NEW_C_HEAP_ARRAY(ShenandoahTaskQueue*, size, mtGC);
   for (uint i = 0; i < size; ++i) {
-    _queues[i] = new ShenandoahTaskQueue(_overflow);
+    _queues[i] = new ShenandoahTaskQueue(_free, _overflow);
   }
 }
 
@@ -172,6 +189,8 @@ ShenandoahTaskQueueSet::~ShenandoahTaskQueueSet() {
   FREE_C_HEAP_ARRAY(_queues);
   _overflow->clear();
   delete _overflow;
+  _free->clear();
+  delete _free;
 }
 
 ShenandoahTaskQueue * ShenandoahTaskQueueSet::queue(uint i) {

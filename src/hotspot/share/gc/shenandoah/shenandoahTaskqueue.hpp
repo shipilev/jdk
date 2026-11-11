@@ -297,12 +297,12 @@ public:
   size_t size();
 };
 
-class ShenandoahTaskQueueOverflow : public CHeapObj<mtGC>  {
+class ShenandoahTaskChunkStack : public CHeapObj<mtGC>  {
 private:
   ShenandoahTaskQueueChunk* _head;
 
 public:
-  ShenandoahTaskQueueOverflow();
+  ShenandoahTaskChunkStack();
 
   ShenandoahTaskQueueChunk* pop();
   void push(ShenandoahTaskQueueChunk* chunk);
@@ -314,10 +314,11 @@ public:
 
 class ShenandoahTaskQueue : public CHeapObj<mtGC> {
   ShenandoahTaskQueueChunk* _chunk;
-  ShenandoahTaskQueueOverflow* _overflow;
+  ShenandoahTaskChunkStack* _free;
+  ShenandoahTaskChunkStack* _overflow;
 
 public:
-  ShenandoahTaskQueue(ShenandoahTaskQueueOverflow* overflow) : _chunk(new ShenandoahTaskQueueChunk()), _overflow(overflow) {};
+  ShenandoahTaskQueue(ShenandoahTaskChunkStack* free, ShenandoahTaskChunkStack* overflow);
   ~ShenandoahTaskQueue();
 
   void push(ShenandoahMarkTask task);
@@ -335,7 +336,8 @@ class ShenandoahTaskQueueSet : public CHeapObj<mtGC> {
 private:
   ShenandoahTaskQueue** _queues;
   int _size;
-  ShenandoahTaskQueueOverflow* _overflow;
+  ShenandoahTaskChunkStack* _free;
+  ShenandoahTaskChunkStack* _overflow;
 
 public:
   ShenandoahTaskQueueSet(uint size);
@@ -345,8 +347,6 @@ public:
   bool is_empty();
 
   void clear();
-
-  size_t size();
 
   bool has_overflow();
 

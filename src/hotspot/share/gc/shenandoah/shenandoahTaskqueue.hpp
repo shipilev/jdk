@@ -272,7 +272,7 @@ public:
 #pragma warning(pop)
 #endif
 
-static const int MAX_TASK_CHUNK_SIZE = 128;
+static const int MAX_TASK_CHUNK_SIZE = 256;
 
 class ShenandoahTaskQueueChunk : public CHeapObj<mtGC>  {
 private:

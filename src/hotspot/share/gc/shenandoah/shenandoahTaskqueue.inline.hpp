@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2016, 2019, Red Hat, Inc. All rights reserved.
  * Copyright (c) 2024, 2026, Oracle and/or its affiliates. All rights reserved.
+ * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,74 +29,148 @@
 
 #include "gc/shenandoah/shenandoahTaskqueue.hpp"
 
-#include "gc/shared/taskqueue.inline.hpp"
-#include "utilities/stack.inline.hpp"
+void ShenandoahTaskQueue::push(ShenandoahMarkTask task) {
+  if (!_chunk->push(task)) {
+    _qs->push_shared(_chunk);
+    _chunk = _qs->pop_free();
+    bool succ = _chunk->push(task);
+    assert(succ, "Must succeed");
+  }
+}
 
-template <class E, MemTag MT, unsigned int N>
-bool BufferedOverflowTaskQueue<E, MT, N>::pop(E &t) {
-  if (!_buf_empty) {
-    t = _elem;
-    _buf_empty = true;
+bool ShenandoahTaskQueue::pop(ShenandoahMarkTask& task) {
+  if (_chunk->pop(task)) {
     return true;
   }
 
-  if (taskqueue_t::pop_local(t)) {
-    return true;
-  }
-
-  if (taskqueue_t::pop_overflow(t)) {
-    pop_more_overflow();
-    return true;
+  auto chunk = _qs->pop_shared();
+  if (chunk != nullptr) {
+    _qs->push_free(_chunk);
+    _chunk = chunk;
+    return _chunk->pop(task);
   }
 
   return false;
 }
 
-template <class E, MemTag MT, unsigned int N>
-void BufferedOverflowTaskQueue<E, MT, N>::pop_more_overflow() {
-  // Local queue is empty and we have overflow. Overflow queue is invisible
-  // for work stealing, so we want to transfer as much as practically possible
-  // from it. Pulling too little hinders work balancing. Pulling too much
-  // incurs stalls (important e.g. when we need to respond to yield/cancellation).
-  // Local queues must also have some space left for local pushes.
-  constexpr uint fill = MIN2<uint>(16*K, N/2);
+static uint32_t decode_idx(uint64_t encoded) {
+  return (uint32_t) encoded;
+}
+static uint64_t encode(uint64_t old, uint32_t idx, bool bump) {
+  uint64_t ver = (old >> 32) + (bump ? 1 : 0);
+  return (ver << 32) | idx;
+}
 
-  E tmp;
-  assert(taskqueue_t::size() == 0, "Local queue is empty");
-  for (uint i = 0; (i < fill) && taskqueue_t::pop_overflow(tmp); i++) {
-    bool pushed = taskqueue_t::try_push_to_taskqueue(tmp);
-    assert(pushed, "Should always succeed pushing");
+inline bool ShenandoahTaskQueueSet::is_shared_empty() {
+  return decode_idx(AtomicAccess::load(&_shared_list_head)) == NULL_IDX;
+}
+
+inline ShenandoahTaskQueueChunk* ShenandoahTaskQueueSet::pop(uint64_t* head) {
+  uint64_t old = AtomicAccess::load_acquire(head);
+  while (true) {
+    uint32_t idx = decode_idx(old);
+    if (idx == NULL_IDX) {
+      return nullptr;
+    }
+    ShenandoahTaskQueueChunk* chunk = chunk_at(idx);
+    uint64_t next = encode(old, chunk->next_idx(), true);
+    uint64_t prev = AtomicAccess::cmpxchg(head, old, next, memory_order_seq_cst);
+    if (prev == old) {
+      return chunk;
+    }
+    old = prev;
   }
 }
 
-template <class E, MemTag MT, unsigned int N>
-bool BufferedOverflowTaskQueue<E, MT, N>::push(E t) {
-  if (_buf_empty) {
-    _elem = t;
-    _buf_empty = false;
-  } else {
-    bool pushed = taskqueue_t::push(_elem);
-    assert(pushed, "overflow queue should always succeed pushing");
-    _elem = t;
+inline void ShenandoahTaskQueueSet::push(uint64_t* head, ShenandoahTaskQueueChunk* chunk) {
+  uint64_t old = AtomicAccess::load_acquire(head);
+  while (true) {
+    uint32_t idx = index_of(chunk);
+    chunk->set_next_idx(decode_idx(old));
+    uint64_t next = encode(old, idx, false);
+    uint64_t prev = AtomicAccess::cmpxchg(head, old, next, memory_order_seq_cst);
+    if (prev == old) {
+      return;
+    }
+    old = prev;
   }
-  return true;
 }
 
-template <class E, MemTag MT, unsigned int N>
-void BufferedOverflowTaskQueue<E, MT, N>::clear() {
-    _buf_empty = true;
-    taskqueue_t::set_empty();
-    taskqueue_t::overflow_stack()->clear();
+inline ShenandoahTaskQueueChunk* ShenandoahTaskQueueSet::pop_shared() {
+  return pop(&_shared_list_head);
 }
 
-template <class E, MemTag MT, unsigned int N>
-inline size_t BufferedOverflowTaskQueue<E, MT, N>::full_size() {
-  return taskqueue_t::size() + taskqueue_t::overflow_stack()->size() + (_buf_empty ? 0 : 1);
+inline ShenandoahTaskQueueChunk* ShenandoahTaskQueueSet::pop_free() {
+  auto chunk = pop(&_free_list_head);
+  if (chunk == nullptr) {
+    chunk = allocate_chunk();
+  }
+  return chunk;
 }
 
-template <class E, MemTag MT, unsigned int N>
-inline size_t BufferedOverflowTaskQueue<E, MT, N>::capacity() const {
-  return N;
+inline void ShenandoahTaskQueueSet::push_shared(ShenandoahTaskQueueChunk* chunk) {
+  push(&_shared_list_head, chunk);
+}
+
+inline void ShenandoahTaskQueueSet::push_free(ShenandoahTaskQueueChunk* chunk) {
+  push(&_free_list_head, chunk);
+}
+
+bool ShenandoahTaskQueueChunk::push(ShenandoahMarkTask t) {
+  if (_top < MAX_TASK_CHUNK_SIZE) {
+    _tasks[_top++] = t;
+    return true;
+  }
+  return false;
+}
+
+bool ShenandoahTaskQueueChunk::pop(ShenandoahMarkTask& t) {
+  if (_top > 0) {
+    t = _tasks[--_top];
+    return true;
+  }
+  return false;
+}
+
+inline uint32_t ShenandoahTaskQueueChunk::next_idx() {
+  return AtomicAccess::load(&_next_chunk_idx);
+}
+
+inline void ShenandoahTaskQueueChunk::set_next_idx(uint32_t next) {
+  AtomicAccess::store(&_next_chunk_idx, next);
+}
+
+inline ShenandoahTaskQueueChunk* ShenandoahTaskQueueSet::chunk_at(uint32_t idx) {
+  if (idx == NULL_IDX) {
+    return nullptr;
+  }
+  return reinterpret_cast<ShenandoahTaskQueueChunk*>(_vs_chunks.low() + idx * CHUNK_SIZE);
+}
+
+inline uint32_t ShenandoahTaskQueueSet::index_of(ShenandoahTaskQueueChunk* chunk) {
+  if (chunk == nullptr) {
+    return NULL_IDX;
+  }
+  intptr_t raw_chunk = (intptr_t)chunk;
+  intptr_t raw_base = (intptr_t)_vs_chunks.low();
+  assert(raw_chunk > raw_base, "Should be");
+  size_t off = raw_chunk - raw_base;
+  assert(is_aligned(off, CHUNK_SIZE), "Sanity: alignment");
+  return checked_cast<uint32_t>(off / CHUNK_SIZE);
+}
+
+inline ShenandoahTaskQueueChunk* ShenandoahTaskQueueSet::allocate_chunk() {
+  MutexLocker ml(&_expand_lock, Mutex::_no_safepoint_check_flag);
+  if (_chunks_allocated >= _chunks_committed) {
+    size_t expand = COMMIT_CHUNKS * CHUNK_SIZE;
+    if (!_vs_chunks.expand_by(expand)) {
+      vm_exit_out_of_memory(expand, OOM_MMAP_ERROR, "Shenandoah: ShenandoahTaskQueueSet pool exhausted");
+    }
+    _chunks_committed += COMMIT_CHUNKS;
+  }
+  auto chunk = new (chunk_at(_chunks_allocated)) ShenandoahTaskQueueChunk();
+  _chunks_allocated++;
+  return chunk;
 }
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHTASKQUEUE_INLINE_HPP

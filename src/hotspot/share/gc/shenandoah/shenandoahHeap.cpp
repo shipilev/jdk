@@ -106,6 +106,7 @@
 #include "utilities/events.hpp"
 #include "utilities/globalDefinitions.hpp"
 #include "utilities/powerOfTwo.hpp"
+#include "utilities/stack.inline.hpp"
 #if INCLUDE_JFR
 #include "gc/shenandoah/shenandoahJfrSupport.hpp"
 #endif
@@ -1879,7 +1880,7 @@ void ShenandoahHeap::reclaim_aux_bitmap_for_iteration() {
 class ShenandoahObjectIterateParScanClosure : public BasicOopIterateClosure {
 private:
   MarkBitMap* _bitmap;
-  ShenandoahObjToScanQueue* _queue;
+  ShenandoahTaskQueue* _queue;
 
   template <class T>
   void do_oop_work(T* p) {
@@ -1898,7 +1899,7 @@ private:
     }
   }
 public:
-  ShenandoahObjectIterateParScanClosure(MarkBitMap* bitmap, ShenandoahObjToScanQueue* q) :
+  ShenandoahObjectIterateParScanClosure(MarkBitMap* bitmap, ShenandoahTaskQueue* q) :
     _bitmap(bitmap), _queue(q) {}
   void do_oop(oop* p)       { do_oop_work(p); }
   void do_oop(narrowOop* p) { do_oop_work(p); }
@@ -1916,7 +1917,7 @@ private:
   MarkBitMap*                  _aux_bit_map;
   ShenandoahHeap*              _heap;
   ShenandoahScanObjectStack    _roots_stack; // global roots stack
-  ShenandoahObjToScanQueueSet* _task_queues;
+  ShenandoahTaskQueueSet*      _task_queues;
 public:
   ShenandoahParallelObjectIterator(uint num_workers, MarkBitMap* bitmap) :
         _num_workers(num_workers),
@@ -1940,13 +1941,6 @@ public:
     _heap->reclaim_aux_bitmap_for_iteration();
     // Reclaim queue for workers
     if (_task_queues!= nullptr) {
-      for (uint i = 0; i < _num_workers; ++i) {
-        ShenandoahObjToScanQueue* q = _task_queues->queue(i);
-        if (q != nullptr) {
-          delete q;
-          _task_queues->register_queue(i, nullptr);
-        }
-      }
       delete _task_queues;
       _task_queues = nullptr;
     }
@@ -1961,12 +1955,7 @@ public:
 private:
   // Divide global root_stack into worker queues
   bool prepare_worker_queues() {
-    _task_queues = new ShenandoahObjToScanQueueSet((int) _num_workers);
-    // Initialize queues for every workers
-    for (uint i = 0; i < _num_workers; ++i) {
-      ShenandoahObjToScanQueue* task_queue = new ShenandoahObjToScanQueue();
-      _task_queues->register_queue(i, task_queue);
-    }
+    _task_queues = new ShenandoahTaskQueueSet(_num_workers);
     // Divide roots among the workers. Assume that object referencing distribution
     // is related with root kind, use round-robin to make every worker have same chance
     // to process every kind of roots
@@ -1986,11 +1975,11 @@ private:
 
   void object_iterate_parallel(ObjectClosure* cl,
                                uint worker_id,
-                               ShenandoahObjToScanQueueSet* queue_set) {
+                               ShenandoahTaskQueueSet* queue_set) {
     assert(SafepointSynchronize::is_at_safepoint(), "safe iteration is only available during safepoints");
     assert(queue_set != nullptr, "task queue must not be null");
 
-    ShenandoahObjToScanQueue* q = queue_set->queue(worker_id);
+    ShenandoahTaskQueue* q = queue_set->queue(worker_id);
     assert(q != nullptr, "object iterate queue must not be null");
 
     ShenandoahMarkTask t;
@@ -1998,7 +1987,7 @@ private:
 
     // Work through the queue to traverse heap.
     // Steal when there is no task in queue.
-    while (q->pop(t) || queue_set->steal(worker_id, t)) {
+    while (q->pop(t)) {
       oop obj = t.obj();
       assert(oopDesc::is_oop(obj), "must be a valid oop");
       cl->do_object(obj);

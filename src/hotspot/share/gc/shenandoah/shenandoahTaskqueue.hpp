@@ -27,52 +27,16 @@
 #define SHARE_GC_SHENANDOAH_SHENANDOAHTASKQUEUE_HPP
 
 #include "gc/shared/taskqueue.hpp"
-#include "gc/shared/taskTerminator.hpp"
 #include "gc/shenandoah/shenandoahPadding.hpp"
+#include "memory/reservedSpace.hpp"
+#include "memory/virtualspace.hpp"
 #include "nmt/memTag.hpp"
-#include "runtime/atomic.hpp"
 #include "runtime/atomicAccess.hpp"
-#include "runtime/javaThread.hpp"
 #include "runtime/mutex.hpp"
 #include "utilities/debug.hpp"
 
+class ShenandoahTaskQueueSet;
 class ShenandoahHeap;
-
-template<class E, MemTag MT, unsigned int N = TASKQUEUE_SIZE>
-class BufferedOverflowTaskQueue: public OverflowTaskQueue<E, MT, N>
-{
-public:
-  typedef OverflowTaskQueue<E, MT, N> taskqueue_t;
-
-  BufferedOverflowTaskQueue() : _buf_empty(true) {};
-
-  TASKQUEUE_STATS_ONLY(using taskqueue_t::stats;)
-
-  // Push task t into the queue. Returns true on success.
-  ALWAYSINLINE
-  bool push(E t);
-
-  // Attempt to pop from the queue. Returns true on success.
-  ALWAYSINLINE
-  bool pop(E &t);
-
-  inline void clear();
-
-  inline bool is_empty()        const {
-    return _buf_empty && taskqueue_t::is_empty();
-  }
-
-  NOINLINE
-  void pop_more_overflow();
-
-  inline size_t full_size();
-
-  inline size_t capacity() const;
-
-private:
-  bool _buf_empty;
-  E _elem;
-};
 
 // ShenandoahMarkTask
 //
@@ -309,25 +273,109 @@ public:
 #pragma warning(pop)
 #endif
 
-typedef BufferedOverflowTaskQueue<ShenandoahMarkTask, mtGC> ShenandoahBufferedOverflowTaskQueue;
-typedef Padded<ShenandoahBufferedOverflowTaskQueue> ShenandoahObjToScanQueue;
+class ShenandoahTaskQueueChunk {
+  static const int MAX_TASK_CHUNK_SIZE = 254;
 
-class ShenandoahObjToScanQueueSet: public GenericTaskQueueSet<ShenandoahObjToScanQueue, mtGC> {
+  int _top;
+  ShenandoahMarkTask _tasks[MAX_TASK_CHUNK_SIZE];
+  uint32_t _next_chunk_idx;
+
 public:
-  ShenandoahObjToScanQueueSet(int n) : GenericTaskQueueSet<ShenandoahObjToScanQueue, mtGC>(n) {}
+  ShenandoahTaskQueueChunk() : _top(0), _next_chunk_idx(0) {}
 
-  void rebalance(size_t target_queues);
+  ALWAYSINLINE
+  bool push(ShenandoahMarkTask t);
+
+  ALWAYSINLINE
+  bool pop(ShenandoahMarkTask& t);
+
+  uint32_t next_idx();
+  void set_next_idx(uint32_t next);
 
   bool is_empty();
   void clear();
 };
 
-class ShenandoahTerminatorTerminator : public TerminatorTerminator {
-private:
-  ShenandoahHeap* _heap;
+class ShenandoahTaskQueue : public CHeapObj<mtGC> {
+  shenandoah_padding(0);
+  ShenandoahTaskQueueChunk* _chunk;
+  ShenandoahTaskQueueSet* const _qs;
+  shenandoah_padding(1);
+
 public:
-  ShenandoahTerminatorTerminator(ShenandoahHeap* const heap) : _heap(heap) { }
-  virtual bool should_exit_termination();
+  ShenandoahTaskQueue(ShenandoahTaskQueueSet* qs);
+  ~ShenandoahTaskQueue();
+
+  ALWAYSINLINE
+  void push(ShenandoahMarkTask task);
+
+  ALWAYSINLINE
+  bool pop(ShenandoahMarkTask& task);
+
+  void flush_to_shared();
+  void clear();
+
+  bool is_empty();
+};
+
+class ShenandoahTaskQueueSet : public CHeapObj<mtGC> {
+  static const size_t CHUNK_SIZE = sizeof(ShenandoahTaskQueueChunk);
+  static const size_t COMMIT_CHUNKS = 128;
+  static const uint32_t NULL_IDX = 0;
+  static_assert(is_power_of_2(CHUNK_SIZE));
+
+  ShenandoahTaskQueue** _queues;
+  int _queue_count;
+
+  ReservedSpace _rs_chunks;
+  VirtualSpace _vs_chunks;
+  Mutex _expand_lock;
+  uint32_t _chunks_allocated;
+  uint32_t _chunks_committed;
+
+  shenandoah_padding(0);
+  uint64_t _shared_list_head;
+  shenandoah_padding(1);
+  uint64_t _free_list_head;
+  shenandoah_padding(2);
+
+  ShenandoahTaskQueueChunk* allocate_chunk();
+  ShenandoahTaskQueueChunk* chunk_at(uint32_t idx);
+  uint32_t index_of(ShenandoahTaskQueueChunk* chunk);
+
+  inline ShenandoahTaskQueueChunk* pop(uint64_t* head);
+  inline void push(uint64_t* head, ShenandoahTaskQueueChunk* chunk);
+
+public:
+  ShenandoahTaskQueueSet(uint queue_count);
+  ~ShenandoahTaskQueueSet();
+
+  inline ShenandoahTaskQueueChunk* pop_shared();
+  inline ShenandoahTaskQueueChunk* pop_free();
+
+  inline void push_shared(ShenandoahTaskQueueChunk* chunk);
+  inline void push_free(ShenandoahTaskQueueChunk* chunk);
+
+  ShenandoahTaskQueue* queue(uint i) {
+    return _queues[i];
+  }
+
+  bool is_empty();
+  inline bool is_shared_empty();
+
+  void clear();
+  void rebalance();
+};
+
+class ShenandoahTaskTerminator {
+  ShenandoahHeap* _heap;
+  ShenandoahTaskQueueSet* _queues;
+  int _active_workers;
+
+public:
+  ShenandoahTaskTerminator(int workers, ShenandoahTaskQueueSet* queues) :
+    _heap(ShenandoahHeap::heap()), _queues(queues), _active_workers(workers) {}
+  bool offer_termination(bool cancellable);
 };
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHTASKQUEUE_HPP

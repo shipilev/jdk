@@ -287,8 +287,13 @@ public:
   bool push(ShenandoahMarkTask t);
   bool pop(ShenandoahMarkTask& t);
 
-  ShenandoahTaskQueueChunk* next() { return AtomicAccess::load(&_next); }
-  void set_next(ShenandoahTaskQueueChunk * head) { AtomicAccess::store(&_next, head); }
+  ShenandoahTaskQueueChunk* next() {
+    return AtomicAccess::load(&_next);
+  }
+
+  void set_next(ShenandoahTaskQueueChunk* head) {
+    AtomicAccess::store(&_next, head);
+  }
 
   bool is_empty();
 
@@ -318,8 +323,9 @@ private:
 public:
   ShenandoahTaskChunkStack();
 
-  ShenandoahTaskQueueChunk* pop();
   void push(ShenandoahTaskQueueChunk* chunk);
+  ShenandoahTaskQueueChunk* pop_or_create();
+  ShenandoahTaskQueueChunk* pop();
 
   bool is_empty();
 
@@ -328,30 +334,28 @@ public:
 
 class ShenandoahTaskQueue : public CHeapObj<mtGC> {
   ShenandoahTaskQueueChunk* _chunk;
-  ShenandoahTaskChunkStack* _free;
-  ShenandoahTaskChunkStack* _overflow;
+  ShenandoahTaskChunkStack* _free_list;
+  ShenandoahTaskChunkStack* _shared_list;
 
 public:
-  ShenandoahTaskQueue(ShenandoahTaskChunkStack* free, ShenandoahTaskChunkStack* overflow);
+  ShenandoahTaskQueue(ShenandoahTaskChunkStack* free_list, ShenandoahTaskChunkStack* shared_list);
   ~ShenandoahTaskQueue();
 
   void push(ShenandoahMarkTask task);
-
   bool pop(ShenandoahMarkTask& task);
 
-  bool is_empty();
-
+  void flush_to_shared();
   void clear();
 
-  ShenandoahTaskQueueChunk * disown_chunk();
+  bool is_empty();
 };
 
 class ShenandoahTaskQueueSet : public CHeapObj<mtGC> {
 private:
   ShenandoahTaskQueue** _queues;
   int _size;
-  ShenandoahTaskChunkStack* _free;
-  ShenandoahTaskChunkStack* _overflow;
+  ShenandoahTaskChunkStack* _free_list;
+  ShenandoahTaskChunkStack* _shared_list;
 
 public:
   ShenandoahTaskQueueSet(uint size);
@@ -362,7 +366,7 @@ public:
 
   void clear();
 
-  bool has_overflow();
+  bool has_shared();
 
   void rebalance();
 };

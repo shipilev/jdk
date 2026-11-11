@@ -31,5 +31,44 @@
 #include "gc/shared/taskqueue.inline.hpp"
 #include "utilities/stack.inline.hpp"
 
+void ShenandoahTaskQueue::push(ShenandoahMarkTask task) {
+  if (!_chunk->push(task)) {
+    _shared_list->push(_chunk);
+    _chunk = _free_list->pop_or_create();
+    bool succ = _chunk->push(task);
+    assert(succ, "Must succeed");
+  }
+}
+
+bool ShenandoahTaskQueue::pop(ShenandoahMarkTask& task) {
+  if (_chunk->pop(task)) {
+    return true;
+  }
+
+  auto chunk = _shared_list->pop();
+  if (chunk != nullptr) {
+    _free_list->push(_chunk);
+    _chunk = chunk;
+    return _chunk->pop(task);
+  }
+
+  return false;
+}
+
+bool ShenandoahTaskQueueChunk::push(ShenandoahMarkTask t) {
+  if (_index < MAX_TASK_CHUNK_SIZE) {
+    _tasks[_index++] = t;
+    return true;
+  }
+  return false;
+}
+
+bool ShenandoahTaskQueueChunk::pop(ShenandoahMarkTask& t) {
+  if (_index > 0) {
+    t = _tasks[--_index];
+    return true;
+  }
+  return false;
+}
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHTASKQUEUE_INLINE_HPP

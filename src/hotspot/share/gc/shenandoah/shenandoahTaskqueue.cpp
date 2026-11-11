@@ -35,23 +35,6 @@ ShenandoahTaskQueueChunk::~ShenandoahTaskQueueChunk() {
   FREE_C_HEAP_ARRAY(_tasks);
 }
 
-bool ShenandoahTaskQueueChunk::push(ShenandoahMarkTask t) {
-  if (_index < MAX_TASK_CHUNK_SIZE) {
-    _tasks[_index++] = t;
-    return true;
-  } else {
-    return false;
-  }
-}
-
-bool ShenandoahTaskQueueChunk::pop(ShenandoahMarkTask &t) {
-  if (_index > 0) {
-    t = _tasks[--_index];
-    return true;
-  } else {
-    return false;
-  }
-}
 
 bool ShenandoahTaskQueueChunk::is_empty() {
   return _index == 0;
@@ -129,29 +112,6 @@ ShenandoahTaskQueue::~ShenandoahTaskQueue() {
   delete _chunk;
 }
 
-void ShenandoahTaskQueue::push(ShenandoahMarkTask task) {
-  if (!_chunk->push(task)) {
-    _shared_list->push(_chunk);
-    _chunk = _free_list->pop_or_create();
-    bool succ = _chunk->push(task);
-    assert(succ, "Must succeed");
-  }
-}
-
-bool ShenandoahTaskQueue::pop(ShenandoahMarkTask& task) {
-  if (_chunk->pop(task)) {
-    return true;
-  }
-
-  auto chunk = _shared_list->pop();
-  if (chunk != nullptr) {
-    _free_list->push(_chunk);
-    _chunk = chunk;
-    return _chunk->pop(task);
-  }
-
-  return false;
-}
 
 bool ShenandoahTaskQueue::is_empty() {
   return _chunk->is_empty();
@@ -186,10 +146,6 @@ ShenandoahTaskQueueSet::~ShenandoahTaskQueueSet() {
   delete _shared_list;
   _free_list->clear();
   delete _free_list;
-}
-
-ShenandoahTaskQueue* ShenandoahTaskQueueSet::queue(uint i) {
-  return _queues[i];
 }
 
 bool ShenandoahTaskQueueSet::is_empty() {

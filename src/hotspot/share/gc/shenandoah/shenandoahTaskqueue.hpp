@@ -284,7 +284,10 @@ public:
   ShenandoahTaskQueueChunk();
   ~ShenandoahTaskQueueChunk();
 
+  ALWAYSINLINE
   bool push(ShenandoahMarkTask t);
+
+  ALWAYSINLINE
   bool pop(ShenandoahMarkTask& t);
 
   ShenandoahTaskQueueChunk* next() {
@@ -341,7 +344,10 @@ public:
   ShenandoahTaskQueue(ShenandoahTaskChunkStack* free_list, ShenandoahTaskChunkStack* shared_list);
   ~ShenandoahTaskQueue();
 
+  ALWAYSINLINE
   void push(ShenandoahMarkTask task);
+
+  ALWAYSINLINE
   bool pop(ShenandoahMarkTask& task);
 
   void flush_to_shared();
@@ -360,7 +366,10 @@ private:
 public:
   ShenandoahTaskQueueSet(uint size);
   ~ShenandoahTaskQueueSet();
-  ShenandoahTaskQueue* queue(uint uint);
+
+  ShenandoahTaskQueue* queue(uint i) {
+    return _queues[i];
+  }
 
   bool is_empty();
 

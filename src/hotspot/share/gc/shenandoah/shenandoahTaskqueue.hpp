@@ -287,8 +287,8 @@ public:
   bool push(ShenandoahMarkTask t);
   bool pop(ShenandoahMarkTask& t);
 
-  ShenandoahTaskQueueChunk* next() { return _next; }
-  void set_next(ShenandoahTaskQueueChunk * head) { _next = head; }
+  ShenandoahTaskQueueChunk* next() { return AtomicAccess::load(&_next); }
+  void set_next(ShenandoahTaskQueueChunk * head) { AtomicAccess::store(&_next, head); }
 
   bool is_empty();
 
@@ -299,7 +299,21 @@ public:
 
 class ShenandoahTaskChunkStack : public CHeapObj<mtGC>  {
 private:
-  ShenandoahTaskQueueChunk* _head;
+  static const int      ADDR_BITS = 48;
+  static const uint64_t ADDR_MASK = (uint64_t(1) << ADDR_BITS) - 1;
+  static const uint64_t  VER_MASK = ~ADDR_MASK;
+  static const uint64_t   VER_INC = uint64_t(1) << ADDR_BITS;
+  volatile uint64_t _head;
+
+  static ShenandoahTaskQueueChunk* decode(uint64_t encoded) {
+    return reinterpret_cast<ShenandoahTaskQueueChunk*>(encoded & ADDR_MASK);
+  }
+  static uint64_t encode(uint64_t orig, ShenandoahTaskQueueChunk* chunk, bool bump) {
+    uint64_t addr = reinterpret_cast<uintptr_t>(chunk);
+    assert((addr & ~ADDR_MASK) == 0, "Sanity: must fit");
+    uint64_t ver = (orig & VER_MASK) + (bump ? VER_INC : 0);
+    return ver | addr;
+  }
 
 public:
   ShenandoahTaskChunkStack();

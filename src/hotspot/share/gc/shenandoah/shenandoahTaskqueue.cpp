@@ -69,36 +69,40 @@ size_t ShenandoahTaskQueueChunk::size() {
   return _index;
 }
 
-ShenandoahTaskChunkStack::ShenandoahTaskChunkStack() : _head(nullptr) {
+ShenandoahTaskChunkStack::ShenandoahTaskChunkStack() : _head(0) {
 }
 
 ShenandoahTaskQueueChunk* ShenandoahTaskChunkStack::pop() {
-  // FIXME: ABA here!
+  uint64_t old = AtomicAccess::load_acquire(&_head);
   while (true) {
-    auto head = AtomicAccess::load(&_head);
-    if (head == nullptr) {
+    ShenandoahTaskQueueChunk* c = decode(old);
+    if (c == nullptr) {
       return nullptr;
     }
-    auto old = AtomicAccess::cmpxchg(&_head, head, head->next(), memory_order_seq_cst);
-    if (old == head) {
-      return head;
+    uint64_t next = encode(old, c->next(), true);
+    uint64_t prev = AtomicAccess::cmpxchg(&_head, old, next, memory_order_seq_cst);
+    if (prev == old) {
+      return c;
     }
+    old = prev;
   }
 }
 
-void ShenandoahTaskChunkStack::push(ShenandoahTaskQueueChunk *chunk) {
+void ShenandoahTaskChunkStack::push(ShenandoahTaskQueueChunk* chunk) {
+  uint64_t old = AtomicAccess::load_acquire(&_head);
   while (true) {
-    auto head = AtomicAccess::load(&_head);
-    chunk->set_next(head);
-    auto old = AtomicAccess::cmpxchg(&_head, head, chunk, memory_order_seq_cst);
-    if (old == head) {
+    chunk->set_next(decode(old));
+    uint64_t next = encode(old, chunk, false);
+    uint64_t prev = AtomicAccess::cmpxchg(&_head, old, next, memory_order_seq_cst);
+    if (prev == old) {
       return;
     }
+    old = prev;
   }
 }
 
 bool ShenandoahTaskChunkStack::is_empty() {
-  return AtomicAccess::load(&_head) == nullptr;
+  return decode(AtomicAccess::load(&_head)) == nullptr;
 }
 
 void ShenandoahTaskChunkStack::clear() {

@@ -399,7 +399,7 @@ class ShenandoahTaskTerminator {
 public:
   ShenandoahTaskTerminator(int workers, ShenandoahTaskQueueSet* queues) :
     _heap(ShenandoahHeap::heap()), _queues(queues), _active_workers(workers) {}
-  bool offer_termination();
+  bool offer_termination(bool cancellable);
 };
 
 #endif // SHARE_GC_SHENANDOAH_SHENANDOAHTASKQUEUE_HPP

@@ -166,7 +166,7 @@ void ShenandoahTaskQueueSet::rebalance() {
   }
 }
 
-bool ShenandoahTaskTerminator::offer_termination() {
+bool ShenandoahTaskTerminator::offer_termination(bool cancellable) {
   AtomicAccess::dec(&_active_workers, memory_order_relaxed);
   SpinYield spin;
   while (true) {
@@ -174,7 +174,7 @@ bool ShenandoahTaskTerminator::offer_termination() {
       // Consensus: everyone terminated
       return true;
     }
-    if (_heap->cancelled_gc()) {
+    if (cancellable && _heap->cancelled_gc()) {
       // Requested termination
       return true;
     }

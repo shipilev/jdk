@@ -86,7 +86,6 @@ ShenandoahHeuristics* ShenandoahYoungGeneration::initialize_heuristics(Shenandoa
   _heuristics = _young_heuristics;
   _heuristics->set_guaranteed_gc_interval(ShenandoahGuaranteedYoungGCInterval);
   _heuristics->set_gc_duty_cycle_limit(ShenandoahYoungGCDutyCycleLimit);
-  confirm_heuristics_mode();
   return _heuristics;
 }
 

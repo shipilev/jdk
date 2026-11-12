@@ -116,24 +116,10 @@ public:
   size_t get_total_population() const { return _total_pop; }
 };
 
-void ShenandoahGeneration::confirm_heuristics_mode() {
-  if (_heuristics->is_diagnostic() && !UnlockDiagnosticVMOptions) {
-    vm_exit_during_initialization(
-            err_msg("Heuristics \"%s\" is diagnostic, and must be enabled via -XX:+UnlockDiagnosticVMOptions.",
-                    _heuristics->name()));
-  }
-  if (_heuristics->is_experimental() && !UnlockExperimentalVMOptions) {
-    vm_exit_during_initialization(
-            err_msg("Heuristics \"%s\" is experimental, and must be enabled via -XX:+UnlockExperimentalVMOptions.",
-                    _heuristics->name()));
-  }
-}
-
 ShenandoahHeuristics* ShenandoahGeneration::initialize_heuristics(ShenandoahMode* gc_mode) {
   _heuristics = gc_mode->initialize_heuristics(this);
   _heuristics->set_guaranteed_gc_interval(ShenandoahGuaranteedGCInterval);
   _heuristics->set_gc_duty_cycle_limit(ShenandoahGCDutyCycleLimit);
-  confirm_heuristics_mode();
   return _heuristics;
 }
 

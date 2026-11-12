@@ -273,15 +273,15 @@ public:
 #pragma warning(pop)
 #endif
 
-static const int MAX_TASK_CHUNK_SIZE = 254;
-
 class ShenandoahTaskQueueChunk {
-  int _index;
+  static const int MAX_TASK_CHUNK_SIZE = 254;
+
+  int _top;
   ShenandoahMarkTask _tasks[MAX_TASK_CHUNK_SIZE];
   uint32_t _next_chunk_idx;
 
 public:
-  ShenandoahTaskQueueChunk() : _index(0), _next_chunk_idx(0) {}
+  ShenandoahTaskQueueChunk() : _top(0), _next_chunk_idx(0) {}
 
   ALWAYSINLINE
   bool push(ShenandoahMarkTask t);
@@ -298,16 +298,13 @@ public:
   }
 
   bool is_empty();
-
   void clear();
-
-  size_t size();
 };
 
 class ShenandoahTaskQueue : public CHeapObj<mtGC> {
   shenandoah_padding(0);
   ShenandoahTaskQueueChunk* _chunk;
-  ShenandoahTaskQueueSet* _qs;
+  ShenandoahTaskQueueSet* const _qs;
   shenandoah_padding(1);
 
 public:
@@ -327,20 +324,19 @@ public:
 };
 
 class ShenandoahTaskQueueSet : public CHeapObj<mtGC> {
-  static const size_t CHUNK_STRIDE  = 2048;
+  static const size_t CHUNK_STRIDE  = sizeof(ShenandoahTaskQueueChunk);
   static const size_t COMMIT_CHUNKS = 128;
-  static const uint32_t NULL_IDX      = 0;
-
-  static_assert(sizeof(ShenandoahTaskQueueChunk) == CHUNK_STRIDE);
+  static const uint32_t NULL_IDX    = 0;
+  static_assert(is_power_of_2(CHUNK_STRIDE));
 
   ShenandoahTaskQueue** _queues;
   int _size;
 
-  ReservedSpace _rs;
-  VirtualSpace _vs;
+  ReservedSpace _rs_chunks;
+  VirtualSpace _vs_chunks;
   Mutex _expand_lock;
-  uint32_t _next_idx;
-  uint32_t _committed;
+  uint32_t _chunks_allocated;
+  uint32_t _chunks_committed;
 
   shenandoah_padding(0);
   uint64_t _shared_list_head;
@@ -355,7 +351,6 @@ class ShenandoahTaskQueueSet : public CHeapObj<mtGC> {
     uint64_t ver = (old >> 32) + (bump ? 1 : 0);
     return (ver << 32) | idx;
   }
-
 
   ShenandoahTaskQueueChunk* allocate_chunk();
   ShenandoahTaskQueueChunk* chunk_at(uint32_t idx);

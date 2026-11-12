@@ -73,16 +73,16 @@ inline void ShenandoahTaskQueueSet::push_free(ShenandoahTaskQueueChunk* chunk) {
 }
 
 bool ShenandoahTaskQueueChunk::push(ShenandoahMarkTask t) {
-  if (_index < MAX_TASK_CHUNK_SIZE) {
-    _tasks[_index++] = t;
+  if (_top < MAX_TASK_CHUNK_SIZE) {
+    _tasks[_top++] = t;
     return true;
   }
   return false;
 }
 
 bool ShenandoahTaskQueueChunk::pop(ShenandoahMarkTask& t) {
-  if (_index > 0) {
-    t = _tasks[--_index];
+  if (_top > 0) {
+    t = _tasks[--_top];
     return true;
   }
   return false;
@@ -92,7 +92,7 @@ inline ShenandoahTaskQueueChunk* ShenandoahTaskQueueSet::chunk_at(uint32_t idx) 
   if (idx == NULL_IDX) {
     return nullptr;
   }
-  return reinterpret_cast<ShenandoahTaskQueueChunk*>(_vs.low() + idx * CHUNK_STRIDE);
+  return reinterpret_cast<ShenandoahTaskQueueChunk*>(_vs_chunks.low() + idx * CHUNK_STRIDE);
 }
 
 inline uint32_t ShenandoahTaskQueueSet::index_of(ShenandoahTaskQueueChunk* chunk) {
@@ -100,7 +100,7 @@ inline uint32_t ShenandoahTaskQueueSet::index_of(ShenandoahTaskQueueChunk* chunk
     return NULL_IDX;
   }
   intptr_t raw_chunk = (intptr_t)chunk;
-  intptr_t raw_base = (intptr_t)_vs.low();
+  intptr_t raw_base = (intptr_t)_vs_chunks.low();
   assert(raw_chunk > raw_base, "Should be");
   size_t off = raw_chunk - raw_base;
   assert(is_aligned(off, CHUNK_STRIDE), "Sanity: alignment");
@@ -109,15 +109,15 @@ inline uint32_t ShenandoahTaskQueueSet::index_of(ShenandoahTaskQueueChunk* chunk
 
 inline ShenandoahTaskQueueChunk* ShenandoahTaskQueueSet::allocate_chunk() {
   MutexLocker ml(&_expand_lock, Mutex::_no_safepoint_check_flag);
-  uint32_t idx = _next_idx;
-  if (_next_idx >= _committed) {
+  uint32_t idx = _chunks_allocated;
+  if (_chunks_allocated >= _chunks_committed) {
     size_t expand = COMMIT_CHUNKS * CHUNK_STRIDE;
-    if (!_vs.expand_by(expand)) {
+    if (!_vs_chunks.expand_by(expand)) {
       vm_exit_out_of_memory(expand, OOM_MMAP_ERROR, "Shenandoah: Task chunk pool exhausted");
     }
-    _committed = _vs.committed_size() / CHUNK_STRIDE;
+    _chunks_committed = _vs_chunks.committed_size() / CHUNK_STRIDE;
   }
-  _next_idx = idx + 1;
+  _chunks_allocated = idx + 1;
   return new (chunk_at(idx)) ShenandoahTaskQueueChunk();
 }
 

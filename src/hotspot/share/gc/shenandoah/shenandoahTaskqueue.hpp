@@ -330,7 +330,7 @@ class ShenandoahTaskQueueSet : public CHeapObj<mtGC> {
   static_assert(is_power_of_2(CHUNK_STRIDE));
 
   ShenandoahTaskQueue** _queues;
-  int _size;
+  int _queue_count;
 
   ReservedSpace _rs_chunks;
   VirtualSpace _vs_chunks;
@@ -360,7 +360,7 @@ class ShenandoahTaskQueueSet : public CHeapObj<mtGC> {
   void push(uint64_t* head, ShenandoahTaskQueueChunk* chunk);
 
 public:
-  ShenandoahTaskQueueSet(uint size);
+  ShenandoahTaskQueueSet(uint queue_count);
   ~ShenandoahTaskQueueSet();
 
   ShenandoahTaskQueueChunk* pop_shared();

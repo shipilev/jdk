@@ -96,8 +96,8 @@ void ShenandoahTaskQueue::flush_to_shared() {
   }
 }
 
-ShenandoahTaskQueueSet::ShenandoahTaskQueueSet(uint size) :
-  _size(size),
+ShenandoahTaskQueueSet::ShenandoahTaskQueueSet(uint queue_count) :
+  _queue_count(queue_count),
   _expand_lock(Mutex::stackwatermark - 1, "ShenandoahTaskQueueChunkPool_lock", true),
   _chunks_allocated(1), _chunks_committed(0),
   _shared_list_head(0), _free_list_head(0) {
@@ -114,14 +114,14 @@ ShenandoahTaskQueueSet::ShenandoahTaskQueueSet(uint size) :
     vm_exit_out_of_memory(rs_size, OOM_MALLOC_ERROR, "Cannot reserve Shenandoah mark chunk pool");
   }
 
-  _queues = NEW_C_HEAP_ARRAY(ShenandoahTaskQueue*, size, mtGC);
-  for (uint i = 0; i < size; ++i) {
+  _queues = NEW_C_HEAP_ARRAY(ShenandoahTaskQueue*, _queue_count, mtGC);
+  for (int i = 0; i < _queue_count; ++i) {
     _queues[i] = new ShenandoahTaskQueue(this);
   }
 }
 
 ShenandoahTaskQueueSet::~ShenandoahTaskQueueSet() {
-  for (int i = 0; i < _size; ++i) {
+  for (int i = 0; i < _queue_count; ++i) {
     delete _queues[i];
   }
   FREE_C_HEAP_ARRAY(_queues);
@@ -131,7 +131,7 @@ ShenandoahTaskQueueSet::~ShenandoahTaskQueueSet() {
 }
 
 bool ShenandoahTaskQueueSet::is_empty() {
-  for (int i = 0; i < _size; i++) {
+  for (int i = 0; i < _queue_count; i++) {
     ShenandoahTaskQueue* q = queue(i);
     assert(q != nullptr, "Sanity");
     if (!q->is_empty()) {
@@ -142,7 +142,7 @@ bool ShenandoahTaskQueueSet::is_empty() {
 }
 
 void ShenandoahTaskQueueSet::clear() {
-  for (int i = 0; i < _size; i++) {
+  for (int i = 0; i < _queue_count; i++) {
     ShenandoahTaskQueue* q = queue(i);
     assert(q != nullptr, "Sanity");
     q->clear();
@@ -160,7 +160,7 @@ bool ShenandoahTaskQueueSet::has_shared() {
 }
 
 void ShenandoahTaskQueueSet::rebalance() {
-  for (int i = 0; i < _size; i++) {
+  for (int i = 0; i < _queue_count; i++) {
     ShenandoahTaskQueue* q = queue(i);
     assert(q != nullptr, "Sanity");
     q->flush_to_shared();

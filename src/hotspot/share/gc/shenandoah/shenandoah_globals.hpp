@@ -294,14 +294,20 @@
           "Heuristics may trigger collections more frequently. Time is in " \
           "milliseconds. Setting this to 0 disables the feature.")          \
                                                                             \
-  product(double, ShenandoahGCDutyCycleLimit, 0.1, EXPERIMENTAL,              \
-          "")                                                               \
+  product(double, ShenandoahGCDutyCycleLimit, 0.1, EXPERIMENTAL,            \
+          "Limit the GC duty cycle by this value. Affects behavior when GC "\
+          "when GC is not under duress. Non-generational setting.")         \
+          range(0.0, 1.0)                                                   \
                                                                             \
-  product(double, ShenandoahYoungGCDutyCycleLimit, 0.1, EXPERIMENTAL,         \
-          "")                                                               \
+  product(double, ShenandoahYoungGCDutyCycleLimit, 0.1, EXPERIMENTAL,       \
+          "Limit the GC duty cycle by this value. Affects behavior when GC "\
+          "when GC is not under duress. Generational young setting.")       \
+          range(0.0, 1.0)                                                   \
                                                                             \
-  product(double, ShenandoahOldGCDutyCycleLimit, 0.1, EXPERIMENTAL,           \
-          "")                                                               \
+  product(double, ShenandoahOldGCDutyCycleLimit, 0.1, EXPERIMENTAL,         \
+          "Limit the GC duty cycle by this value. Affects behavior when GC "\
+          "when GC is not under duress. Generational old setting.")         \
+          range(0.0, 1.0)                                                   \
                                                                             \
   product(bool, ShenandoahAlwaysClearSoftRefs, false, EXPERIMENTAL,         \
           "Unconditionally clear soft references, instead of using any "    \

@@ -41,6 +41,9 @@ void ShenandoahCompactHeuristics::configure() {
   SHENANDOAH_ERGO_OVERRIDE_DEFAULT(ShenandoahUncommitDelay,        1000);
   SHENANDOAH_ERGO_OVERRIDE_DEFAULT(ShenandoahGuaranteedGCInterval, 30000);
   SHENANDOAH_ERGO_OVERRIDE_DEFAULT(ShenandoahGarbageThreshold,     10);
+  SHENANDOAH_ERGO_OVERRIDE_DEFAULT(ShenandoahGCDutyCycleLimit,      0.5);
+  SHENANDOAH_ERGO_OVERRIDE_DEFAULT(ShenandoahYoungGCDutyCycleLimit, 0.5);
+  SHENANDOAH_ERGO_OVERRIDE_DEFAULT(ShenandoahOldGCDutyCycleLimit,   0.2);
 }
 
 ShenandoahCompactHeuristics::ShenandoahCompactHeuristics(ShenandoahSpaceInfo* space_info) :
@@ -58,7 +61,7 @@ bool ShenandoahCompactHeuristics::should_start_gc() {
     return true;
   }
 
-  if (trigger_allocation_threshold(used, capacity)) {
+  if (trigger_footprint(used, capacity)) {
     return true;
   }
 

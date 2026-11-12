@@ -203,8 +203,6 @@ protected:
   size_t _guaranteed_gc_interval;
   double _gc_duty_cycle_limit;
 
-  size_t _bytes_used_at_end_of_gc;
-
   double _cycle_start;
   double _last_cycle_end;
 
@@ -303,8 +301,8 @@ public:
   // Format prefix and emit log message indicating a GC cycle hs been triggered
   void log_trigger(const char* fmt, ...) const ATTRIBUTE_PRINTF(2, 3);
 
-  // Trigger when bytes allocated since last gc cycle exceeds threshold
-  bool trigger_allocation_threshold(size_t used, size_t capacity);
+  // Trigger to maintain reasonable footprint
+  bool trigger_footprint(size_t used, size_t capacity);
 
   // Trigger when bytes available falls below min free threshold
   bool trigger_min_free_threshold(size_t available, size_t capacity);

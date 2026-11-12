@@ -79,7 +79,6 @@ ShenandoahHeuristics::ShenandoahHeuristics(ShenandoahSpaceInfo* space_info) :
   _region_data(nullptr),
   _guaranteed_gc_interval(0),
   _gc_duty_cycle_limit(0),
-  _bytes_used_at_end_of_gc(0),
   _cycle_start(os::elapsedTime()),
   _last_cycle_end(0),
   _gc_times_learned(0),
@@ -223,26 +222,6 @@ bool ShenandoahHeuristics::should_start_gc() {
       return true;
     }
   }
-
-  if (_gc_duty_cycle_limit > 0) {
-    const size_t used = _space_info->used();
-    const size_t capacity = ShenandoahHeap::heap()->soft_max_capacity();
-    const size_t bytes_allocated = used > _bytes_used_at_end_of_gc ? used - _bytes_used_at_end_of_gc : 0;
-    const size_t alloc_threshold = capacity * ShenandoahAllocationThreshold / 100;
-
-    double last_gc_time = _last_cycle_end - _cycle_start;
-    double last_check_time = os::elapsedTime() - _cycle_start;
-
-    double duty_cycle = last_gc_time / last_check_time;
-    if (bytes_allocated > alloc_threshold &&
-        duty_cycle < _gc_duty_cycle_limit) {
-      log_trigger("Footprint. Allocated %zuM, %3.1f%% duty cycle",
-                   bytes_allocated / M, duty_cycle * 100);
-      accept_trigger();
-      return true;
-    }
-  }
-
   decline_trigger();
   return false;
 }
@@ -338,24 +317,31 @@ void ShenandoahHeuristics::assert_humongous_mark_consistency(ShenandoahHeapRegio
 }
 #endif
 
-bool ShenandoahHeuristics::trigger_allocation_threshold(const size_t used, const size_t capacity) {
+bool ShenandoahHeuristics::trigger_footprint(const size_t used, const size_t capacity) {
   if (ShenandoahAllocationThreshold == 0) {
     // Trigger is disabled
     return false;
   }
 
-  const size_t threshold_bytes_allocated = capacity / 100 * ShenandoahAllocationThreshold;
-  const size_t bytes_allocated = used > _bytes_used_at_end_of_gc ? used - _bytes_used_at_end_of_gc : 0;
-  log_debug(gc, ergo)("trigger allocation threshold: used: " PROPERFMT ", soft_max_capacity: "  PROPERFMT ", "
-                      "allocated_since_gc_start: "  PROPERFMT,
-                      PROPERFMTARGS(used), PROPERFMTARGS(capacity), PROPERFMTARGS(bytes_allocated));
+  if (_gc_duty_cycle_limit == 0) {
+    // Trigger is disabled
+    return false;
+  }
 
-  if (bytes_allocated > threshold_bytes_allocated) {
-    log_trigger("Allocation. " PROPERFMT " allocated, above " PROPERFMT " threshold",
-                PROPERFMTARGS(bytes_allocated), PROPERFMTARGS(threshold_bytes_allocated));
+  const size_t bytes_allocated = used > _bytes_used_at_end_of_gc ? used - _bytes_used_at_end_of_gc : 0;
+  const size_t alloc_threshold = capacity * ShenandoahAllocationThreshold / 100;
+
+  double last_gc_time = _last_cycle_end - _cycle_start;
+  double last_check_time = os::elapsedTime() - _cycle_start;
+
+  double duty_cycle = last_gc_time / last_check_time;
+  if (bytes_allocated > alloc_threshold && duty_cycle < _gc_duty_cycle_limit) {
+    log_trigger("Footprint. %3.1f%% duty cycle, allocated %zuM",
+                duty_cycle * 100, bytes_allocated / M);
     accept_trigger();
     return true;
   }
+
   return false;
 }
 

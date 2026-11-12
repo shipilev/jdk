@@ -221,7 +221,7 @@ bool ShenandoahAdaptiveHeuristics::should_start_gc() {
 
   _last_trigger = OTHER;
 
-  if (trigger_allocation_threshold(used, capacity)) {
+  if (trigger_footprint(used, capacity)) {
     return true;
   }
 

@@ -27,15 +27,6 @@
 #include "gc/shenandoah/shenandoahTaskqueue.inline.hpp"
 #include "utilities/spinYield.hpp"
 
-ShenandoahTaskQueueChunk::ShenandoahTaskQueueChunk() : _next(nullptr), _index(0) {
-  _tasks = NEW_C_HEAP_ARRAY(ShenandoahMarkTask, MAX_TASK_CHUNK_SIZE, mtGC);
-}
-
-ShenandoahTaskQueueChunk::~ShenandoahTaskQueueChunk() {
-  FREE_C_HEAP_ARRAY(_tasks);
-}
-
-
 bool ShenandoahTaskQueueChunk::is_empty() {
   return _index == 0;
 }
@@ -46,9 +37,6 @@ void ShenandoahTaskQueueChunk::clear() {
 
 size_t ShenandoahTaskQueueChunk::size() {
   return _index;
-}
-
-ShenandoahTaskChunkStack::ShenandoahTaskChunkStack() : _head(0) {
 }
 
 ShenandoahTaskQueueChunk* ShenandoahTaskChunkStack::pop_or_create() {
@@ -93,13 +81,9 @@ bool ShenandoahTaskChunkStack::is_empty() {
 }
 
 void ShenandoahTaskChunkStack::clear() {
-  while (true) {
-    auto chunk = pop();
-    if (chunk != nullptr) {
-      delete chunk;
-    } else {
-      break;
-    }
+  ShenandoahTaskQueueChunk* chunk;
+  while ((chunk = pop()) != nullptr) {
+    delete chunk;
   }
 }
 
@@ -109,9 +93,9 @@ ShenandoahTaskQueue::ShenandoahTaskQueue(ShenandoahTaskChunkStack* free_list, Sh
 }
 
 ShenandoahTaskQueue::~ShenandoahTaskQueue() {
-  delete _chunk;
+  _chunk->clear();
+  _free_list->push(_chunk);
 }
-
 
 bool ShenandoahTaskQueue::is_empty() {
   return _chunk->is_empty();
@@ -167,6 +151,7 @@ void ShenandoahTaskQueueSet::clear() {
   }
 
   _shared_list->clear();
+  _free_list->clear();
 }
 
 bool ShenandoahTaskQueueSet::has_shared() {

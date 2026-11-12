@@ -28,6 +28,7 @@
 
 #include "gc/shared/taskqueue.hpp"
 #include "gc/shared/taskTerminator.hpp"
+#include "gc/shenandoah/shenandoahPadding.hpp"
 #include "nmt/memTag.hpp"
 #include "runtime/atomic.hpp"
 #include "runtime/atomicAccess.hpp"
@@ -274,15 +275,16 @@ public:
 
 static const int MAX_TASK_CHUNK_SIZE = 256;
 
-class ShenandoahTaskQueueChunk : public CHeapObj<mtGC>  {
+class ShenandoahTaskQueueChunk : public CHeapObj<mtGC> {
 private:
-  ShenandoahTaskQueueChunk* _next;
-  ShenandoahMarkTask* _tasks;
+  shenandoah_padding(0);
   int _index;
+  ShenandoahMarkTask _tasks[MAX_TASK_CHUNK_SIZE];
+  ShenandoahTaskQueueChunk* _next;
+  shenandoah_padding(1);
 
 public:
-  ShenandoahTaskQueueChunk();
-  ~ShenandoahTaskQueueChunk();
+  ShenandoahTaskQueueChunk() : _index(0), _next(nullptr) {}
 
   ALWAYSINLINE
   bool push(ShenandoahMarkTask t);
@@ -311,7 +313,10 @@ private:
   static const uint64_t ADDR_MASK = (uint64_t(1) << ADDR_BITS) - 1;
   static const uint64_t  VER_MASK = ~ADDR_MASK;
   static const uint64_t   VER_INC = uint64_t(1) << ADDR_BITS;
+
+  shenandoah_padding(0);
   volatile uint64_t _head;
+  shenandoah_padding(1);
 
   static ShenandoahTaskQueueChunk* decode(uint64_t encoded) {
     return reinterpret_cast<ShenandoahTaskQueueChunk*>(encoded & ADDR_MASK);
@@ -324,7 +329,7 @@ private:
   }
 
 public:
-  ShenandoahTaskChunkStack();
+  ShenandoahTaskChunkStack() : _head(0) {}
 
   void push(ShenandoahTaskQueueChunk* chunk);
   ShenandoahTaskQueueChunk* pop_or_create();
@@ -336,9 +341,11 @@ public:
 };
 
 class ShenandoahTaskQueue : public CHeapObj<mtGC> {
+  shenandoah_padding(0);
   ShenandoahTaskQueueChunk* _chunk;
   ShenandoahTaskChunkStack* _free_list;
   ShenandoahTaskChunkStack* _shared_list;
+  shenandoah_padding(1);
 
 public:
   ShenandoahTaskQueue(ShenandoahTaskChunkStack* free_list, ShenandoahTaskChunkStack* shared_list);

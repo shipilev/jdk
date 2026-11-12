@@ -167,17 +167,22 @@ void ShenandoahTaskQueueSet::rebalance() {
 }
 
 bool ShenandoahTaskTerminator::offer_termination() {
-  AtomicAccess::inc(&_offered_workers);
+  AtomicAccess::dec(&_active_workers, memory_order_relaxed);
   SpinYield spin;
-  while (AtomicAccess::load(&_expected_workers) != AtomicAccess::load(&_offered_workers)) {
-    if (_queues->has_shared()) {
-      AtomicAccess::dec(&_offered_workers);
-      return false;
+  while (true) {
+    if (AtomicAccess::load(&_active_workers) == 0) {
+      // Consensus: everyone terminated
+      return true;
     }
     if (_heap->cancelled_gc()) {
-      break;
+      // Requested termination
+      return true;
+    }
+    if (_queues->has_shared()) {
+      // New work appeared, no termination
+      AtomicAccess::inc(&_active_workers, memory_order_relaxed);
+      return false;
     }
     spin.wait();
   }
-  return true;
 }

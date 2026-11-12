@@ -394,12 +394,11 @@ public:
 class ShenandoahTaskTerminator {
   ShenandoahHeap* _heap;
   ShenandoahTaskQueueSet* _queues;
-  int _expected_workers;
-  int _offered_workers;
+  int _active_workers;
 
 public:
   ShenandoahTaskTerminator(int workers, ShenandoahTaskQueueSet* queues) :
-    _heap(ShenandoahHeap::heap()), _queues(queues), _expected_workers(workers), _offered_workers(0) {}
+    _heap(ShenandoahHeap::heap()), _queues(queues), _active_workers(workers) {}
   bool offer_termination();
 };
 

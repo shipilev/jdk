@@ -276,7 +276,6 @@ public:
 static const int MAX_TASK_CHUNK_SIZE = 254;
 
 class ShenandoahTaskQueueChunk {
-private:
   int _index;
   ShenandoahMarkTask _tasks[MAX_TASK_CHUNK_SIZE];
   uint32_t _next_chunk_idx;
@@ -305,29 +304,6 @@ public:
   size_t size();
 };
 
-class ShenandoahTaskQueueChunkPool : public CHeapObj<mtGC> {
-  static const size_t CHUNK_STRIDE  = 2048;
-  static const size_t COMMIT_CHUNKS = 128;
-
-  static_assert(sizeof(ShenandoahTaskQueueChunk) == CHUNK_STRIDE);
-
-  ReservedSpace _rs;
-  VirtualSpace _vs;
-  Mutex _expand_lock;
-  uint32_t _next_idx;
-  uint32_t _committed;
-
-public:
-  static const uint32_t NULL_IDX      = 0;
-
-  ShenandoahTaskQueueChunkPool();
-  ~ShenandoahTaskQueueChunkPool();
-
-  ShenandoahTaskQueueChunk* allocate();
-  ShenandoahTaskQueueChunk* chunk_at(uint32_t idx);
-  uint32_t index_of(ShenandoahTaskQueueChunk* chunk);
-};
-
 class ShenandoahTaskQueue : public CHeapObj<mtGC> {
   shenandoah_padding(0);
   ShenandoahTaskQueueChunk* _chunk;
@@ -351,7 +327,27 @@ public:
 };
 
 class ShenandoahTaskQueueSet : public CHeapObj<mtGC> {
-private:
+  static const size_t CHUNK_STRIDE  = 2048;
+  static const size_t COMMIT_CHUNKS = 128;
+  static const uint32_t NULL_IDX      = 0;
+
+  static_assert(sizeof(ShenandoahTaskQueueChunk) == CHUNK_STRIDE);
+
+  ShenandoahTaskQueue** _queues;
+  int _size;
+
+  ReservedSpace _rs;
+  VirtualSpace _vs;
+  Mutex _expand_lock;
+  uint32_t _next_idx;
+  uint32_t _committed;
+
+  shenandoah_padding(0);
+  uint64_t _shared_list_head;
+  shenandoah_padding(1);
+  uint64_t _free_list_head;
+  shenandoah_padding(2);
+
   static uint32_t decode_idx(uint64_t encoded) {
     return (uint32_t) encoded;
   }
@@ -360,15 +356,10 @@ private:
     return (ver << 32) | idx;
   }
 
-  ShenandoahTaskQueue** _queues;
-  int _size;
-  ShenandoahTaskQueueChunkPool* _pool;
 
-  shenandoah_padding(0);
-  uint64_t _shared_list_head;
-  shenandoah_padding(1);
-  uint64_t _free_list_head;
-  shenandoah_padding(2);
+  ShenandoahTaskQueueChunk* allocate_chunk();
+  ShenandoahTaskQueueChunk* chunk_at(uint32_t idx);
+  uint32_t index_of(ShenandoahTaskQueueChunk* chunk);
 
   ShenandoahTaskQueueChunk* pop(uint64_t* head);
   void push(uint64_t* head, ShenandoahTaskQueueChunk* chunk);
@@ -376,6 +367,12 @@ private:
 public:
   ShenandoahTaskQueueSet(uint size);
   ~ShenandoahTaskQueueSet();
+
+  ShenandoahTaskQueueChunk* pop_shared();
+  ShenandoahTaskQueueChunk* pop_free();
+
+  void push_shared(ShenandoahTaskQueueChunk* chunk);
+  void push_free(ShenandoahTaskQueueChunk* chunk);
 
   ShenandoahTaskQueue* queue(uint i) {
     return _queues[i];
@@ -389,12 +386,6 @@ public:
   bool has_shared();
 
   void rebalance();
-
-  ShenandoahTaskQueueChunk* pop_shared();
-  ShenandoahTaskQueueChunk* pop_free();
-
-  void push_shared(ShenandoahTaskQueueChunk* chunk);
-  void push_free(ShenandoahTaskQueueChunk* chunk);
 };
 
 class ShenandoahTaskTerminator {

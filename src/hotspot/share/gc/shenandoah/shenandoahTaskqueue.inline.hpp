@@ -59,16 +59,16 @@ inline ShenandoahTaskQueueChunk* ShenandoahTaskQueueSet::pop_shared() {
 inline ShenandoahTaskQueueChunk* ShenandoahTaskQueueSet::pop_free() {
   auto chunk = pop(&_free_list_head);
   if (chunk == nullptr) {
-    chunk = _pool->allocate();
+    chunk = allocate_chunk();
   }
   return chunk;
 }
 
-inline void ShenandoahTaskQueueSet::push_shared(ShenandoahTaskQueueChunk *chunk) {
+inline void ShenandoahTaskQueueSet::push_shared(ShenandoahTaskQueueChunk* chunk) {
   push(&_shared_list_head, chunk);
 }
 
-inline void ShenandoahTaskQueueSet::push_free(ShenandoahTaskQueueChunk *chunk) {
+inline void ShenandoahTaskQueueSet::push_free(ShenandoahTaskQueueChunk* chunk) {
   push(&_free_list_head, chunk);
 }
 
@@ -88,14 +88,14 @@ bool ShenandoahTaskQueueChunk::pop(ShenandoahMarkTask& t) {
   return false;
 }
 
-inline ShenandoahTaskQueueChunk* ShenandoahTaskQueueChunkPool::chunk_at(uint32_t idx) {
+inline ShenandoahTaskQueueChunk* ShenandoahTaskQueueSet::chunk_at(uint32_t idx) {
   if (idx == NULL_IDX) {
     return nullptr;
   }
   return reinterpret_cast<ShenandoahTaskQueueChunk*>(_vs.low() + idx * CHUNK_STRIDE);
 }
 
-inline uint32_t ShenandoahTaskQueueChunkPool::index_of(ShenandoahTaskQueueChunk* chunk) {
+inline uint32_t ShenandoahTaskQueueSet::index_of(ShenandoahTaskQueueChunk* chunk) {
   if (chunk == nullptr) {
     return NULL_IDX;
   }
@@ -107,7 +107,7 @@ inline uint32_t ShenandoahTaskQueueChunkPool::index_of(ShenandoahTaskQueueChunk*
   return checked_cast<uint32_t>(off / CHUNK_STRIDE);
 }
 
-inline ShenandoahTaskQueueChunk* ShenandoahTaskQueueChunkPool::allocate() {
+inline ShenandoahTaskQueueChunk* ShenandoahTaskQueueSet::allocate_chunk() {
   MutexLocker ml(&_expand_lock, Mutex::_no_safepoint_check_flag);
   uint32_t idx = _next_idx;
   if (_next_idx >= _committed) {

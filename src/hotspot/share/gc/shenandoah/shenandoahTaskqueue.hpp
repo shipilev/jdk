@@ -269,18 +269,16 @@ public:
 #pragma warning(pop)
 #endif
 
-static const int MAX_TASK_CHUNK_SIZE = 236;
+static const int MAX_TASK_CHUNK_SIZE = 254;
 
-class ShenandoahTaskQueueChunk : public CHeapObj<mtGC> {
+class ShenandoahTaskQueueChunk {
 private:
-  shenandoah_padding(0);
   int _index;
   ShenandoahMarkTask _tasks[MAX_TASK_CHUNK_SIZE];
-  ShenandoahTaskQueueChunk* _next;
-  shenandoah_padding(1);
+  uint32_t _next_chunk_idx;
 
 public:
-  ShenandoahTaskQueueChunk() : _index(0), _next(nullptr) {}
+  ShenandoahTaskQueueChunk() : _index(0), _next_chunk_idx(0) {}
 
   ALWAYSINLINE
   bool push(ShenandoahMarkTask t);
@@ -288,12 +286,12 @@ public:
   ALWAYSINLINE
   bool pop(ShenandoahMarkTask& t);
 
-  ShenandoahTaskQueueChunk* next() {
-    return AtomicAccess::load(&_next);
+  uint32_t next_idx() {
+    return AtomicAccess::load(&_next_chunk_idx);
   }
 
-  void set_next(ShenandoahTaskQueueChunk* head) {
-    AtomicAccess::store(&_next, head);
+  void set_next_idx(uint32_t next) {
+    AtomicAccess::store(&_next_chunk_idx, next);
   }
 
   bool is_empty();
@@ -303,41 +301,53 @@ public:
   size_t size();
 };
 
-// Want to be allocated in power of two bucket, without significant memory loss.
-// This assumes some native allocator overhead.
-static_assert(is_power_of_2(sizeof(ShenandoahTaskQueueChunk) + 16));
+class ShenandoahTaskChunkPool : public CHeapObj<mtGC> {
+  static const size_t CHUNK_STRIDE  = 2048;
+  static const size_t COMMIT_CHUNKS = 128;
+
+  static_assert(sizeof(ShenandoahTaskQueueChunk) == CHUNK_STRIDE);
+
+  ReservedSpace _rs;
+  VirtualSpace _vs;
+  Mutex _expand_lock;
+  uint32_t _next_idx;
+  uint32_t _committed;
+
+public:
+  static const uint32_t NULL_IDX      = 0;
+
+  ShenandoahTaskChunkPool();
+  ~ShenandoahTaskChunkPool();
+
+  ShenandoahTaskQueueChunk* allocate();
+  ShenandoahTaskQueueChunk* chunk_at(uint32_t idx);
+  uint32_t index_of(ShenandoahTaskQueueChunk* chunk);
+};
 
 class ShenandoahTaskChunkStack : public CHeapObj<mtGC>  {
 private:
-  static const int      ADDR_BITS = 48;
-  static const uint64_t ADDR_MASK = (uint64_t(1) << ADDR_BITS) - 1;
-  static const uint64_t  VER_MASK = ~ADDR_MASK;
-  static const uint64_t   VER_INC = uint64_t(1) << ADDR_BITS;
+  ShenandoahTaskChunkPool* const _pool;
 
   shenandoah_padding(0);
   volatile uint64_t _head;
   shenandoah_padding(1);
 
-  static ShenandoahTaskQueueChunk* decode(uint64_t encoded) {
-    return reinterpret_cast<ShenandoahTaskQueueChunk*>(encoded & ADDR_MASK);
+  static uint32_t decode_idx(uint64_t encoded) {
+    return (uint32_t) encoded;
   }
-  static uint64_t encode(uint64_t orig, ShenandoahTaskQueueChunk* chunk, bool bump) {
-    uint64_t addr = reinterpret_cast<uintptr_t>(chunk);
-    assert((addr & ~ADDR_MASK) == 0, "Sanity: must fit");
-    uint64_t ver = (orig & VER_MASK) + (bump ? VER_INC : 0);
-    return ver | addr;
+  static uint64_t encode(uint64_t old, uint32_t idx, bool bump) {
+    uint64_t ver = (old >> 32) + (bump ? 1 : 0);
+    return (ver << 32) | idx;
   }
 
 public:
-  ShenandoahTaskChunkStack() : _head(0) {}
+  ShenandoahTaskChunkStack(ShenandoahTaskChunkPool* pool) : _pool(pool), _head(0) {}
 
   void push(ShenandoahTaskQueueChunk* chunk);
   ShenandoahTaskQueueChunk* pop_or_create();
   ShenandoahTaskQueueChunk* pop();
 
   bool is_empty();
-
-  void clear();
 };
 
 class ShenandoahTaskQueue : public CHeapObj<mtGC> {
@@ -367,6 +377,7 @@ class ShenandoahTaskQueueSet : public CHeapObj<mtGC> {
 private:
   ShenandoahTaskQueue** _queues;
   int _size;
+  ShenandoahTaskChunkPool* _pool;
   ShenandoahTaskChunkStack* _free_list;
   ShenandoahTaskChunkStack* _shared_list;
 

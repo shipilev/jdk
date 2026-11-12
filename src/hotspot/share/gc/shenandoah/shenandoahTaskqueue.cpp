@@ -24,6 +24,7 @@
 
 
 #include "gc/shenandoah/shenandoahTaskqueue.inline.hpp"
+#include "memory/memoryReserver.hpp"
 #include "utilities/spinYield.hpp"
 
 bool ShenandoahTaskQueueChunk::is_empty() {
@@ -41,7 +42,7 @@ size_t ShenandoahTaskQueueChunk::size() {
 ShenandoahTaskQueueChunk* ShenandoahTaskChunkStack::pop_or_create() {
   auto chunk = pop();
   if (chunk == nullptr) {
-    chunk = new ShenandoahTaskQueueChunk();
+    chunk = _pool->allocate();
   }
   return chunk;
 }
@@ -49,14 +50,15 @@ ShenandoahTaskQueueChunk* ShenandoahTaskChunkStack::pop_or_create() {
 ShenandoahTaskQueueChunk* ShenandoahTaskChunkStack::pop() {
   uint64_t old = AtomicAccess::load_acquire(&_head);
   while (true) {
-    ShenandoahTaskQueueChunk* c = decode(old);
-    if (c == nullptr) {
+    uint32_t idx = decode_idx(old);
+    if (idx == ShenandoahTaskChunkPool::NULL_IDX) {
       return nullptr;
     }
-    uint64_t next = encode(old, c->next(), true);
+    ShenandoahTaskQueueChunk* chunk = _pool->chunk_at(idx);
+    uint64_t next = encode(old, chunk->next_idx(), true);
     uint64_t prev = AtomicAccess::cmpxchg(&_head, old, next, memory_order_seq_cst);
     if (prev == old) {
-      return c;
+      return chunk;
     }
     old = prev;
   }
@@ -65,8 +67,9 @@ ShenandoahTaskQueueChunk* ShenandoahTaskChunkStack::pop() {
 void ShenandoahTaskChunkStack::push(ShenandoahTaskQueueChunk* chunk) {
   uint64_t old = AtomicAccess::load_acquire(&_head);
   while (true) {
-    chunk->set_next(decode(old));
-    uint64_t next = encode(old, chunk, false);
+    uint32_t idx = _pool->index_of(chunk);
+    chunk->set_next_idx(decode_idx(old));
+    uint64_t next = encode(old, idx, false);
     uint64_t prev = AtomicAccess::cmpxchg(&_head, old, next, memory_order_seq_cst);
     if (prev == old) {
       return;
@@ -76,14 +79,7 @@ void ShenandoahTaskChunkStack::push(ShenandoahTaskQueueChunk* chunk) {
 }
 
 bool ShenandoahTaskChunkStack::is_empty() {
-  return decode(AtomicAccess::load(&_head)) == nullptr;
-}
-
-void ShenandoahTaskChunkStack::clear() {
-  ShenandoahTaskQueueChunk* chunk;
-  while ((chunk = pop()) != nullptr) {
-    delete chunk;
-  }
+  return decode_idx(AtomicAccess::load(&_head)) == ShenandoahTaskChunkPool::NULL_IDX;
 }
 
 ShenandoahTaskQueue::ShenandoahTaskQueue(ShenandoahTaskChunkStack* free_list, ShenandoahTaskChunkStack* shared_list) :
@@ -112,8 +108,9 @@ void ShenandoahTaskQueue::flush_to_shared() {
 }
 
 ShenandoahTaskQueueSet::ShenandoahTaskQueueSet(uint size) : _size(size) {
-  _free_list = new ShenandoahTaskChunkStack();
-  _shared_list = new ShenandoahTaskChunkStack();
+  _pool = new ShenandoahTaskChunkPool();
+  _free_list = new ShenandoahTaskChunkStack(_pool);
+  _shared_list = new ShenandoahTaskChunkStack(_pool);
   _queues = NEW_C_HEAP_ARRAY(ShenandoahTaskQueue*, size, mtGC);
   for (uint i = 0; i < size; ++i) {
     _queues[i] = new ShenandoahTaskQueue(_free_list, _shared_list);
@@ -125,10 +122,9 @@ ShenandoahTaskQueueSet::~ShenandoahTaskQueueSet() {
     delete _queues[i];
   }
   FREE_C_HEAP_ARRAY(_queues);
-  _shared_list->clear();
   delete _shared_list;
-  _free_list->clear();
   delete _free_list;
+  delete _pool;
 }
 
 bool ShenandoahTaskQueueSet::is_empty() {
@@ -149,8 +145,11 @@ void ShenandoahTaskQueueSet::clear() {
     q->clear();
   }
 
-  _shared_list->clear();
-  _free_list->clear();
+  ShenandoahTaskQueueChunk* chunk;
+  while ((chunk = _shared_list->pop()) != nullptr) {
+    chunk->clear();
+    _free_list->push(chunk);
+  }
 }
 
 bool ShenandoahTaskQueueSet::has_shared() {
@@ -184,4 +183,24 @@ bool ShenandoahTaskTerminator::offer_termination(bool cancellable) {
     }
     spin.wait();
   }
+}
+
+ShenandoahTaskChunkPool::ShenandoahTaskChunkPool() :
+  _expand_lock(Mutex::stackwatermark - 1, "ShenandoahTaskChunkPool_lock", true),
+  _next_idx(1), _committed(0) {
+
+  // Size up for the absolute worst case: the smallest objects (8 bytes), each containing a pointer.
+  // TODO: 2-level indexing would allow us to reserve as we go.
+  size_t size = align_up(MaxHeapSize / 8, os::vm_allocation_granularity());
+  assert(size / CHUNK_STRIDE <= UINT32_MAX, "index must fit in 32 bits");
+
+  _rs = MemoryReserver::reserve(size, os::vm_allocation_granularity(), os::vm_page_size(), mtGC);
+  if (!_rs.is_reserved() || !_vs.initialize(_rs, 0)) {
+    vm_exit_out_of_memory(size, OOM_MALLOC_ERROR, "Cannot reserve Shenandoah mark chunk pool");
+  }
+}
+
+ShenandoahTaskChunkPool::~ShenandoahTaskChunkPool() {
+  _vs.release();
+  MemoryReserver::release(_rs);
 }

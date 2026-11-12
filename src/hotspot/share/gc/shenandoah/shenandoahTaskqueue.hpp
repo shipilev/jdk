@@ -28,8 +28,11 @@
 
 #include "gc/shared/taskqueue.hpp"
 #include "gc/shenandoah/shenandoahPadding.hpp"
+#include "memory/reservedSpace.hpp"
+#include "memory/virtualspace.hpp"
 #include "nmt/memTag.hpp"
 #include "runtime/atomicAccess.hpp"
+#include "runtime/mutex.hpp"
 #include "utilities/debug.hpp"
 
 class ShenandoahHeap;

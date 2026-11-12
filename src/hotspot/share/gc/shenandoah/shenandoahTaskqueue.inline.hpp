@@ -164,7 +164,7 @@ inline ShenandoahTaskQueueChunk* ShenandoahTaskQueueSet::allocate_chunk() {
   if (_chunks_allocated >= _chunks_committed) {
     size_t expand = COMMIT_CHUNKS * CHUNK_SIZE;
     if (!_vs_chunks.expand_by(expand)) {
-      vm_exit_out_of_memory(expand, OOM_MMAP_ERROR, "Shenandoah: Task chunk pool exhausted");
+      vm_exit_out_of_memory(expand, OOM_MMAP_ERROR, "Shenandoah: ShenandoahTaskQueueSet pool exhausted");
     }
     _chunks_committed += COMMIT_CHUNKS;
   }

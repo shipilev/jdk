@@ -71,12 +71,12 @@ ShenandoahTaskQueueSet::ShenandoahTaskQueueSet(uint queue_count) :
 
   // Size up for the absolute worst case: the smallest objects (8 bytes), each containing a pointer.
   // TODO: 2-level indexing would allow us to reserve as we go.
-  size_t rs_size = align_up(MaxHeapSize / 8, alignment);
+  size_t rs_size = align_up(MaxHeapSize, alignment);
   assert(rs_size / CHUNK_SIZE <= UINT32_MAX, "index must fit in 32 bits");
 
   _rs_chunks = MemoryReserver::reserve(rs_size, alignment, os::vm_page_size(), mtGC);
   if (!_rs_chunks.is_reserved() || !_vs_chunks.initialize(_rs_chunks, 0)) {
-    vm_exit_out_of_memory(rs_size, OOM_MALLOC_ERROR, "Cannot reserve Shenandoah mark chunk pool");
+    vm_exit_out_of_memory(rs_size, OOM_MALLOC_ERROR, "Cannot reserve space for ShenandoahTaskQueueSet");
   }
 
   _queues = NEW_C_HEAP_ARRAY(ShenandoahTaskQueue*, _queue_count, mtGC);

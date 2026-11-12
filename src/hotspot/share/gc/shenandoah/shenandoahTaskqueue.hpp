@@ -273,7 +273,7 @@ public:
 #pragma warning(pop)
 #endif
 
-static const int MAX_TASK_CHUNK_SIZE = 256;
+static const int MAX_TASK_CHUNK_SIZE = 236;
 
 class ShenandoahTaskQueueChunk : public CHeapObj<mtGC> {
 private:
@@ -306,6 +306,10 @@ public:
 
   size_t size();
 };
+
+// Want to be allocated in power of two bucket, without significant memory loss.
+// This assumes some native allocator overhead.
+static_assert(is_power_of_2(sizeof(ShenandoahTaskQueueChunk) + 16));
 
 class ShenandoahTaskChunkStack : public CHeapObj<mtGC>  {
 private:

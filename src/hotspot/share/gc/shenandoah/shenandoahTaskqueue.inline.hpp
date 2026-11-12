@@ -30,8 +30,8 @@
 
 void ShenandoahTaskQueue::push(ShenandoahMarkTask task) {
   if (!_chunk->push(task)) {
-    _shared_list->push(_chunk);
-    _chunk = _free_list->pop_or_create();
+    _qs->push_shared(_chunk);
+    _chunk = _qs->pop_free();
     bool succ = _chunk->push(task);
     assert(succ, "Must succeed");
   }
@@ -42,14 +42,34 @@ bool ShenandoahTaskQueue::pop(ShenandoahMarkTask& task) {
     return true;
   }
 
-  auto chunk = _shared_list->pop();
+  auto chunk = _qs->pop_shared();
   if (chunk != nullptr) {
-    _free_list->push(_chunk);
+    _qs->push_free(_chunk);
     _chunk = chunk;
     return _chunk->pop(task);
   }
 
   return false;
+}
+
+inline ShenandoahTaskQueueChunk* ShenandoahTaskQueueSet::pop_shared() {
+  return pop(&_shared_list_head);
+}
+
+inline ShenandoahTaskQueueChunk* ShenandoahTaskQueueSet::pop_free() {
+  auto chunk = pop(&_free_list_head);
+  if (chunk == nullptr) {
+    chunk = _pool->allocate();
+  }
+  return chunk;
+}
+
+inline void ShenandoahTaskQueueSet::push_shared(ShenandoahTaskQueueChunk *chunk) {
+  push(&_shared_list_head, chunk);
+}
+
+inline void ShenandoahTaskQueueSet::push_free(ShenandoahTaskQueueChunk *chunk) {
+  push(&_free_list_head, chunk);
 }
 
 bool ShenandoahTaskQueueChunk::push(ShenandoahMarkTask t) {

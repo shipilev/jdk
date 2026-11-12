@@ -40,16 +40,9 @@ size_t ShenandoahTaskQueueChunk::size() {
   return _index;
 }
 
-ShenandoahTaskQueueChunk* ShenandoahTaskChunkStack::pop_or_create() {
-  auto chunk = pop();
-  if (chunk == nullptr) {
-    chunk = _pool->allocate();
-  }
-  return chunk;
-}
 
-ShenandoahTaskQueueChunk* ShenandoahTaskChunkStack::pop() {
-  uint64_t old = AtomicAccess::load_acquire(&_head);
+ShenandoahTaskQueueChunk* ShenandoahTaskQueueSet::pop(uint64_t* head) {
+  uint64_t old = AtomicAccess::load_acquire(head);
   while (true) {
     uint32_t idx = decode_idx(old);
     if (idx == ShenandoahTaskQueueChunkPool::NULL_IDX) {
@@ -57,7 +50,7 @@ ShenandoahTaskQueueChunk* ShenandoahTaskChunkStack::pop() {
     }
     ShenandoahTaskQueueChunk* chunk = _pool->chunk_at(idx);
     uint64_t next = encode(old, chunk->next_idx(), true);
-    uint64_t prev = AtomicAccess::cmpxchg(&_head, old, next, memory_order_seq_cst);
+    uint64_t prev = AtomicAccess::cmpxchg(head, old, next, memory_order_seq_cst);
     if (prev == old) {
       return chunk;
     }
@@ -65,13 +58,13 @@ ShenandoahTaskQueueChunk* ShenandoahTaskChunkStack::pop() {
   }
 }
 
-void ShenandoahTaskChunkStack::push(ShenandoahTaskQueueChunk* chunk) {
-  uint64_t old = AtomicAccess::load_acquire(&_head);
+void ShenandoahTaskQueueSet::push(uint64_t* head, ShenandoahTaskQueueChunk* chunk) {
+  uint64_t old = AtomicAccess::load_acquire(head);
   while (true) {
     uint32_t idx = _pool->index_of(chunk);
     chunk->set_next_idx(decode_idx(old));
     uint64_t next = encode(old, idx, false);
-    uint64_t prev = AtomicAccess::cmpxchg(&_head, old, next, memory_order_seq_cst);
+    uint64_t prev = AtomicAccess::cmpxchg(head, old, next, memory_order_seq_cst);
     if (prev == old) {
       return;
     }
@@ -79,18 +72,18 @@ void ShenandoahTaskChunkStack::push(ShenandoahTaskQueueChunk* chunk) {
   }
 }
 
-bool ShenandoahTaskChunkStack::is_empty() {
-  return decode_idx(AtomicAccess::load(&_head)) == ShenandoahTaskQueueChunkPool::NULL_IDX;
+bool ShenandoahTaskQueueSet::is_shared_empty() {
+  return decode_idx(AtomicAccess::load(&_shared_list_head)) == ShenandoahTaskQueueChunkPool::NULL_IDX;
 }
 
-ShenandoahTaskQueue::ShenandoahTaskQueue(ShenandoahTaskChunkStack* free_list, ShenandoahTaskChunkStack* shared_list) :
-  _free_list(free_list), _shared_list(shared_list) {
-  _chunk = _free_list->pop_or_create();
+ShenandoahTaskQueue::ShenandoahTaskQueue(ShenandoahTaskQueueSet* qs) :
+  _qs(qs) {
+  _chunk = _qs->pop_free();
 }
 
 ShenandoahTaskQueue::~ShenandoahTaskQueue() {
   _chunk->clear();
-  _free_list->push(_chunk);
+  _qs->push_free(_chunk);
 }
 
 bool ShenandoahTaskQueue::is_empty() {
@@ -103,18 +96,16 @@ void ShenandoahTaskQueue::clear() {
 
 void ShenandoahTaskQueue::flush_to_shared() {
   if (!_chunk->is_empty()) {
-    _shared_list->push(_chunk);
-    _chunk = _free_list->pop_or_create();
+    _qs->push_shared(_chunk);
+    _chunk = _qs->pop_free();
   }
 }
 
-ShenandoahTaskQueueSet::ShenandoahTaskQueueSet(uint size) : _size(size) {
+ShenandoahTaskQueueSet::ShenandoahTaskQueueSet(uint size) : _size(size), _shared_list_head(0), _free_list_head(0) {
   _pool = new ShenandoahTaskQueueChunkPool();
-  _free_list = new ShenandoahTaskChunkStack(_pool);
-  _shared_list = new ShenandoahTaskChunkStack(_pool);
   _queues = NEW_C_HEAP_ARRAY(ShenandoahTaskQueue*, size, mtGC);
   for (uint i = 0; i < size; ++i) {
-    _queues[i] = new ShenandoahTaskQueue(_free_list, _shared_list);
+    _queues[i] = new ShenandoahTaskQueue(this);
   }
 }
 
@@ -123,8 +114,6 @@ ShenandoahTaskQueueSet::~ShenandoahTaskQueueSet() {
     delete _queues[i];
   }
   FREE_C_HEAP_ARRAY(_queues);
-  delete _shared_list;
-  delete _free_list;
   delete _pool;
 }
 
@@ -136,7 +125,7 @@ bool ShenandoahTaskQueueSet::is_empty() {
       return false;
     }
   }
-  return _shared_list->is_empty();
+  return is_shared_empty();
 }
 
 void ShenandoahTaskQueueSet::clear() {
@@ -147,14 +136,14 @@ void ShenandoahTaskQueueSet::clear() {
   }
 
   ShenandoahTaskQueueChunk* chunk;
-  while ((chunk = _shared_list->pop()) != nullptr) {
+  while ((chunk = pop_shared()) != nullptr) {
     chunk->clear();
-    _free_list->push(chunk);
+    push_free(chunk);
   }
 }
 
 bool ShenandoahTaskQueueSet::has_shared() {
-  return !_shared_list->is_empty();
+  return !is_shared_empty();
 }
 
 void ShenandoahTaskQueueSet::rebalance() {

@@ -28,9 +28,6 @@
 
 #include "gc/shenandoah/shenandoahTaskqueue.hpp"
 
-#include "gc/shared/taskqueue.inline.hpp"
-#include "utilities/stack.inline.hpp"
-
 void ShenandoahTaskQueue::push(ShenandoahMarkTask task) {
   if (!_chunk->push(task)) {
     _shared_list->push(_chunk);

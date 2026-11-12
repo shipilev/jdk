@@ -289,13 +289,8 @@ public:
   ALWAYSINLINE
   bool pop(ShenandoahMarkTask& t);
 
-  uint32_t next_idx() {
-    return AtomicAccess::load(&_next_chunk_idx);
-  }
-
-  void set_next_idx(uint32_t next) {
-    AtomicAccess::store(&_next_chunk_idx, next);
-  }
+  uint32_t next_idx();
+  void set_next_idx(uint32_t next);
 
   bool is_empty();
   void clear();
@@ -324,10 +319,10 @@ public:
 };
 
 class ShenandoahTaskQueueSet : public CHeapObj<mtGC> {
-  static const size_t CHUNK_STRIDE  = sizeof(ShenandoahTaskQueueChunk);
+  static const size_t CHUNK_SIZE = sizeof(ShenandoahTaskQueueChunk);
   static const size_t COMMIT_CHUNKS = 128;
-  static const uint32_t NULL_IDX    = 0;
-  static_assert(is_power_of_2(CHUNK_STRIDE));
+  static const uint32_t NULL_IDX = 0;
+  static_assert(is_power_of_2(CHUNK_SIZE));
 
   ShenandoahTaskQueue** _queues;
   int _queue_count;
@@ -344,42 +339,31 @@ class ShenandoahTaskQueueSet : public CHeapObj<mtGC> {
   uint64_t _free_list_head;
   shenandoah_padding(2);
 
-  static uint32_t decode_idx(uint64_t encoded) {
-    return (uint32_t) encoded;
-  }
-  static uint64_t encode(uint64_t old, uint32_t idx, bool bump) {
-    uint64_t ver = (old >> 32) + (bump ? 1 : 0);
-    return (ver << 32) | idx;
-  }
-
   ShenandoahTaskQueueChunk* allocate_chunk();
   ShenandoahTaskQueueChunk* chunk_at(uint32_t idx);
   uint32_t index_of(ShenandoahTaskQueueChunk* chunk);
 
-  ShenandoahTaskQueueChunk* pop(uint64_t* head);
-  void push(uint64_t* head, ShenandoahTaskQueueChunk* chunk);
+  inline ShenandoahTaskQueueChunk* pop(uint64_t* head);
+  inline void push(uint64_t* head, ShenandoahTaskQueueChunk* chunk);
 
 public:
   ShenandoahTaskQueueSet(uint queue_count);
   ~ShenandoahTaskQueueSet();
 
-  ShenandoahTaskQueueChunk* pop_shared();
-  ShenandoahTaskQueueChunk* pop_free();
+  inline ShenandoahTaskQueueChunk* pop_shared();
+  inline ShenandoahTaskQueueChunk* pop_free();
 
-  void push_shared(ShenandoahTaskQueueChunk* chunk);
-  void push_free(ShenandoahTaskQueueChunk* chunk);
+  inline void push_shared(ShenandoahTaskQueueChunk* chunk);
+  inline void push_free(ShenandoahTaskQueueChunk* chunk);
 
   ShenandoahTaskQueue* queue(uint i) {
     return _queues[i];
   }
 
   bool is_empty();
-  bool is_shared_empty();
+  inline bool is_shared_empty();
 
   void clear();
-
-  bool has_shared();
-
   void rebalance();
 };
 

@@ -36,41 +36,6 @@ void ShenandoahTaskQueueChunk::clear() {
   _top = 0;
 }
 
-ShenandoahTaskQueueChunk* ShenandoahTaskQueueSet::pop(uint64_t* head) {
-  uint64_t old = AtomicAccess::load_acquire(head);
-  while (true) {
-    uint32_t idx = decode_idx(old);
-    if (idx == NULL_IDX) {
-      return nullptr;
-    }
-    ShenandoahTaskQueueChunk* chunk = chunk_at(idx);
-    uint64_t next = encode(old, chunk->next_idx(), true);
-    uint64_t prev = AtomicAccess::cmpxchg(head, old, next, memory_order_seq_cst);
-    if (prev == old) {
-      return chunk;
-    }
-    old = prev;
-  }
-}
-
-void ShenandoahTaskQueueSet::push(uint64_t* head, ShenandoahTaskQueueChunk* chunk) {
-  uint64_t old = AtomicAccess::load_acquire(head);
-  while (true) {
-    uint32_t idx = index_of(chunk);
-    chunk->set_next_idx(decode_idx(old));
-    uint64_t next = encode(old, idx, false);
-    uint64_t prev = AtomicAccess::cmpxchg(head, old, next, memory_order_seq_cst);
-    if (prev == old) {
-      return;
-    }
-    old = prev;
-  }
-}
-
-bool ShenandoahTaskQueueSet::is_shared_empty() {
-  return decode_idx(AtomicAccess::load(&_shared_list_head)) == NULL_IDX;
-}
-
 ShenandoahTaskQueue::ShenandoahTaskQueue(ShenandoahTaskQueueSet* qs) :
   _qs(qs) {
   _chunk = _qs->pop_free();
@@ -102,12 +67,12 @@ ShenandoahTaskQueueSet::ShenandoahTaskQueueSet(uint queue_count) :
   _chunks_allocated(1), _chunks_committed(0),
   _shared_list_head(0), _free_list_head(0) {
 
-  size_t alignment = MAX2(CHUNK_STRIDE, os::vm_allocation_granularity());
+  size_t alignment = MAX2(CHUNK_SIZE, os::vm_allocation_granularity());
 
   // Size up for the absolute worst case: the smallest objects (8 bytes), each containing a pointer.
   // TODO: 2-level indexing would allow us to reserve as we go.
   size_t rs_size = align_up(MaxHeapSize / 8, alignment);
-  assert(rs_size / CHUNK_STRIDE <= UINT32_MAX, "index must fit in 32 bits");
+  assert(rs_size / CHUNK_SIZE <= UINT32_MAX, "index must fit in 32 bits");
 
   _rs_chunks = MemoryReserver::reserve(rs_size, alignment, os::vm_page_size(), mtGC);
   if (!_rs_chunks.is_reserved() || !_vs_chunks.initialize(_rs_chunks, 0)) {
@@ -155,10 +120,6 @@ void ShenandoahTaskQueueSet::clear() {
   }
 }
 
-bool ShenandoahTaskQueueSet::has_shared() {
-  return !is_shared_empty();
-}
-
 void ShenandoahTaskQueueSet::rebalance() {
   for (int i = 0; i < _queue_count; i++) {
     ShenandoahTaskQueue* q = queue(i);
@@ -179,7 +140,7 @@ bool ShenandoahTaskTerminator::offer_termination(bool cancellable) {
       // Requested termination
       return true;
     }
-    if (_queues->has_shared()) {
+    if (!_queues->is_shared_empty()) {
       // New work appeared, no termination
       AtomicAccess::inc(&_active_workers, memory_order_relaxed);
       return false;

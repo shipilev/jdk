@@ -304,7 +304,7 @@ public:
   size_t size();
 };
 
-class ShenandoahTaskChunkPool : public CHeapObj<mtGC> {
+class ShenandoahTaskQueueChunkPool : public CHeapObj<mtGC> {
   static const size_t CHUNK_STRIDE  = 2048;
   static const size_t COMMIT_CHUNKS = 128;
 
@@ -319,8 +319,8 @@ class ShenandoahTaskChunkPool : public CHeapObj<mtGC> {
 public:
   static const uint32_t NULL_IDX      = 0;
 
-  ShenandoahTaskChunkPool();
-  ~ShenandoahTaskChunkPool();
+  ShenandoahTaskQueueChunkPool();
+  ~ShenandoahTaskQueueChunkPool();
 
   ShenandoahTaskQueueChunk* allocate();
   ShenandoahTaskQueueChunk* chunk_at(uint32_t idx);
@@ -329,7 +329,7 @@ public:
 
 class ShenandoahTaskChunkStack : public CHeapObj<mtGC>  {
 private:
-  ShenandoahTaskChunkPool* const _pool;
+  ShenandoahTaskQueueChunkPool* const _pool;
 
   shenandoah_padding(0);
   volatile uint64_t _head;
@@ -344,7 +344,7 @@ private:
   }
 
 public:
-  ShenandoahTaskChunkStack(ShenandoahTaskChunkPool* pool) : _pool(pool), _head(0) {}
+  ShenandoahTaskChunkStack(ShenandoahTaskQueueChunkPool* pool) : _pool(pool), _head(0) {}
 
   void push(ShenandoahTaskQueueChunk* chunk);
   ShenandoahTaskQueueChunk* pop_or_create();
@@ -380,7 +380,7 @@ class ShenandoahTaskQueueSet : public CHeapObj<mtGC> {
 private:
   ShenandoahTaskQueue** _queues;
   int _size;
-  ShenandoahTaskChunkPool* _pool;
+  ShenandoahTaskQueueChunkPool* _pool;
   ShenandoahTaskChunkStack* _free_list;
   ShenandoahTaskChunkStack* _shared_list;
 

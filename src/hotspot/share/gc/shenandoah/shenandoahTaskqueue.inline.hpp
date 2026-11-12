@@ -68,14 +68,14 @@ bool ShenandoahTaskQueueChunk::pop(ShenandoahMarkTask& t) {
   return false;
 }
 
-inline ShenandoahTaskQueueChunk* ShenandoahTaskChunkPool::chunk_at(uint32_t idx) {
+inline ShenandoahTaskQueueChunk* ShenandoahTaskQueueChunkPool::chunk_at(uint32_t idx) {
   if (idx == NULL_IDX) {
     return nullptr;
   }
   return reinterpret_cast<ShenandoahTaskQueueChunk*>(_vs.low() + idx * CHUNK_STRIDE);
 }
 
-inline uint32_t ShenandoahTaskChunkPool::index_of(ShenandoahTaskQueueChunk* chunk) {
+inline uint32_t ShenandoahTaskQueueChunkPool::index_of(ShenandoahTaskQueueChunk* chunk) {
   if (chunk == nullptr) {
     return NULL_IDX;
   }
@@ -87,7 +87,7 @@ inline uint32_t ShenandoahTaskChunkPool::index_of(ShenandoahTaskQueueChunk* chun
   return checked_cast<uint32_t>(off / CHUNK_STRIDE);
 }
 
-inline ShenandoahTaskQueueChunk* ShenandoahTaskChunkPool::allocate() {
+inline ShenandoahTaskQueueChunk* ShenandoahTaskQueueChunkPool::allocate() {
   MutexLocker ml(&_expand_lock, Mutex::_no_safepoint_check_flag);
   uint32_t idx = _next_idx;
   if (_next_idx >= _committed) {

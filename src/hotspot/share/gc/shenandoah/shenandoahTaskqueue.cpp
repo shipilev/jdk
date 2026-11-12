@@ -23,6 +23,7 @@
  */
 
 
+#include "gc/shenandoah/shenandoahHeap.hpp"
 #include "gc/shenandoah/shenandoahTaskqueue.inline.hpp"
 #include "memory/memoryReserver.hpp"
 #include "utilities/spinYield.hpp"
@@ -51,7 +52,7 @@ ShenandoahTaskQueueChunk* ShenandoahTaskChunkStack::pop() {
   uint64_t old = AtomicAccess::load_acquire(&_head);
   while (true) {
     uint32_t idx = decode_idx(old);
-    if (idx == ShenandoahTaskChunkPool::NULL_IDX) {
+    if (idx == ShenandoahTaskQueueChunkPool::NULL_IDX) {
       return nullptr;
     }
     ShenandoahTaskQueueChunk* chunk = _pool->chunk_at(idx);
@@ -79,7 +80,7 @@ void ShenandoahTaskChunkStack::push(ShenandoahTaskQueueChunk* chunk) {
 }
 
 bool ShenandoahTaskChunkStack::is_empty() {
-  return decode_idx(AtomicAccess::load(&_head)) == ShenandoahTaskChunkPool::NULL_IDX;
+  return decode_idx(AtomicAccess::load(&_head)) == ShenandoahTaskQueueChunkPool::NULL_IDX;
 }
 
 ShenandoahTaskQueue::ShenandoahTaskQueue(ShenandoahTaskChunkStack* free_list, ShenandoahTaskChunkStack* shared_list) :
@@ -108,7 +109,7 @@ void ShenandoahTaskQueue::flush_to_shared() {
 }
 
 ShenandoahTaskQueueSet::ShenandoahTaskQueueSet(uint size) : _size(size) {
-  _pool = new ShenandoahTaskChunkPool();
+  _pool = new ShenandoahTaskQueueChunkPool();
   _free_list = new ShenandoahTaskChunkStack(_pool);
   _shared_list = new ShenandoahTaskChunkStack(_pool);
   _queues = NEW_C_HEAP_ARRAY(ShenandoahTaskQueue*, size, mtGC);
@@ -185,8 +186,8 @@ bool ShenandoahTaskTerminator::offer_termination(bool cancellable) {
   }
 }
 
-ShenandoahTaskChunkPool::ShenandoahTaskChunkPool() :
-  _expand_lock(Mutex::stackwatermark - 1, "ShenandoahTaskChunkPool_lock", true),
+ShenandoahTaskQueueChunkPool::ShenandoahTaskQueueChunkPool() :
+  _expand_lock(Mutex::stackwatermark - 1, "ShenandoahTaskQueueChunkPool_lock", true),
   _next_idx(1), _committed(0) {
 
   // Size up for the absolute worst case: the smallest objects (8 bytes), each containing a pointer.
@@ -200,7 +201,7 @@ ShenandoahTaskChunkPool::ShenandoahTaskChunkPool() :
   }
 }
 
-ShenandoahTaskChunkPool::~ShenandoahTaskChunkPool() {
+ShenandoahTaskQueueChunkPool::~ShenandoahTaskQueueChunkPool() {
   _vs.release();
   MemoryReserver::release(_rs);
 }

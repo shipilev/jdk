@@ -78,7 +78,6 @@ ShenandoahHeuristics::ShenandoahHeuristics(ShenandoahSpaceInfo* space_info) :
   _space_info(space_info),
   _region_data(nullptr),
   _guaranteed_gc_interval(0),
-  _gc_duty_cycle_limit(0),
   _cycle_start(os::elapsedTime()),
   _last_cycle_end(0),
   _gc_times_learned(0),
@@ -323,7 +322,7 @@ bool ShenandoahHeuristics::trigger_footprint(const size_t used, const size_t cap
     return false;
   }
 
-  if (_gc_duty_cycle_limit == 0) {
+  if (ShenandoahDutyCycleLimit == 0) {
     // Trigger is disabled
     return false;
   }
@@ -333,15 +332,15 @@ bool ShenandoahHeuristics::trigger_footprint(const size_t used, const size_t cap
 
   double last_gc_time = _last_cycle_end - _cycle_start;
   double last_check_time = os::elapsedTime() - _cycle_start;
+  const int duty_threshold = ShenandoahDutyCycleLimit;
 
-  double duty_cycle = last_gc_time / last_check_time;
-  if (bytes_allocated > alloc_threshold && duty_cycle < _gc_duty_cycle_limit) {
+  double duty_cycle = last_gc_time / last_check_time * 100;
+  if (bytes_allocated > alloc_threshold && duty_cycle < duty_threshold) {
     log_trigger("Footprint. %3.1f%% duty cycle, allocated %zuM",
-                duty_cycle * 100, bytes_allocated / M);
+                duty_cycle, bytes_allocated / M);
     accept_trigger();
     return true;
   }
-
   return false;
 }
 

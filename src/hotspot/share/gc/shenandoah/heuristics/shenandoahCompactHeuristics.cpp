@@ -36,14 +36,12 @@ void ShenandoahCompactHeuristics::configure() {
   SHENANDOAH_ERGO_ENABLE_FLAG(ShenandoahUncommit);
   SHENANDOAH_ERGO_ENABLE_FLAG(ShenandoahAlwaysClearSoftRefs);
   SHENANDOAH_ERGO_ENABLE_FLAG(UseStringDeduplication);
-  SHENANDOAH_ERGO_OVERRIDE_DEFAULT(ShenandoahAllocationThreshold,  10);
+  SHENANDOAH_ERGO_OVERRIDE_DEFAULT(ShenandoahAllocationThreshold,  5);
   SHENANDOAH_ERGO_OVERRIDE_DEFAULT(ShenandoahImmediateThreshold,   100);
   SHENANDOAH_ERGO_OVERRIDE_DEFAULT(ShenandoahUncommitDelay,        1000);
   SHENANDOAH_ERGO_OVERRIDE_DEFAULT(ShenandoahGuaranteedGCInterval, 30000);
   SHENANDOAH_ERGO_OVERRIDE_DEFAULT(ShenandoahGarbageThreshold,     10);
-  SHENANDOAH_ERGO_OVERRIDE_DEFAULT(ShenandoahGCDutyCycleLimit,      0.5);
-  SHENANDOAH_ERGO_OVERRIDE_DEFAULT(ShenandoahYoungGCDutyCycleLimit, 0.5);
-  SHENANDOAH_ERGO_OVERRIDE_DEFAULT(ShenandoahOldGCDutyCycleLimit,   0.2);
+  SHENANDOAH_ERGO_OVERRIDE_DEFAULT(ShenandoahDutyCycleLimit,       5);
 }
 
 ShenandoahCompactHeuristics::ShenandoahCompactHeuristics(ShenandoahSpaceInfo* space_info) :

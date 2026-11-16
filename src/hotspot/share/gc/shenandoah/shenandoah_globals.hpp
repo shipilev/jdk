@@ -245,7 +245,7 @@
           "size.")                                                          \
           range(0,100)                                                      \
                                                                             \
-  product(uintx, ShenandoahAllocationThreshold, 5, EXPERIMENTAL,            \
+  product(uintx, ShenandoahAllocationThreshold, 10, EXPERIMENTAL,           \
           "How many bytes may be allocated since the last GC cycle started "\
           "before some heuristics trigger the collection. In percents of "  \
           "(soft) max heap size. Set to zero to effectively disable.")      \
@@ -294,20 +294,10 @@
           "Heuristics may trigger collections more frequently. Time is in " \
           "milliseconds. Setting this to 0 disables the feature.")          \
                                                                             \
-  product(double, ShenandoahGCDutyCycleLimit, 0.1, EXPERIMENTAL,            \
-          "Limit the GC duty cycle by this value. Affects behavior when GC "\
-          "when GC is not under duress. Non-generational setting.")         \
-          range(0.0, 1.0)                                                   \
-                                                                            \
-  product(double, ShenandoahYoungGCDutyCycleLimit, 0.1, EXPERIMENTAL,       \
-          "Limit the GC duty cycle by this value. Affects behavior when GC "\
-          "when GC is not under duress. Generational young setting.")       \
-          range(0.0, 1.0)                                                   \
-                                                                            \
-  product(double, ShenandoahOldGCDutyCycleLimit, 0.1, EXPERIMENTAL,         \
-          "Limit the GC duty cycle by this value. Affects behavior when GC "\
-          "when GC is not under duress. Generational old setting.")         \
-          range(0.0, 1.0)                                                   \
+  product(int, ShenandoahDutyCycleLimit, 10, EXPERIMENTAL,                  \
+          "Limit the GC duty cycle by this value. Measured in percents. "   \
+          "Affects behavior when GC when GC is not under duress.")          \
+          range(0, 100)                                                     \
                                                                             \
   product(bool, ShenandoahAlwaysClearSoftRefs, false, EXPERIMENTAL,         \
           "Unconditionally clear soft references, instead of using any "    \

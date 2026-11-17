@@ -266,8 +266,8 @@ private:
   inline void do_oop_work(T* p) {
     T o = RawAccess<>::oop_load(p);
     if (!CompressedOops::is_null(o)) {
-      oop obj = CompressedOops::decode_not_null(o);
-      if (_cset->is_in(obj)) {
+      if (_cset->is_in(o)) {
+        oop obj = CompressedOops::decode_not_null(o);
         oop resolved = ShenandoahForwarding::forwardee_or_null(obj);
         if (resolved == nullptr) {
           if (EVAC) {
@@ -378,8 +378,8 @@ void ShenandoahBarrierSet::arraycopy_evacuation(T* src, size_t count) {
   for (T* elem_ptr = src; elem_ptr < end; ++elem_ptr) {
     T o = RawAccess<>::oop_load(elem_ptr);
     if (!CompressedOops::is_null(o)) {
-      oop obj = CompressedOops::decode_not_null(o);
-      if (cset->is_in(obj)) {
+      if (cset->is_in(o)) {
+        oop obj = CompressedOops::decode_not_null(o);
         oop resolved = ShenandoahForwarding::forwardee_or_null(obj);
         if (resolved == nullptr) {
           resolved = _heap->evacuate_object(obj, thread);
@@ -408,8 +408,8 @@ void ShenandoahBarrierSet::arraycopy_update(T* src, size_t count) {
   for (T* elem_ptr = src; elem_ptr < end; ++elem_ptr) {
     T o = RawAccess<>::oop_load(elem_ptr);
     if (!CompressedOops::is_null(o)) {
-      oop obj = CompressedOops::decode_not_null(o);
-      if (cset->is_in(obj)) {
+      if (cset->is_in(o)) {
+        oop obj = CompressedOops::decode_not_null(o);
         shenandoah_assert_forwarded(elem_ptr, obj);
         oop resolved = ShenandoahForwarding::forwardee(obj);
         if (resolved != obj) {

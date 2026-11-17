@@ -378,6 +378,11 @@ inline bool ShenandoahHeap::in_collection_set(oop p) const {
   return collection_set()->is_in(p);
 }
 
+inline bool ShenandoahHeap::in_collection_set(narrowOop p) const {
+  assert(collection_set() != nullptr, "Sanity");
+  return collection_set()->is_in(p);
+}
+
 inline bool ShenandoahHeap::in_collection_set_loc(void* p) const {
   assert(collection_set() != nullptr, "Sanity");
   return collection_set()->is_in_loc(p);

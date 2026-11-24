@@ -56,65 +56,44 @@ ShenandoahMark::ShenandoahMark(ShenandoahGeneration* generation, bool bootstrapp
   _bootstrapping(bootstrapping) {
 }
 
-template <ShenandoahGenerationType GENERATION, bool CANCELLABLE, bool STRING_DEDUP>
-void ShenandoahMark::mark_loop_prework(uint w, TaskTerminator *t, StringDedup::Requests* const req) {
+template<ShenandoahGenerationType GENERATION, bool CANCELLABLE>
+void ShenandoahMark::mark_loop(uint w, TaskTerminator* t) {
   ShenandoahObjToScanQueue* q = get_queue(w);
   ShenandoahObjToScanQueue* old_q = _bootstrapping ? get_old_queue(w) : nullptr;
   ShenandoahReferenceProcessor *rp = _generation->ref_processor();
   ShenandoahHeap* const heap = ShenandoahHeap::heap();
   ShenandoahLiveData* ld = heap->get_liveness_cache(w);
 
-  // TODO: We can clean up this if we figure out how to do templated oop closures that
-  // play nice with specialized_oop_iterators.
   using Closure = ShenandoahMarkRefsClosure<GENERATION>;
   Closure cl(q, rp, old_q);
-  if (UseCompressedOops) {
-    mark_loop_work<Closure, narrowOop, GENERATION, CANCELLABLE, STRING_DEDUP>(&cl, ld, w, t, req);
+
+  if (_string_dedup) {
+    StringDedup::Requests req;
+    if (UseCompressedOops) {
+      mark_loop_work<Closure, narrowOop, GENERATION, CANCELLABLE, true>(&cl, ld, w, t, &req);
+    } else {
+      mark_loop_work<Closure, oop, GENERATION, CANCELLABLE, true>(&cl, ld, w, t, &req);
+    }
   } else {
-    mark_loop_work<Closure, oop, GENERATION, CANCELLABLE, STRING_DEDUP>(&cl, ld, w, t, req);
+    if (UseCompressedOops) {
+      mark_loop_work<Closure, narrowOop, GENERATION, CANCELLABLE, false>(&cl, ld, w, t, nullptr);
+    } else {
+      mark_loop_work<Closure, oop, GENERATION, CANCELLABLE, false>(&cl, ld, w, t, nullptr);
+    }
   }
 
   heap->flush_liveness_cache(w);
 }
 
-template<bool CANCELLABLE, bool STRING_DEDUP>
-void ShenandoahMark::mark_loop(uint worker_id, TaskTerminator* terminator,
-                               ShenandoahGenerationType generation_type, StringDedup::Requests* const req) {
-  switch (generation_type) {
-    case YOUNG:
-      mark_loop_prework<YOUNG, CANCELLABLE, STRING_DEDUP>(worker_id, terminator, req);
-      break;
-    case OLD:
-      mark_loop_prework<OLD, CANCELLABLE, STRING_DEDUP>(worker_id, terminator, req);
-      break;
-    case GLOBAL:
-      mark_loop_prework<GLOBAL, CANCELLABLE, STRING_DEDUP>(worker_id, terminator, req);
-      break;
-    case NON_GEN:
-      mark_loop_prework<NON_GEN, CANCELLABLE, STRING_DEDUP>(worker_id, terminator, req);
-      break;
-    default:
-      ShouldNotReachHere();
-  }
-}
+template void ShenandoahMark::mark_loop<NON_GEN, true>(uint w, TaskTerminator* t);
+template void ShenandoahMark::mark_loop<GLOBAL,  true>(uint w, TaskTerminator* t);
+template void ShenandoahMark::mark_loop<YOUNG,   true>(uint w, TaskTerminator* t);
+template void ShenandoahMark::mark_loop<OLD,     true>(uint w, TaskTerminator* t);
 
-void ShenandoahMark::mark_loop(uint worker_id, TaskTerminator* terminator, ShenandoahGenerationType generation_type,
-                               bool cancellable) {
-  if (_string_dedup) {
-    StringDedup::Requests req;
-    if (cancellable) {
-      mark_loop<true, true>(worker_id, terminator, generation_type, &req);
-    } else {
-      mark_loop<false, true>(worker_id, terminator, generation_type, &req);
-    }
-  } else {
-    if (cancellable) {
-      mark_loop<true, false>(worker_id, terminator, generation_type, nullptr);
-    } else {
-      mark_loop<false, false>(worker_id, terminator, generation_type, nullptr);
-    }
-  }
-}
+template void ShenandoahMark::mark_loop<NON_GEN, false>(uint w, TaskTerminator* t);
+template void ShenandoahMark::mark_loop<GLOBAL,  false>(uint w, TaskTerminator* t);
+template void ShenandoahMark::mark_loop<YOUNG,   false>(uint w, TaskTerminator* t);
+template void ShenandoahMark::mark_loop<OLD,     false>(uint w, TaskTerminator* t);
 
 template <class T, class OT, ShenandoahGenerationType GENERATION, bool CANCELLABLE, bool STRING_DEDUP>
 void ShenandoahMark::mark_loop_work(T* cl, ShenandoahLiveData* live_data, uint worker_id, TaskTerminator *terminator, StringDedup::Requests* const req) {
